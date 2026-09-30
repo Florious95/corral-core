@@ -1,0 +1,5 @@
+argv: bash -lc 'env -u TEAM_AGENT_* bash -lc "cd server && go test ./internal/api/... ./cmd/..."'
+exit_code: 0
+
+ok  github.com/agentmirror/agentmirror/internal/api  5.377s
+ok  github.com/agentmirror/agentmirror/cmd/agentmirrord  (cached)

@@ -1,0 +1,31 @@
+{
+  "task_id": "test-api-user-scenarios-perf",
+  "case_id": "msg_15eac0462ab8",
+  "status": "red",
+  "notes": "返工要点：`special_keys` 场景当前只断言 7 个 input 帧得到成功 input_ack，baseline.json/REPORT 又明确写 `terminal effects are not claimed`；这不满足 taskbook 的“017 当期承诺翻译成 API 剧本”与“每个场景断言用户可见结果，不是内部实现”。须在自建隔离 tmux 中为 Esc/Ctrl-C/Tab/↑↓←→ 分别建立可观察终端效果（可用 raw-mode/字节回显夹具或真实可判定交互），同时保留 req_id 对应 ack，并从报告删除“不声明终端效果”的豁免后复跑三条 acceptance。其余偏差可接受：产品实际配对口就是 WS auth/auth_ack；上传未鉴权作为风险记录而非本任务造契约；三态 10 秒数据只作首轮 baseline；UI/真机路径继续按 016 列 unverified。当前 suggested_thresholds 仍为 advisory_unapproved，本裁定不批准任何数值门限，尤其不得把观测到的子进程派生率机械翻倍后当性能合格线。",
+  "tests": [
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash e2e/api-user-scenarios.sh'",
+      "rc": 0
+    },
+    {
+      "argv": "bash -lc 'python3 -m json.tool e2e/artifacts/test-api-user-scenarios-perf/baseline.json >/dev/null'",
+      "rc": 0
+    },
+    {
+      "argv": "bash -lc 'test -s e2e/artifacts/test-api-user-scenarios-perf/REPORT.md'",
+      "rc": 0
+    }
+  ],
+  "changes": [
+    "e2e/api-user-scenarios.sh",
+    "e2e/artifacts/test-api-user-scenarios-perf/",
+    ".team/evidence/test-api-user-scenarios-perf.json"
+  ],
+  "deviation": [
+    "当前产品没有独立 HTTP 配对/QR endpoint；套件按已交付的 WS auth/auth_ack 程序接口覆盖配对建立。",
+    "POST /upload 当前没有认证校验；套件记录该产品风险，不臆造请求头契约。",
+    "性能数据是首轮 baseline，建议门限仅由观测值机械派生且未获批准，因此没有数值硬断言。",
+    "静默经济三态在同一隔离 daemon 上顺序采样，每态 10 秒；不外推为长窗口门限。"
+  ]
+}

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -49,6 +50,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.pointerInput
@@ -72,18 +74,22 @@ import dev.agentmirror.app.ui.components.CanonicalProviderMarks
 import dev.agentmirror.app.ui.components.ExtractedProviderIcon
 import dev.agentmirror.app.ui.components.GlassButton
 import dev.agentmirror.app.ui.components.GlassModalLayer
+import dev.agentmirror.app.ui.components.HeaderRule
 import dev.agentmirror.app.ui.components.LanPill
 import dev.agentmirror.app.ui.components.LiquidToggle
 import dev.agentmirror.app.ui.components.LocalFloatingNavInset
 import dev.agentmirror.app.ui.components.LocalGlassBackdrop
 import dev.agentmirror.app.ui.components.PathText
 import dev.agentmirror.app.ui.components.SessionRow
+import dev.agentmirror.app.ui.components.TokenText
 import dev.agentmirror.app.ui.components.glassControl
-import dev.agentmirror.app.ui.components.glassPanel
-import dev.agentmirror.app.ui.components.glassReadable
+import dev.agentmirror.app.ui.components.modalPanel
 import dev.agentmirror.app.ui.components.rememberPressProgress
+import dev.agentmirror.app.ui.components.ruledSurface
 import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.theme.Dims
+import dev.agentmirror.app.ui.theme.HeaderStyle
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 import dev.agentmirror.app.ui.theme.Motion
 import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.workspace.AgentLauncherUi
@@ -127,6 +133,7 @@ fun SessionListScreen(
     onCreateAgentErrorCleared: () -> Unit = {},
 ) {
     val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
     Column(modifier.fillMaxSize().background(p.screenBackground).statusBarsPadding()) {
         Row(
             Modifier
@@ -165,16 +172,17 @@ fun SessionListScreen(
             }
         }
         Column(Modifier.padding(start = Dims.screenHPadding, end = Dims.screenHPadding, top = 2.dp, bottom = 13.dp)) {
+            if (kit.recipes.header == HeaderStyle.Display) {
+                TokenText("工作区 · ${sessions.size} 个会话", kit.colors.eyebrow, kit.typography.eyebrow, maxLines = 1)
+                Box(Modifier.height(6.dp))
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AppText(
+                TokenText(
                     text = workspaceName,
                     color = p.titleText,
-                    fontSize = TypeSizes.screenTitleSecondary,
-                    fontWeight = FontWeight.Bold,
-                    lineHeightMultiplier = 1.2f,
-                    letterSpacing = (-0.4).sp,
+                    token = kit.typography.sectionTitle,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
@@ -187,7 +195,7 @@ fun SessionListScreen(
             Box(Modifier.height(5.dp))
             PathText(workspacePath)
         }
-        Box(Modifier.fillMaxWidth().height(Dims.hairline).background(p.divider))
+        HeaderRule()
         Box(
             Modifier
                 .weight(1f)
@@ -258,12 +266,7 @@ private fun CreateAgentDialog(
                 .widthIn(max = 420.dp)
                 .fillMaxWidth()
                 .pointerInput(Unit) {} // 面板内空白处的点击不落到遮罩
-                .glassPanel(
-                    backdrop = LocalGlassBackdrop.current,
-                    shape = DialogPanelShape,
-                    surface = p.glassSurface.glassReadable(),
-                    exportedBackdrop = panelBackdrop,
-                )
+                .modalPanel(DialogPanelShape, panelBackdrop)
                 .padding(22.dp)
                 .testTag("create-agent-dialog"),
         ) {
@@ -333,6 +336,7 @@ internal fun CreateAgentFormContent(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -345,7 +349,7 @@ internal fun CreateAgentFormContent(
             label = { androidx.compose.material3.Text("名称") },
             placeholder = { androidx.compose.material3.Text("例如：代码助手") },
             singleLine = true,
-            shape = RoundedCornerShape(Radii.glassControl),
+            shape = LocalThemeSuite.current.geometry.shape(RoundedCornerShape(Radii.glassControl)),
             colors = OutlinedTextFieldDefaults.colors(
                 // 输入框坐在玻璃面板上：半透卡面透出折射背景，边框仍保持可见轮廓
                 focusedContainerColor = p.glassCardFill,
@@ -364,19 +368,49 @@ internal fun CreateAgentFormContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelMedium,
             )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .testTag("create-agent-launcher-row"),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                launchers.forEach { option ->
-                    AgentIconCard(
-                        launcher = option,
-                        isSelected = option.provider == selectedProvider,
-                        onClick = { onSelectProvider(option.provider) },
-                    )
+            if (kit.surfaces.isGlass) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .testTag("create-agent-launcher-row"),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    launchers.forEach { option ->
+                        AgentIconCard(
+                            launcher = option,
+                            isSelected = option.provider == selectedProvider,
+                            onClick = { onSelectProvider(option.provider) },
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(82.dp)
+                        .border(1.dp, p.inputBorder)
+                        .testTag("create-agent-launcher-row"),
+                ) {
+                    launchers.forEachIndexed { index, option ->
+                        Box(Modifier.weight(1f).fillMaxHeight()) {
+                            AgentIconCard(
+                                launcher = option,
+                                isSelected = option.provider == selectedProvider,
+                                onClick = { onSelectProvider(option.provider) },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            if (index > 0) {
+                                Box(
+                                    Modifier
+                                        .align(Alignment.CenterStart)
+                                        .fillMaxHeight()
+                                        .width(1.dp)
+                                        .background(Color(0xFF4A4747)),
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -418,8 +452,7 @@ internal fun CreateAgentFormContent(
 }
 
 /**
- * Agent 品牌图标卡（Pi / Codex / Cursor / Grok 官方图标）——玻璃面板上的玻璃卡。
- * 选中：主色 Hue 调色 + 1dp 纯净主色描边 + 主色内光晕，右上角 16dp 主色圆底白对勾 ✓。
+ * Agent 品牌图标卡（Pi / Codex / Cursor / Grok 官方图标）：玻璃主题保留原卡片，现代主义使用金属面板。
  */
 @Composable
 internal fun AgentIconCard(
@@ -429,30 +462,54 @@ internal fun AgentIconCard(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
     val interaction = remember { MutableInteractionSource() }
     val press = rememberPressProgress(interaction)
-    val contentTint = if (isSelected) p.accent else p.rowTitleText
+    val contentTint = if (kit.surfaces.isGlass) {
+        if (isSelected) p.accent else p.rowTitleText
+    } else if (isSelected) {
+        Color(0xFF1A1817)
+    } else {
+        Color.White
+    }
 
     Box(
         modifier = modifier
-            .width(78.dp)
-            .height(82.dp)
+            .then(if (kit.surfaces.isGlass) Modifier.width(78.dp).height(82.dp) else Modifier.fillMaxSize())
             .semantics { selected = isSelected }
             .testTag("agent-card-${launcher.provider}")
-            .glassControl(
-                backdrop = LocalGlassBackdrop.current,
-                shape = AgentCardShape,
-                surface = if (isSelected) Color.Unspecified else p.glassSurface.copy(alpha = 0.35f),
-                tint = if (isSelected) p.accent else Color.Unspecified,
-                tintAlpha = 0.12f,
-                glow = if (isSelected) p.accent else Color.Unspecified,
-                pressProgress = press,
-                blurRadius = 2.dp,
-                lensHeight = 5.dp,
-                lensAmount = 12.dp,
+            .then(
+                if (kit.surfaces.isGlass) {
+                    Modifier.glassControl(
+                        backdrop = LocalGlassBackdrop.current,
+                        shape = AgentCardShape,
+                        surface = if (isSelected) Color.Unspecified else p.glassSurface.copy(alpha = 0.35f),
+                        tint = if (isSelected) p.accent else Color.Unspecified,
+                        tintAlpha = 0.12f,
+                        glow = if (isSelected) p.accent else Color.Unspecified,
+                        pressProgress = press,
+                        blurRadius = 2.dp,
+                        lensHeight = 5.dp,
+                        lensAmount = 12.dp,
+                    )
+                } else {
+                    Modifier.background(
+                        Brush.verticalGradient(
+                            if (isSelected) {
+                                listOf(Color(0xFFFFFFFF), Color(0xFFF2F2F4), Color(0xFFE5E5E8))
+                            } else {
+                                listOf(Color(0xFF2B2929), Color(0xFF1F1D1D))
+                            },
+                        ),
+                    )
+                },
             )
             .then(
-                if (isSelected) Modifier.border(1.dp, p.accent, RoundedCornerShape(Radii.glassControl)) else Modifier,
+                if (isSelected && kit.surfaces.isGlass) {
+                    Modifier.border(1.dp, p.accent, kit.geometry.shape(RoundedCornerShape(Radii.glassControl)))
+                } else {
+                    Modifier
+                },
             )
             .clickable(
                 interactionSource = interaction,
@@ -462,46 +519,78 @@ internal fun AgentIconCard(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        if (isSelected) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 5.dp, end = 5.dp)
-                    .size(16.dp)
-                    .clip(CircleShape)
-                    .background(p.accent)
-                    .testTag("agent-card-check-${launcher.provider}"),
-                contentAlignment = Alignment.Center,
+        if (kit.surfaces.isGlass) {
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 5.dp, end = 5.dp)
+                        .size(16.dp)
+                        .clip(kit.geometry.shape(CircleShape))
+                        .background(p.accent)
+                        .testTag("agent-card-check-${launcher.provider}"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AppText(
+                        text = "✓",
+                        color = p.onAccent,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        lineHeightMultiplier = 1f,
+                    )
+                }
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
             ) {
+                AgentBrandIcon(
+                    canonicalId = launcher.provider,
+                    tint = contentTint,
+                    modifier = Modifier.size(28.dp),
+                )
+                Spacer(Modifier.height(6.dp))
                 AppText(
-                    text = "✓",
-                    color = p.onAccent,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
+                    text = CanonicalProviderMarks.of(launcher.provider)?.displayName ?: launcher.displayName,
+                    color = if (isSelected) p.accent else p.rowTitleText,
+                    fontSize = 11.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                     lineHeightMultiplier = 1f,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
-        }
-
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
-        ) {
+        } else {
+            if (isSelected) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .size(9.dp)
+                        .background(Color(0xFFEC3013))
+                        .testTag("agent-card-selection-marker-${launcher.provider}"),
+                )
+            }
             AgentBrandIcon(
                 canonicalId = launcher.provider,
                 tint = contentTint,
-                modifier = Modifier.size(28.dp),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 14.dp, top = 12.dp)
+                    .size(28.dp),
             )
-            Spacer(Modifier.height(6.dp))
             AppText(
                 text = CanonicalProviderMarks.of(launcher.provider)?.displayName ?: launcher.displayName,
-                color = if (isSelected) p.accent else p.rowTitleText,
+                color = contentTint,
                 fontSize = 11.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 lineHeightMultiplier = 1f,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 10.dp),
             )
         }
     }
@@ -560,10 +649,11 @@ fun SessionListRows(
     listTestTag: String = "l2-session-list-scroll",
 ) {
     val orderedSessions = sessions.sortedByDescending { it.starred }
+    val rowGap = LocalThemeSuite.current.geometry.listRowGap
     LazyColumn(
         modifier = modifier.testTag(listTestTag),
-        contentPadding = PaddingValues(top = Dims.cardVGap, bottom = Dims.cardVGap + LocalFloatingNavInset.current),
-        verticalArrangement = Arrangement.spacedBy(Dims.cardVGap),
+        contentPadding = PaddingValues(top = rowGap, bottom = rowGap + LocalFloatingNavInset.current),
+        verticalArrangement = Arrangement.spacedBy(rowGap),
     ) {
         items(orderedSessions, key = { it.id }) { item ->
             val isClosing = closingSessionRef == item.id

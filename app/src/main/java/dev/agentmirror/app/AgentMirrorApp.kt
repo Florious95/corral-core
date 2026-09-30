@@ -46,6 +46,7 @@ import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import dev.agentmirror.app.ui.theme.AppTheme
 import dev.agentmirror.app.ui.theme.Appearance
 import dev.agentmirror.app.ui.theme.SharedPreferencesAppearanceStore
+import dev.agentmirror.app.ui.theme.SharedPreferencesThemeSuiteStore
 import dev.agentmirror.app.workspace.WorkspaceViewModel
 
 /**
@@ -86,6 +87,9 @@ fun AgentMirrorApp(
     val context = LocalContext.current
     val appearanceStore = remember { SharedPreferencesAppearanceStore(context) }
     var appearance by remember { mutableStateOf(appearanceStore.load()) }
+    // 界面风格与外观各自独立持久化；切换只改这份 state，整树按新令牌重组，不重建 Activity / 路由 / 会话。
+    val themeStore = remember { SharedPreferencesThemeSuiteStore(context) }
+    var themeId by remember { mutableStateOf(themeStore.load()) }
     val darkTheme = when (appearance) {
         Appearance.Light -> false
         Appearance.Dark -> true
@@ -100,7 +104,7 @@ fun AgentMirrorApp(
             )
         }
     }
-    AppTheme(appearance = appearance) {
+    AppTheme(appearance = appearance, themeId = themeId) {
     AgentMirrorTheme(darkTheme = darkTheme) {
         // 在屏兜底时钟泵（fix-app-runtime-sa）：任一屏在屏且 App RESUMED 即挂一个兜底泵，
         // 前台服务泵不可用时接管共享连接的重连调度与输入超时裁决，服务恢复即让出（不双泵）。
@@ -233,6 +237,11 @@ fun AgentMirrorApp(
                         onAppearanceChange = {
                             appearance = it
                             appearanceStore.save(it)
+                        },
+                        themeId = themeId,
+                        onThemeChange = {
+                            themeId = it
+                            themeStore.save(it)
                         },
                     )
                 }

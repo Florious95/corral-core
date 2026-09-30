@@ -1,0 +1,5 @@
+{
+  "task_id": "fix-recovery-baseline",
+  "status": "blocked",
+  "notes": "排期条件“P0 波次收口后派”仍未满足：feat-tsnet-wiring 的席位已空闲但尚无证据文件，不能视为完成；fix-ts-state-dir-e2e 仍因后台模拟器控制条件缺失而 blocked。当前不放行，不修改 taskbook deps；待这两个 P0 任务均有 pass 证据后重新裁定具体前置。"
+}

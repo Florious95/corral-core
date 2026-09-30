@@ -1,0 +1,73 @@
+{
+  "status": "pass",
+  "task_id": "doc-contract-discovery",
+  "case_id": "msg_ba8dd551e3b0",
+  "summary": "internal/discovery 三件事全部办结。①注释核实：包内 8 个非测试导出符号（Discover / DiscoverWithDirs / DefaultSocketDirs / Pane / Workspace / Count / Model / Workspace()）逐条与实现对照读，**一条不实注释都没找到**——确认方式不是默认结论，而是逐符号交叉验证：Pane.Socket 注释声明『ws-api 消费它 build 稳定 ref』，实测 api/session.go:23 sessionRef(p) 返回 p.Socket+分隔符+p.PaneID 真在用；Pane.Socket/PaneID 注释声明的 bridge.NewPane(Socket, PaneID) 实测 api/session.go:66 真调用（bridge/bridge.go:34 签名一致）；PanePID 注释声称『state-wiring 加法输入、零时降级 unknown』，实测 scan.go:180-183 非数字 PID 落 0、agentstate 侧从该根下钻，且 0d24f61 提交正是该字段落库时同步写的注释；Discover 注释声明的『DefaultSocketDirs 扫描 + 跳过不可达 socket』、DefaultSocketDirs 注释声明的『TMUX_TMPDIR 优先 + /tmp 与 /private/tmp 去重』、Count/Workspace()/buildModel 排序注释，全部与实现逐行吻合；注释里引用的 requirement 001/002/008 经 requirement-base/INDEX.md 核对为真实条目。现有注释文本无任何反引号符号引用（全自然语言），T3-2 无可验引用可造假。②补契约：为确有契约面的 4 个导出符号补 @contract 四标签齐全（Discover/DiscoverWithDirs 有 @err 面、DefaultSocketDirs/Model.Workspace 显式 @err none），未为纯 getter（Pane 字段、Count）凑数。③T3-4 漂移：internal/discovery **零漂移**——该包只 import 标准库（context/fmt/log/slog/os/os/exec/path/filepath/strconv/strings/time/sort），T3-4 清单无本包条目；t3-report 里『internal/api → internal/discovery』是 api 包的漂移，归 doc-contract-api 席。为不存在的 import 补 @consumes 反而会判红（声明了却未 import），故 consumes_added 为空。阳性对照已做并还原：删 Discover 的 @err → --strict-t3 --pkg internal/discovery exit 1 精确指向 scan.go:28 缺 @err，还原后 exit 0——证明判据真扫到本包，绿不是『没扫到』。验收三连全过：单包硬判 exit 0、包内 go test 全绿（ok 0.428s）、全仓库 --check exit 0（仅 T3-4 报告模式列 29 条他包漂移不计退出码）。改动仅注释：model.go +5 行 / scan.go +15 行，零删除，未动任何实现代码。",
+  "rewritten": [],
+  "rewritten_confirmation": "本包一条不实注释都没找到。确认过程（非默认结论）：包内全部 8 个非测试导出符号（Discover / DiscoverWithDirs / DefaultSocketDirs / Pane / Workspace / Count / Model / Model.Workspace）的 doc 注释逐条与实现对照；注释里引用的 4 类事实逐项实证——①跨包符号引用：Pane.Socket 注释声称被 api 层消费 build 稳定 ref 并经 bridge.NewPane(Socket, PaneID) 建桥，实测 server/internal/api/session.go:23 sessionRef(p)=p.Socket+'\\x1f'+p.PaneID、session.go:66 bridge.NewPane(p.Socket, p.PaneID)，且 server/internal/bridge/bridge.go:34 签名 NewPane(socket, paneID string) 一致；②字段语义：PanePID 注释声称零值=无法解析时降级、消费方按 0 处理，实测 scan.go:180-183 非数字 PID 落 0 且该字段由 fix-state-wiring 任务 (0d24f61) 与注释同步落库，git diff 证实注释与实现同 commit 演进无漂移；③行为断言：Discover 注释声称跳过一个死 socket 不中止扫描，实测 scan.go:55-67 每个 socket 错误仅 logger.Debug + continue，且 scan_test.go:216 TestDiscoverToleratesDeadSocket 用真实 stale socket 锁死该行为；DefaultSocketDirs 注释声称 TMUX_TMPDIR 优先 + /tmp 与 /private/tmp 去重，实测 scan.go:81-103 与 model_test.go:104/124 两个测试锁定；④需求引用：注释所引 requirement 001/002/008 经 requirement-base/INDEX.md 核实均为真实已裁定条目。另用 git log 回看该包全历史（6b55b3e 建包 → 8fce201 → 0d24f61），doc 注释一直随实现演进（doc.go 从『Landing zone 无实现』改到现行描述正是 ws-api 落地时同步的），无『曾如此现已改掉』的残留旧行为。",
+  "contracts_added": [
+    {
+      "symbol": "Discover",
+      "file": "server/internal/discovery/scan.go",
+      "line": 28,
+      "contract": "@contract / @pre ctx 必须非 nil；logger 可为 nil（内部替换为丢弃日志的 handler） / @post 返回一次全新快照 Model；不可达或过期的 socket 被跳过，单点故障不中止扫描 / @err ctx 取消或超时时返回 ctx.Err() / @inv 不做缓存，每次调用重新扫描",
+      "rationale": "对外主入口，有前置（ctx 非 nil）、后置（新快照+容错）、错误面（ctx 取消返回 ctx.Err()）、不变量（无缓存）四项齐全，契约面真实存在"
+    },
+    {
+      "symbol": "DiscoverWithDirs",
+      "file": "server/internal/discovery/scan.go",
+      "line": 42,
+      "contract": "@contract / @pre ctx 必须非 nil；socketDirs 为要扫描的目录列表，可为空 / @post 返回一次全新快照 Model；每个目录内不可达或过期的 socket 被跳过 / @err ctx 取消或超时时返回 ctx.Err()；目录读取失败仅记日志并跳过，不返回错误 / @inv 不做缓存；空 socketDirs 返回空 Model 且 error 为 nil",
+      "rationale": "Discover 的显式目录变体，四项契约面齐全（空列表返回空 Model 由实现 scan.go:40-73 直接保证）"
+    },
+    {
+      "symbol": "DefaultSocketDirs",
+      "file": "server/internal/discovery/scan.go",
+      "line": 88,
+      "contract": "@contract / @pre none（无外部前置条件） / @post 返回目录列表去重（EvalSymlinks 解析后相同即只列一次）；列表永不为空，至少含平台默认目录 / @err none（不返回错误；无法解析的路径按原样收录，由扫描时跳过） / @inv 不触发任何 tmux 调用，纯本地路径计算",
+      "rationale": "纯函数：无错误面写 @err none、无前置写 @pre none，后置去重语义由实现 map[resolved] 去重与 model_test.go:104 锁定"
+    },
+    {
+      "symbol": "Model.Workspace",
+      "file": "server/internal/discovery/model.go",
+      "line": 75,
+      "contract": "@contract / @pre none（纯查询，无副作用） / @post 返回 CWD 精确匹配的 Workspace；无匹配时返回 nil / @err none / @inv 不修改 Model；cwd 不变则结果不变",
+      "rationale": "只读查询：无错误面显式 @err none，后置（nil 语义）由实现 return nil 直接保证，不变量（只读）真实"
+    }
+  ],
+  "consumes_added": [],
+  "consumes_rationale": "internal/discovery 包零架构漂移：包内全部 import 均为标准库（scan.go: context/fmt/log/slog/os/os/exec/path/filepath/strconv/strings/time；model.go: sort），无任何跨层内部包 import。docs/wiki/t3-report.md T3-4 清单 29 条中无本包条目；清单中『internal/api → internal/discovery』属于 internal/api 包的漂移（api 消费了 discovery 却没声明），归 doc-contract-api 席位，本席 write_scope 严格限 server/internal/discovery/ 不得越界代补。依据 HANDBOOK §9.3『只声明真实存在的 import』——本包无内部 import 可声明，补 @consumes 反而会判『声明 @consumes 但 import 图没有该包』红，故正确地保持不声明。",
+  "uncertain": [],
+  "uncertain_rationale": "判不准处为零：包内所有导出符号的注释都有可落地的代码事实或测试事实佐证，无一处需要猜测。唯一值得记录但已实证排除的是 Pane.Socket 的『stable ref』措辞——初读怀疑是否确有此消费路径，经 api/session.go:23 sessionRef 实证为真，故不列 uncertain。",
+  "deviation": [],
+  "changes": [
+    "server/internal/discovery/scan.go — Discover/DiscoverWithDirs/DefaultSocketDirs 三符号 doc 补 @contract 四标签（+15 行注释，零实现改动）",
+    "server/internal/discovery/model.go — Model.Workspace 补 @contract 四标签（+5 行注释，零实现改动）"
+  ],
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/discovery",
+      "rc": 0,
+      "note": "单包硬判：T3-1/T3-2/T3-3/T3-4 全 PASS，exit 0（最终态）"
+    },
+    {
+      "argv": "bash -lc 'cd server && go test -count=1 ./internal/discovery/...'（env -u TEAM_AGENT_* 逐变量净化：AGENT_ID/OWNER_TEAM_ID/WORKSPACE/ID/MCP_AUTO_APPROVE/MCP_AUTO_APPROVE_SOURCE/LEADER_BYPASS/LEADER_BYPASS_SOURCE/LEADER_BYPASS_PROVIDER/LEADER_BYPASS_FLAG）",
+      "rc": 0,
+      "note": "包内 11 个测试全绿：ok github.com/agentmirror/agentmirror/internal/discovery 0.428s——注释改动零行为影响"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "全仓库判据不被打坏：T1-1/T1-2 保持绿 exit 0；T3 报告模式列清单（T3-4 仍有他包 29 条漂移待各自席补）不计退出码"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/discovery（故意破坏：删 Discover 的 @err 标签）",
+      "rc": 1,
+      "note": "阳性对照（只验绿不验红等于没验）：破坏后单包硬判真 exit 1，精确报『[T3-3] internal/discovery server/internal/discovery/scan.go:28 @contract — 缺契约标签: @err』——证明判据真扫到本包，绿的成果不是『没扫到』的假绿；随后已还原，git diff 确认工作区只剩注释新增"
+    }
+  ],
+  "positive_control": {
+    "summary": "故意破坏一次并确认判据真会红，然后还原。破坏动作：删除 Discover（scan.go:28）doc 注释块中的 @err 标签行。破坏后运行 `python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/discovery` 输出 'T3-3: FAIL — 契约标签完备：1 条违规 / [T3-3] internal/discovery server/internal/discovery/scan.go:28 @contract — 缺契约标签: @err'，exit 1。还原后同命令恢复 T3-3 PASS、exit 0。结论：判据对本包的 @contract 完备性真实生效，'全绿'不可能是扫不到本包的假象。",
+    "output_snippet": "== T3 判据（单包 internal/discovery，严格（计入退出码）） ==\nT3-1 : PASS — 符号级 doc 覆盖：无违规\nT3-2 : PASS — 引用真实性：无违规\nT3-3 : FAIL — 契约标签完备：1 条违规\n  [T3-3] internal/discovery  server/internal/discovery/scan.go:28  `@contract` — 缺契约标签: @err\nT3-4 : PASS — 跨层声明一致：无违规\n结果：未通过（exit 1）"
+  }
+}

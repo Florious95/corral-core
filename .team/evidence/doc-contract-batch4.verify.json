@@ -1,0 +1,206 @@
+{
+  "task_id": "doc-contract-batch4.verify",
+  "status": "pass",
+  "seat": "w-doc-verify4",
+  "case_id": "msg_d1b48e557fb8",
+  "summary": "扫描根盲区已真被堵上：我自己跑出的修复前 rc=0（空通过，只扫到 1 个 Kotlin 包）、修复后 rc=1 精确指向 TerminalEmulator 缺 @post、必绿格仍 exit 0；真仓库盲区探针（临时删 TerminalEmulator.feed 的 @err）确认真的会红且精确指向该符号，恢复后 git diff 自证干净。5 包 rewritten 全部属实（重点断言逐条独立核过：TermSurfaceView 整帧重绘、GlyphFontProvider MONO 槽 ASCII 预判、TsnetSocksAuthenticator 无安装点、ConnectionUi STOPPED 永久关闭、brandPrimary/brandBackground 零消费、CONTINUATION 零引用）。session 返工 3 处改后说法全部与实现相符。找漏网：termview 的 DamageListener/presenter 两处注释仍称『增量刷新』而实现已整帧重绘（跨包 doc 残留，predates 本批）。无人动实现：逐包 diff 全部注释/标注行，server/ 未被 w-archwiki-ktroot 触碰。",
+  "scanner_fix": {
+    "verdict": "PASS",
+    "verification": {
+      "1_before_fix_empty_pass": {
+        "method": "用 git show d831a25:tools/archwiki/build_wiki.py 取修复前旧版，对 tools/archwiki/testdata/ktroot 红测 fixture 跑 --check --go-source --strict-t3",
+        "argv": "env -u TEAM_AGENT_* python3 /tmp/verify4_old/build_wiki_old.py --root tools/archwiki/testdata/ktroot --check --go-source --strict-t3",
+        "rc": 0,
+        "output_excerpt": "T1-2: PASS — Go 1 包、Kotlin 1 包均有模块 doc; T3-1..T3-4 全 PASS; 结果：通过（exit 0）",
+        "confirms": "修复前确实空通过：只扫到 java 形态的 Legacy 1 个 Kotlin 包，src/main/kotlin 下的残缺 @contract 对判据不可见"
+      },
+      "2_after_fix_really_red": {
+        "method": "同一 fixture 用当前版本跑",
+        "argv": "env -u TEAM_AGENT_* python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/ktroot --check --go-source --strict-t3",
+        "rc": 1,
+        "output_excerpt": "T3-3 FAIL — 契约标签完备：1 条违规; [T3-3] dev.agentmirror.terminal app/terminal/src/main/kotlin/dev/agentmirror/terminal/TerminalEmulator.kt:3 `@contract` — 缺契约标签: @post",
+        "confirms": "修复后会红且精确指向残缺符号 TerminalEmulator 缺 @post"
+      },
+      "3_no_overcorrection": {
+        "method": "同一 fixture 的必绿格：kotlin 目录下完整 @contract 的 terminalgrid 包单包硬判",
+        "argv": "env -u TEAM_AGENT_* python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/ktroot --check --go-source --strict-t3 --pkg dev.agentmirror.terminalgrid",
+        "rc": 0,
+        "output_excerpt": "T3-1..T3-4 全 PASS; 结果：通过（exit 0）",
+        "confirms": "非『凡 kotlin 目录一律红』；必绿格仍绿"
+      },
+      "4_real_repo_blind_spot_probe": {
+        "method": "真仓库盲区探针：临时删除 app/terminal/src/main/kotlin/dev/agentmirror/terminal/TerminalEmulator.kt 里 TerminalEmulator.feed 的 @err 标签，跑单包硬判确认红，随后原样恢复并 git diff 自证干净",
+        "probe_target": "TerminalEmulator.feed 的 @err 行（line 105）",
+        "probe_break_rc": 1,
+        "probe_break_output": "[T3-3] dev.agentmirror.terminal app/terminal/src/main/kotlin/dev/agentmirror/terminal/TerminalEmulator.kt:100 `@contract` — 缺契约标签: @err",
+        "probe_restore_rc": 0,
+        "restore_verified": "sha256 校验：恢复后 TerminalEmulator.kt 与探针前字节级一致（OK）；git diff 确认无 @probe 残留；restore 后单包硬判 exit 0",
+        "confirms": "最关键的『真仓库探针』：判据现在真的扫到 app/terminal/src/main/kotlin 下的导出符号并精确指向——fixture 能红之外，真代码上也能红。盲区确已堵上"
+      },
+      "5_existing_conclusions_unchanged": {
+        "method": "old vs new scanner 对真仓库逐包 deps 对照",
+        "result": "既有 18 包（9 Go + 9 Kotlin）deps 逐字节一致，0 diff；新增唯一 dev.agentmirror.terminal（Go 9→9、Kotlin 9→10）；session/termview 各新增 1 条 →terminal 边（来自 terminal 首次入图，非打坏既有结论）。Go 侧零变化（go_doc_lines 2529 不变）",
+        "confirms": "既有判据结论零变化"
+      },
+      "6_no_whitelist_exemption": {
+        "method": "读 build_wiki.py diff + 全文 grep terminal/skip/exempt/whitelist/allow",
+        "result": "无任何对 dev.agentmirror.terminal 的特判/白名单/豁免；KT_SEARCH 改为按形状发现（java/kotlin 目录名候选），_find_kotlin_roots 跨模块扫描 app/*/src/main/{java,kotlin}",
+        "confirms": "没有为了让全仓库好看而给该模块开口子"
+      },
+      "7_idempotent_and_docstring": {
+        "method": "生成物幂等 + docstring 相符检查",
+        "result": "t3-report.md 连续 4 次 --check 运行字节级一致；clean-slate 重生成两次一致；README.md 一致。既有幂等契约成立（_build_basename_index 排除 .team/runtime 等 gitignored 易变文件不在 skip 列表内，但该问题 predates 本批修复，且当前全排序输出稳定）。_find_kotlin_roots 与 KT_SEARCH 的 docstring/注释与新实现（app/<模块>/src/main/{java,kotlin} 形状发现）逐字相符，未出现『注释与实现不符』（本轮整件事就在治这个）",
+        "confirms": "生成物幂等、docstring 与新实现相符"
+      }
+    },
+    "archwiki_write_scope": {
+      "changes": ["tools/archwiki/build_wiki.py", "tools/archwiki/test_check.py", "tools/archwiki/testdata/README.md", "tools/archwiki/testdata/ktroot/", "docs/wiki/README.md", "docs/wiki/t3-report.md"],
+      "server_untouched": true,
+      "app_terminal_untouched_by_ktroot_seat": true,
+      "no_commit": true
+    }
+  },
+  "packages": {
+    "dev.agentmirror.app.termview": {
+      "status": "pass",
+      "rewritten_verified": {
+        "TermSurfaceView_class_KDoc": "属实。原 KDoc（HEAD）称『每帧只重绘 presenter 给出的脏逻辑行区间（60fps 工作量 = 脏行数而非全屏）』；实现 doFrame `while (p.takeDamage().isNotEmpty()) Unit` 排空即弃 + invalidate() 整帧，onDraw `for (logical in win)` 画窗口全部行。改后说法『整帧全窗口重绘』与实现相符。F1 性能调查起点正确：每帧工作量 = 窗口行数非脏行数",
+        "TermSurfaceView_backToBottomLabel": "属实。backToBottomLabel 全仓库仅声明（line 67）+ 读取（line 202）两处，无赋值点，恒 null 永不走；真实回到底部入口是 SessionScreen 的 Compose 悬浮钮。改后说法属实",
+        "TermSurfaceView_onDraw": "属实。onDraw 铺可见窗口全部行背景（非脏行），改后说法相符",
+        "GlyphFontProvider_class_KDoc": "属实（半真半假修正）。原称『并用真实 Paint.hasGlyph 实现』；实现 hasGlyph：GlyphSlot.MONO -> `codepoint in 0x20..0x7E`（ASCII 预判），仅 SYSTEM_FALLBACK/POWERLINE 走真实 hasGlyph。改后说法『MONO 槽按 ASCII 原生等宽预判』与实现相符",
+        "GlyphProbe_KDoc": "属实。同上 MONO 槽 ASCII 预判非 hasGlyph；改后说法与实现相符"
+      },
+      "contracts_added_sound": true,
+      "consumes_added": "dev.agentmirror.terminal 已补，T3-4 PASS",
+      "acceptance": {
+        "single_pkg_check": { "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.termview", "rc": 0 },
+        "app_test": { "argv": ":app:testDebugUnitTest", "rc": 0, "suites": 8, "tests": 43, "failures": 0, "errors": 0 },
+        "full_check": { "argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0 }
+      },
+      "no_impl_change": true,
+      "gaps": [
+        "DamageListener.kt（terminal 包）KDoc『渲染层增量刷新用』与 TermViewPresenter init 注释『60fps 增量刷新数据源』两处仍把 damage 描述为增量刷新数据源，而 TermSurfaceView 现整帧重绘、damage 仅作触发信号（排空即弃）。此为跨包 doc 残留，predates 本批（原 doFrame 即已整帧重绘），但两席均未扫到。属『把触发信号写成增量内容』的轻微语义残留，建议下批统一口径"
+      ]
+    },
+    "dev.agentmirror.app.tsnet": {
+      "status": "pass",
+      "rewritten_verified": {
+        "TsnetSocksAuthenticator": "属实。全仓库无任何安装调用点（仅 TsnetDialTest.kt:63 单测构造；Authenticator.setDefault 全仓库零安装调用）；SOCKS 认证实际走 TsnetSocks 自实现握手（TsnetProxySocketFactory 注入，OkHttpWebSocketTransport 用 socketFactory）；本类仅单测引用。改后说法『当前生产接线不用本类』与实现相符",
+        "TsnetDial_class_KDoc_consumer": "属实。conn 包零 TsnetDial/TsnetWire/TsnetState/ConnectionPath 引用、零 `import dev.agentmirror.app.tsnet`；实际消费方仅 service（OkHttpWebSocketTransport）+ pairing（PersistentConnection/PairingViewModel）。改后说法（service/pairing）与实现相符",
+        "ConnectionPath_KDoc": "属实。写入方 OkHttpWebSocketTransport 按选路记录；读取方 WorkspaceScreen/SessionScreen/MirrorForegroundService 通知。改后说法点名真实消费方，与实现相符",
+        "TsnetInterfaceCodec_KDoc": "属实（T3-1 基线补缺）。parseInterfaces 在 tools/tsnetbind/tsnetbind.go 真实存在，测试两端齐全；『只编码不解析』与实现相符"
+      },
+      "contracts_added_sound": true,
+      "acceptance": {
+        "single_pkg_check": { "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.tsnet", "rc": 0 },
+        "app_test": { "argv": ":app:testDebugUnitTest", "rc": 0, "suites": 6, "tests": 34, "failures": 0, "errors": 0 },
+        "full_check": { "argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0 }
+      },
+      "no_impl_change": true,
+      "gaps": []
+    },
+    "dev.agentmirror.app.ui.theme": {
+      "status": "pass",
+      "rewritten_verified": {
+        "brandPrimary": "属实。提交 e00e41d（ui-redesign）存在；dark primary=0xFF9DBDFF、light primary=0xFF2F5DA8 均内联字面量，brandPrimary（0xFF1B2A4A）全仓库零消费点（grep 仅自身定义+colors.xml）。改后说法『孤儿 token』与实现相符",
+        "brandBackground": "属实。dark scheme background=0xFF0B111D 内联；TermSurfaceView.DEFAULT_BG=0xFF0D1626 同字面量但不经本 token；brandBackground 零消费。改后说法与实现相符"
+      },
+      "contracts_added_sound": true,
+      "other_public_symbols_verified": ["Spacing 值=码值且被 4 包消费", "StateTone/StateTones 三色语义@Immutable 相符", "Light/DarkStateTones 值成对相符", "MonoFontFamily=FontFamily.Monospace 被消费", "LocalStateTones=staticCompositionLocalOf{LightStateTones} 相符", "AgentMirrorTheme darkTheme→scheme/tone 配对相符", "文件头『禁止字面量颜色』全仓库 grep 验证为真（仅 termview 终端渲染/ANSI 色板例外，属终端层非页面/组件层）"],
+      "acceptance": {
+        "single_pkg_check": { "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.ui.theme", "rc": 0 },
+        "app_test": { "argv": ":app:testDebugUnitTest", "rc": 0, "suites": 1, "tests": 3, "failures": 0, "errors": 0 },
+        "full_check": { "argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0 }
+      },
+      "no_impl_change": true,
+      "gaps": []
+    },
+    "dev.agentmirror.app.workspace": {
+      "status": "pass",
+      "rewritten_verified": {
+        "ConnectionUi": "属实（压在红线第 5 条失败可见）。Connection.kt finish() permanent 推导：authAcked=false 且 authSent=true（auth 被拒）或 explicitPermanent=true（显式 stop）→ permanent；ConnectionManager.connListener.onClosed(permanent=true) 走 setState(STOPPED) 不调度重连。原 KDoc『断连（RECONNECTING/STOPPED）由 conn 层自动重连』是假话；改后『STOPPED 是永久关闭（auth 被拒/显式 stop），不再自动重连』与实现相符",
+        "WorkspaceViewModel_内部接线注释": "属实。MirrorForegroundService 全仓库无 startService/startForegroundService 调用点；包装监听在 ServiceWire.manager() 内部构造（connListener+uiConnector 双扇出）。改后引用 ServiceWire.manager 与实现相符",
+        "WorkspaceUi": "属实。upsertSession 里 added_sessions 新建工作区 sessionCount=0/aggregateState=s.state 占位，changed_workspaces 纠正前用会话自身状态渲染；『全部来自服务端权威值』确为绝对化断言漏边界。改后说法与实现相符",
+        "StateBadgeStyle_KDoc_link": "属实。原 [unknown] 小写非导出符号（实际 UNKNOWN），改后 [UNKNOWN] 指向正确"
+      },
+      "contracts_added_sound": true,
+      "consumes_added": "conn/tsnet/ui.theme 三条已补，T3-4 PASS",
+      "acceptance": {
+        "single_pkg_check": { "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.workspace", "rc": 0 },
+        "app_test": { "argv": ":app:testDebugUnitTest", "rc": 0, "suites": 3, "tests": 22, "failures": 0, "errors": 0 },
+        "full_check": { "argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0 }
+      },
+      "no_impl_change": true,
+      "gaps": []
+    },
+    "dev.agentmirror.terminal": {
+      "status": "pass",
+      "rewritten_verified": {
+        "Cell_KDoc_CONTINUATION": "属实。CONTINUATION 全仓库仅 Cell.kt 声明+自身 KDoc 两处，零引用；宽字符续格由网格层内联创建 `Cell(\"\", style, 0)`（TerminalGrid.kt:66 write 宽字符）。改后说法『并非 CONTINUATION 单例』与实现相符"
+      },
+      "contracts_added_sound": true,
+      "module_own_criteria": "T3-1/T3-2/T3-3/T3-4 全 PASS（单包硬判 exit 0）；T3-3 @contract 符号 10 个四标签齐全",
+      "import_free_leaf": true,
+      "acceptance": {
+        "single_pkg_check": { "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.terminal", "rc": 0 },
+        "terminal_test": { "argv": ":terminal:test --rerun-tasks", "rc": 0, "suites": 9, "tests": 67, "failures": 0, "errors": 0 },
+        "full_check": { "argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0 }
+      },
+      "no_impl_change": true,
+      "gaps": [
+        "internal 符号（AnsiParser/Utf8Decoder/TerminalGrid/TermHandler/applySgr）非公共契约面，正确未标 @contract。Cell/Cell.BLANK/Cell.CONTINUATION/TextStyle/TerminalColor/ScreenSnapshot/DamageListener 纯值/容器/接口，不标合理。无遗漏的公共导出符号"
+      ]
+    }
+  },
+  "session_rework": {
+    "status": "pass",
+    "three_claims_verified": {
+      "claim1_unique_caller": {
+        "original": "SessionRoute 类 KDoc 称『MainActivity/AgentMirrorApp 双入口』",
+        "rewritten": "『[AgentMirrorApp] 的 Session 分支唯一入口』",
+        "verified": "属实。grep 全仓库 SessionRoute 唯一调用点是 AgentMirrorApp.kt:96（AppRoute.Session 分支）；MainActivity 只挂载 Compose 根 AgentMirrorApp（line 80），不直接调 SessionRoute"
+      },
+      "claim2_wiring_layer": {
+        "original": "『仅路由挂载，不含接线层』",
+        "rewritten": "『本组合同时承担接线层：把当前会话 VM 挂到 [ServiceWire.uiConnector] 扇出，并安全创建共享连接』",
+        "verified": "属实。SessionRoute 内 DisposableEffect(vm) 挂 ServiceWire.uiConnector = vm；createSessionViewModel 调 ServiceWire.manager(...).start()。改后说法与实现相符"
+      },
+      "claim3_manager_creator_and_clock": {
+        "original": "『fg-service 持有 manager、前台服务决定启动；离屏后服务接手』",
+        "rewritten": "『manager 真实创建方是 ServiceWire.manager（首次调用构造），生产路径经 startPersistentConnection 或本文件 createSessionViewModel 触发；时钟泵由在屏组合 LaunchedEffect 驱动』",
+        "verified": "属实。MirrorForegroundService 全仓库零 startService/startForegroundService 调用点（manifest 声明但从未启动），pumpRunnable 未运行；manager 由 startPersistentConnection（MainActivity.kt:74 onCreate 先行调用）或 createSessionViewModel 触发；时钟泵由 SessionScreen.kt:157 LaunchedEffect + PairingScreen.kt:147 LaunchedEffect 驱动。改后说法与实现完全相符"
+      }
+    },
+    "sweep_no_similar_gaps": "顺带核对其余顶层声明（SessionScreen/Attachment/AttachmentUploader/HttpUrlConnectionUploader/SessionViewModel 各项/UploadOutcome/InputStatus）均与实现相符，无同类『未接线写成现状』漏网；dismissTransient 唯一调用点 LaunchedEffect、showBackToBottom 由 Compose 悬浮钮渲染，均与改后说法一致",
+    "acceptance": {
+      "single_pkg_check": { "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.session", "rc": 0 },
+      "app_test": { "argv": ":app:testDebugUnitTest", "rc": 0, "suites": 6, "tests": 38, "failures": 0, "errors": 0 },
+      "full_check": { "argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0 }
+    },
+    "no_impl_change": true
+  },
+  "gaps": [
+    {
+      "pkg": "dev.agentmirror.app.termview (cross → dev.agentmirror.terminal)",
+      "symbol": "DamageListener KDoc + TermViewPresenter init 注释",
+      "morph": "旧 API 残留/把触发信号写成增量内容",
+      "detail": "terminal 包 DamageListener KDoc『渲染层增量刷新用』与 termview 包 TermViewPresenter init 注释『60fps 增量刷新数据源』仍把脏区描述为增量重绘内容；而 TermSurfaceView 现整帧全窗口重绘，doFrame 里 `while (p.takeDamage().isNotEmpty()) Unit` 排空即弃、damage 仅作『画面已变化』触发信号。两处 doc 与 TermSurfaceView 改后 KDoc（本批已改对）矛盾，且 predates 本批（原 doFrame 即已整帧重绘）。两席各自改了自己包的注释但漏了跨包同题的两处。建议下批统一口径：把『增量刷新数据源』改为『帧触发信号』"
+    }
+  ],
+  "notes": [
+    "本批最重标的（扫描根盲区）确已真被堵上：独立复现修复前空通过（rc=0）+ 修复后必红（rc=1 精确指向）+ 必绿格不红（rc=0）+ 真仓库探针（删 feed 的 @err 会红精确指向，恢复后 git diff 干净）。这是首次有独立席位自己造真仓库盲区探针验证『判据真在扫 app/terminal/src/main/kotlin 下的导出符号』",
+    "全仓库现为 19 包口径（terminal 首次纳入），非异常：Go 9 + Kotlin 10；31 条依赖边",
+    "w-archwiki-ktroot 未动 app/ 与 server/（仅 tools/archwiki/ + docs/wiki/ 生成物）",
+    "幂等：t3-report.md 连跑 4 次字节级一致，clean-slate 两次一致。注：_build_basename_index 会把 .team/runtime/ 等 gitignored 易变文件计入基名索引（该问题 predates 本批修复，非本批引入），本批修复未改变该行为",
+    "我（复核席）未做任何 git commit/push；临时探针产物已清理（/tmp 清空、.team/verify-doc4 未创建），TerminalEmulator.kt 恢复后 sha256 与原样字节级一致"
+  ],
+  "redlines": {
+    "zero_impl_change": "逐包 diff 确认改动全部落在注释/标注行，实现零改动（termview/tsnet/theme/workspace/terminal/session 全部验证）",
+    "write_scope": "w-archwiki-ktroot 仅 tools/archwiki/ + docs/wiki/；5 包各自只动自己包直属文件",
+    "server_untouched": true,
+    "no_commit_push": true,
+    "production_daemon_not_touched": true,
+    "tests_sanitized_env": true,
+    "temp_cleaned": true
+  }
+}

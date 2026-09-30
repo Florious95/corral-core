@@ -1,0 +1,95 @@
+{
+  "status": "pass",
+  "case_id": "msg_a5adbcb5d348",
+  "task": "doc-contract-protocol",
+  "pkg": "internal/protocol",
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/protocol",
+      "rc": 0,
+      "note": "开工前基线：T3-1..T3-4 全部 PASS（如 leader 预告，单包硬判本来就绿）"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/protocol",
+      "rc": 0,
+      "note": "施工后：T3-1..T3-4 全部 PASS"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_* go test -count=1 ./internal/protocol/...",
+      "rc": 0,
+      "note": "包内测试绿（0.227s）"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "全仓库判据绿；docs/wiki/t3-report.md 被 build_wiki 自动重生成（@consumes 声明总数 0→1，证明本包声明被识别）"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/protocol（故意删 MarshalFrame 的 @err 后）",
+      "rc": 1,
+      "note": "阳性对照：T3-3 FAIL 1 条，精确指向 json.go:14 缺 @err，exit 1；恢复后 exit 0"
+    }
+  ],
+  "changes": [
+    "server/internal/protocol/json.go",
+    "server/internal/protocol/binary.go",
+    "server/internal/protocol/errors.go",
+    "server/internal/protocol/frames.go",
+    "server/internal/protocol/doc.go"
+  ],
+  "rewritten": [
+    {
+      "symbol": "UnmarshalFrame",
+      "file": "server/internal/protocol/json.go",
+      "original": "when nil is returned, raw holds the decoded envelope (nil env is not returned)",
+      "problem": "不实：函数签名是 (Typed, error)，不存在 raw 返回值。git 实证：自首个 commit（2bc984f）起签名从未变过，raw 是描述一个从未存在的旧 API 的残留文档",
+      "replaced_with": "出错时返回 (nil, err)，绝不返回 (nil, nil)"
+    },
+    {
+      "symbol": "DecodeBinary",
+      "file": "server/internal/protocol/binary.go",
+      "original": "It is strict by default: ... an oversized frame ... is an error",
+      "problem": "不实：decode 侧无任何 payload 大小上限检查（size 上限只在 encode 侧 validateBinaryPayload 里用 ErrInvalidField）。overloaded frame 错误分支在 decode 路径上不存在",
+      "replaced_with": "Decode 不设 payload 上限，BinaryMaxPayloadLen 限制在 encode 侧由 EncodeBinary 实施"
+    },
+    {
+      "symbol": "EncodeBinary",
+      "file": "server/internal/protocol/binary.go",
+      "original": "Kind is checked by the caller's constructor choices (Snapshot/Delta set ReqID 0)",
+      "problem": "不实：validateBinaryPayload 显式调用 p.Kind.validKind()，kind 闭集是 EncodeBinary 自己校验的，不是依赖 caller 构造约定",
+      "replaced_with": "描述真实校验：kind 闭集 + ref 界 + payload 上限 + scrollback ReqID/LineCount>=1 均由 EncodeBinary 先验"
+    },
+    {
+      "symbol": "ErrInvalidGeometry / ErrInvalidCount",
+      "file": "server/internal/protocol/errors.go",
+      "original": "ErrInvalidGeometry means a terminal dimension (rows/cols) is zero；ErrInvalidCount means a line count is zero",
+      "problem": "误导：这两个 sentinel 在本包乃至全仓库无任何构造方（grep 实证仅 internal/api/ws_conn.go 用 errors.Is 匹配），注释暗示它们是活跃错误面",
+      "replaced_with": "标明为保留 sentinel：本包从不构造（坏几何/坏计数走 ErrInvalidField），仅因 ws_conn.go 的 classifyCodecError 用 errors.Is 匹配而保留"
+    }
+  ],
+  "contracts_added": [
+    "MarshalFrame",
+    "UnmarshalFrame",
+    "EncodeBinary",
+    "DecodeBinary",
+    "BinaryPayload",
+    "Auth",
+    "Input",
+    "Scrollback"
+  ],
+  "consumes_added": [
+    "doc.go：@consumes none（本包零 import、零内部依赖的显式声明）"
+  ],
+  "uncertain": [
+    {
+      "symbol": "Key",
+      "file": "server/internal/protocol/keys.go",
+      "note": "注释里 'Arrow/vertical-bar values are chosen to read unambiguously on the wire' 是设计注记，闭集七键均为小写词（esc/ctrl_c/tab/up/down/left/right），无 vertical-bar 值；语义含糊判不准，但不宣称不存在的实体，不影响注释准确度"
+    }
+  ],
+  "deviation": [],
+  "positive_control": {
+    "summary": "收工前故意删除 MarshalFrame 的 @err 标签，跑 --strict-t3 --pkg internal/protocol：T3-3 FAIL 1 条，精确指向 server/internal/protocol/json.go:14 的 @contract 缺 @err，exit 1。判据确实在扫本包，单包硬判不是假绿。随后恢复 @err，最终验收 exit 0。",
+    "output": "T3-3 : FAIL — 契约标签完备：1 条违规\n  [T3-3] internal/protocol  server/internal/protocol/json.go:14  `@contract` — 缺契约标签: @err\n结果：未通过（exit 1）"
+  }
+}

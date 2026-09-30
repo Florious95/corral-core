@@ -1,0 +1,181 @@
+{
+  "verdict": "partial",
+  "task_id": "arch-criteria-t3",
+  "verifier": "w-t3-verify",
+  "recheck": "返工#1 复打（覆盖上一版 .verify.json）",
+  "d14_archetype": {
+    "source_sha": "9c2adf3f4544937da138142078a3e5a20ec93ad8",
+    "file": "app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt",
+    "line": 107,
+    "comment": "// 工作区：有配置直进；\"重新配对\"从设置入口进入（见 WorkspaceScreen 顶栏设置钮）。",
+    "semantic_verdict": "T3-2 对 D-14 的原始语义谎报仍不可见（verbatim fixture exit 0，T3-2 PASS 0 违规）——但这是**诚实边界**而非缺陷：D-14 的谎言是自然语言语义断言（'顶栏设置钮'不存在），无任何可判形状（不是反引号假符号/假路径/假 flag）。HANDBOOK §3 与 t3-report 已明确此边界，并由 PairingUxTest（app/app/src/test/java/dev/agentmirror/app/PairingUxTest.kt:76-80：点'设置'→'重新配对'→断言切到配对页）覆盖语义可达性。",
+    "shape_verdict": "对 D-14 同位置的**带形状谎报**（函数体内普通 // 注释含假符号/假路径/假 flag），扩面后扫描器在真前置仓库实测能抓：向 9c2adf3 的 AgentMirrorApp.kt:107 注入 `GhostMadeUpClass`/`docs/never-created.md`/`--no-such-flag` 后 --strict-t3 exit 1，T3-2 报 3 条指向该行。"
+  },
+  "previously_failed_5": [
+    {
+      "name": "d14-verbatim-fixture",
+      "status": "still-green-by-design",
+      "argv": "git show 9c2adf3:AgentMirrorApp.kt → /tmp fixture → python3 tools/archwiki/build_wiki.py --root <fixture> --check --go-source --strict-t3",
+      "rc": 0,
+      "note": "原始语义谎报无形状可判，exit 0 是诚实边界（非漏判）。判据设计目标已由 HANDBOOK 明示为'只验引用形状、不验语义事实'"
+    },
+    {
+      "name": "d14-full-prefix-repo",
+      "status": "honest-green",
+      "argv": "git archive 9c2adf3 → python3 tools/archwiki/build_wiki.py --root /tmp/t3verify-fullpre --check --go-source --strict-t3",
+      "rc": 1,
+      "note": "T3-2 PASS 0 违规（语义谎报不判），exit 1 来自 T3-1（TsnetInterfaceCodec.kt:46）。注入带形状谎报后同一行 T3-2 报 3 条"
+    },
+    {
+      "name": "probe-go-body-comment",
+      "status": "FIXED",
+      "argv": "python3 tools/archwiki/build_wiki.py --root /tmp/t3verify-probe --check --go-source --strict-t3",
+      "rc": 1,
+      "note": "Go 函数体 // 注释里的 docs/fake-body.md 与 --no-such-body-flag 现被抓（GhostLies 裸名无反引号不判——符合边界）"
+    },
+    {
+      "name": "probe-kt-plain-comment",
+      "status": "FIXED",
+      "argv": "python3 tools/archwiki/build_wiki.py --root /tmp/t3verify-probe --check --go-source --strict-t3",
+      "rc": 1,
+      "note": "Kotlin 函数体 // 注释里的 docs/fake-plain.md 与 --no-such-plain-flag 现被抓"
+    },
+    {
+      "name": "probe-kt-kdoc-flag",
+      "status": "FIXED",
+      "argv": "python3 tools/archwiki/build_wiki.py --root /tmp/t3verify-probe --check --go-source --strict-t3",
+      "rc": 1,
+      "note": "Kotlin KDoc 内 --no-such-kt-flag 现被抓（Kotlin 侧 flag 判定对齐）"
+    }
+  ],
+  "checks": [
+    {
+      "name": "probe-all-5-shapes",
+      "argv": "python3 tools/archwiki/build_wiki.py --root /tmp/t3verify-probe --check --go-source --strict-t3",
+      "rc": 1,
+      "expected": 1,
+      "met": true,
+      "note": "10 条违规：Go/Kotlin 函数体 // 的假路径+假flag、Kotlin KDoc 假 flag、Go doc 假符号/假路径/假 flag 全抓"
+    },
+    {
+      "name": "string-aware-go-raw-string",
+      "argv": "python3 tools/archwiki/build_wiki.py --root /tmp/t3verify-strings --check --go-source --strict-t3",
+      "rc": 1,
+      "expected": "catch line-end lies, ignore string content",
+      "met": true,
+      "note": "Go 反引号 raw 串内 // fake-symbol、/* fake-path.md */、GhostInString、docs/fake-in-string.md 全部不误判（在串内）；行尾真注释 --no-such-flag-here/docs/never-created.md 被抓（不漏）"
+    },
+    {
+      "name": "string-aware-kt-triple-quote",
+      "argv": "python3 tools/archwiki/build_wiki.py --root /tmp/t3verify-strings --check --go-source --strict-t3",
+      "rc": 1,
+      "expected": "no false positive from triple-quote content",
+      "met": true,
+      "note": "Kotlin 三引号串内 /* is not a comment */、GhostInTriple、docs/fake-triple.md 全部不误判（在串内）；真实行尾注释仍扫"
+    },
+    {
+      "name": "whitelist-audit",
+      "argv": "审查 T3_EXTERNAL_PATH_PREFIXES=(herdr/, src/detect/manifests/) 与 T3_EXTERNAL_FLAGS={tests}",
+      "rc": null,
+      "expected": "narrow documented exceptions",
+      "met": true,
+      "note": "两条白名单都是真实外部引用：herdr 是外部 Apache-2.0 参考实现（server/internal/agentstate/adapters.go:11 引用其 src/detect/manifests/claude.toml，herdr 不在本仓）；--tests 出现在真实 src/main 文件 PairingViewModel.kt:34 等，是 gradle flag 非 daemon CLI。非'为了让真仓库变绿'的后门"
+    },
+    {
+      "name": "coverage-expansion",
+      "argv": "独立复算 _go_doc_lines/_kt_kdoc_lines 总数",
+      "rc": null,
+      "expected": "go=2179 kt=3031 (跳升自 513/1717)",
+      "met": true,
+      "note": "报告 2179/3031 与独立复算一致；总扫描行 2230→5210（2.3x），扩面真生效"
+    },
+    {
+      "name": "drift-fix-basename",
+      "argv": "验证 _build_basename_index 排除 docs/wiki/",
+      "rc": null,
+      "expected": "t3-report.md/README.md 不在基名索引",
+      "met": true,
+      "note": "docs/wiki/ 目录被 skip；t3-report.md 不在索引（README.md 在但属仓库根真实文件）。报告计数稳定，漂移修复有效"
+    },
+    {
+      "name": "idempotency-run2",
+      "argv": "连跑两次 python3 tools/archwiki/build_wiki.py --check && diff",
+      "rc": 0,
+      "expected": 0,
+      "met": true,
+      "note": "两次 stdout byte 相同；docs/wiki/t3-report.md 重跑无 diff"
+    },
+    {
+      "name": "fixture-grid-red",
+      "argv": "missingdoc-symbol + lying-ref --strict-t3",
+      "rc": 1,
+      "expected": 1,
+      "met": true,
+      "note": "missingdoc exit 1；lying-ref exit 1（18 条违规覆盖全部注释形态）"
+    },
+    {
+      "name": "fixture-grid-green",
+      "argv": "documented-symbol + truthful-ref --strict-t3",
+      "rc": 0,
+      "expected": 0,
+      "met": true,
+      "note": "documented exit 0；truthful exit 0（函数体 // 引用真实符号/路径/--listen flag 零误报）"
+    },
+    {
+      "name": "pkg-precision",
+      "argv": "pkg-filter 双侧 + 真仓库三包",
+      "rc": null,
+      "expected": "dirty=1 clean=0 双侧；protocol=0 tsnet=1 conn=0",
+      "met": true,
+      "note": "扩面后 --pkg 单包硬判双侧仍精确"
+    },
+    {
+      "name": "exit-code-grading",
+      "argv": "报告模式 vs --strict-t3",
+      "rc": null,
+      "expected": "report=0 strict=1 双侧",
+      "met": true,
+      "note": "missingdoc report=0/strict=1；真仓库 report=0/strict=1（诚实红）"
+    },
+    {
+      "name": "t1-green",
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "expected": 0,
+      "met": true,
+      "note": "T1-1/T1-2 PASS"
+    },
+    {
+      "name": "unittest",
+      "argv": "python3 -m unittest discover -s tools/archwiki -p test_*.py",
+      "rc": 0,
+      "expected": 0,
+      "met": true,
+      "note": "19 用例全绿，含扩面红测（GhostBody/MissingBodyComment/config/bad-body.yaml/--no-such-plain-flag 断言）"
+    },
+    {
+      "name": "real-repo-strict-0-false-positive",
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3",
+      "rc": 1,
+      "expected": "T3-2=0, T3-1=1 (TsnetInterfaceCodec)",
+      "met": true,
+      "note": "扩面后真仓库 T3-2 0 违规，T3-1 仅 TsnetInterfaceCodec.kt:46（亲验为真）；无新误报"
+    },
+    {
+      "name": "shape-lie-injected-real-repo",
+      "argv": "向 9c2adf3 完整前置仓库 AgentMirrorApp.kt:107 注入 GhostMadeUpClass/docs/never-created.md/--no-such-flag → --strict-t3",
+      "rc": 1,
+      "expected": 1,
+      "met": true,
+      "note": "真仓库上下文里函数体 // 注释的带形状谎报被 T3-2 报 3 条指向该行——扩面在真实代码上生效"
+    }
+  ],
+  "gaps": [
+    "原始 D-14 语义谎报（'顶栏设置钮'不存在）仍不可判——但这是文档化的诚实边界（只验引用形状），不是实现缺陷，语义覆盖已移交 PairingUxTest",
+    "裸符号名（无反引号、非大写开头）在注释里仍不判——GhostLies/GhostPlain 这类写在不存在的函数名上但没反引号包裹的谎报不抓（宁可漏不可吵的既定边界）",
+    "路径判定仍只查文件存在不查语义正确性：引用了真实文件名但错误位置（如 docs/x.md 实际在别处）会被基名兜底放行",
+    "反引号符号判定需大写开头——小写命名的仓库符号写错无法验"
+  ],
+  "notes": "返工#1 的 5 项未过中 3 项真修复（Go/Kotlin 函数体 // 假路径假flag、Kotlin KDoc 假 flag 现在都抓），2 项（D-14 语义谎报的 verbatim fixture 与完整前置仓库）仍绿但**已从'漏判'转为'文档化的诚实边界'**——判据现在明示只验引用形状、不验语义事实，语义谎报由 PairingUxTest 用例覆盖。扩面无新误报：真仓库 T3-2 0 违规，注入带形状谎报到真前置仓库同位置可被抓。字符串感知双向正确（raw 串/三引号串内不误判、行尾真注释不漏判）。白名单两条都是真实外部引用非后门。幂等漂移缺陷已修（docs/wiki/ 排除出基名索引）。verdict=partial：判据本身质量从'对 D-14 形同虚设'提升为'诚实边界下的引用形状判据'，但**T3-2 依然抓不住任务书 goal 原文点名的那条 D-14 语义谎报**——若验收方坚持 goal 的'专抓 D-14 那类'表述，则判据与目标仍未对齐；建议把 goal 措辞与 HANDBOOK 的'只验引用形状'统一，或明确 D-14 语义面由 PairingUxTest 承担。",
+  "redline_respected": true
+}

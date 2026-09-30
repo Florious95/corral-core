@@ -1,0 +1,40 @@
+{
+  "task": "fix-dogfood-lock-zh",
+  "status": "pass",
+  "summary": "README 与 server/README 明示当期界面锁定中文（017 R-6 裁定兑现），说明国际化/翻译抽取为已裁定的后置项、当前不接受翻译 PR，措辞以不了解决策史的外部读者为对象。未动任何代码与界面文案。",
+  "tests": [
+    {
+      "argv": "env -u TEAM_AGENT_AGENT_ID -u TEAM_AGENT_DEV_TOKEN -u TEAM_AGENT_WORKSPACE bash -lc 'grep -q 中文 README.md'",
+      "rc": 0
+    },
+    {
+      "argv": "env -u TEAM_AGENT_AGENT_ID -u TEAM_AGENT_DEV_TOKEN -u TEAM_AGENT_WORKSPACE bash -lc 'grep -q 017 README.md'",
+      "rc": 0
+    },
+    {
+      "argv": "env -u TEAM_AGENT_AGENT_ID -u TEAM_AGENT_DEV_TOKEN -u TEAM_AGENT_WORKSPACE python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0
+    }
+  ],
+  "changes": [
+    {
+      "path": "README.md",
+      "action": "edit",
+      "detail": "新增「界面语言：当期锁定中文」一节，位于许可节之前：① 当期界面语言锁定中文，出处 requirement-base/entries/017-场景审计八项裁定.md 的 R-6；② 国际化与翻译抽取为已裁定的后置项，不是待办疏漏，界面无其他语言不是 bug 也不是开放缺口；③ 对外部贡献者说明当前不接受翻译 PR 的原因（语言政策由需求基裁定、后置工作启动时机与验收标准尚未确定、现在开工与后续既定安排冲突）与将来开放的条件（以需求基就翻译抽取正式立项为条件，立项后同步更新本说明）"
+    },
+    {
+      "path": "server/README.md",
+      "action": "edit",
+      "detail": "新增「界面语言」一节（位于许可节之前）：当期锁定中文，出处 017 R-6，后置项说明，不接受翻译 PR，指向根 README「界面语言」一节详述"
+    }
+  ],
+  "wording_check": {
+    "postponed_as_promise": false,
+    "note": "回读两处新增措辞：通篇用「已裁定的后置项」「不在本期交付范围」「尚未确定」表述，未出现「即将支持」「计划中」「马上」「will support」等承诺式措辞（grep 验证 rc=1 无命中）。将来开放仅以「需求基就翻译抽取正式立项为条件」的条件句表述，未给任何时间线承诺。",
+    "cited_path_real": true,
+    "cited_path_note": "requirement-base/entries/017-场景审计八项裁定.md 经 ls 确认存在，且 R-6 原文为「当期锁中文并在 README 明示；抽取翻译后置」，与文档表述一致；README.md 与 server/README.md 各引用该路径一次。",
+    "reader_audience": true,
+    "reader_note": "措辞面向不了解决策史的外部读者：先说结论（锁中文），再给出处（017 R-6 真实路径），再解释为什么不是疏漏（已裁定后置），最后说明贡献者当前为何不能提翻译 PR 以及将来开放条件——不依赖任何先验知识。"
+  },
+  "deviation": []
+}

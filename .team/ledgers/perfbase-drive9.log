@@ -1,0 +1,55 @@
+租约抢占：pid=16114 stole from pid=95065 reason=holder pid 95065 不存在（判定已死） at=1787364487
+
+[ledger-run 2026-08-22T02:08:07Z] 开工 start | ledger_id=ledger.perfbase.v1 revision=26 账本=.team/ledgers/perfbase-v1.json 墙钟上限=140400s 派单死线=90s
+[ledger-run 2026-08-22T02:08:08Z] 轮次 round | 第 1 轮开始：前沿 ["t.cperf"]（墙钟已跑 1s / 上限 140400s）
+[ledger-run 2026-08-22T02:08:08Z] 派单 dispatch | task=t.cperf 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pb-emu 席位=pb-emu attempt=att-t.cperf-seq1-t1787364488812 delivery=del-t.cperf-seq1-t1787364488812 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T02:08:09Z] 投递回执 send-ok | task=t.cperf case_id=ledger_perfbase_v1__t.cperf__r26 message_id=msg_bc956c7da198 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T02:08:09Z] 派单落地 dispatch-landed | task=t.cperf 席位 pb-emu 的收件箱已多出这条派单
+[ledger-run 2026-08-22T02:08:09Z] 等待 wait | task=t.cperf 在等的 key（case_id）=ledger_perfbase_v1__t.cperf__r26 team=remote-agent-android 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T02:34:12Z] 已唤醒 wait-signaled | task=t.cperf 等到结果了
+[ledger-run 2026-08-22T02:34:12Z] 判据 acceptance | task=t.cperf 在跑 required=["c.perf.nonregress"]
+[ledger-run 2026-08-22T02:34:50Z] 判据通过留档 acceptance-success | task=t.cperf 成功 attempt 落进 attempts[] writeback_revision=27 passed=["c.perf.nonregress"]
+[ledger-run 2026-08-22T02:34:50Z] 原子写回 writeback-atomic | task=t.cperf state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=27 hash=01c7263796c37796）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T02:34:50Z] 写回 writeback | task=t.cperf state=succeeded revision=26 → 27
+[ledger-run 2026-08-22T02:34:50Z] 轮次 round | 第 2 轮开始：前沿 ["t.repo"]（墙钟已跑 1602s / 上限 140400s）
+[ledger-run 2026-08-22T02:34:50Z] 派单 dispatch | task=t.repo 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pb-impl 席位=pb-impl attempt=att-t.repo-seq2-t1787366090216 delivery=del-t.repo-seq2-t1787366090216 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T02:34:50Z] 投递回执 send-ok | task=t.repo case_id=ledger_perfbase_v1__t.repo__r27 message_id=msg_c4f64cdd0970 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T02:34:50Z] 派单落地 dispatch-landed | task=t.repo 席位 pb-impl 的收件箱已多出这条派单
+[ledger-run 2026-08-22T02:34:50Z] 等待 wait | task=t.repo 在等的 key（case_id）=ledger_perfbase_v1__t.repo__r27 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T02:40:47Z] 原子写回 writeback-atomic | task=t.repo status_record + route_hops → 临时文件+rename 已落盘（revision=28 hash=e4857096da8a95be）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T02:40:47Z] 状态路由点火 route-fire | task=t.repo status=done → t.rv.final exhausted=false reentered=false
+[ledger-run 2026-08-22T02:40:47Z] 已唤醒 wait-signaled | task=t.repo 等到结果了
+[ledger-run 2026-08-22T02:40:47Z] 判据 acceptance | task=t.repo 在跑 required=["c.repo"]
+[ledger-run 2026-08-22T02:41:21Z] 判据通过留档 acceptance-success | task=t.repo 成功 attempt 落进 attempts[] writeback_revision=28 passed=["c.repo"]
+[ledger-run 2026-08-22T02:41:21Z] 原子写回 writeback-atomic | task=t.repo state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=28 hash=2cfd6e3ca30e7ca1）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T02:41:21Z] 写回 writeback | task=t.repo state=succeeded revision=27 → 28
+[ledger-run 2026-08-22T02:41:21Z] 轮次 round | 第 3 轮开始：前沿 ["t.rv.final"]（墙钟已跑 1994s / 上限 140400s）
+[ledger-run 2026-08-22T02:41:21Z] 派单 dispatch | task=t.rv.final 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pb-rv1 席位=pb-rv1 attempt=att-t.rv.final-seq3-t1787366481737 delivery=del-t.rv.final-seq3-t1787366481737 等席位预算=3600s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T02:41:22Z] 投递回执 send-ok | task=t.rv.final case_id=ledger_perfbase_v1__t.rv.final__r28 message_id=msg_78ed743e0fe0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T02:41:22Z] 派单落地 dispatch-landed | task=t.rv.final 席位 pb-rv1 的收件箱已多出这条派单
+[ledger-run 2026-08-22T02:41:22Z] 等待 wait | task=t.rv.final 在等的 key（case_id）=ledger_perfbase_v1__t.rv.final__r28 team=remote-agent-android 预算=3600s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T02:47:18Z] 原子写回 writeback-atomic | task=t.rv.final status_record + route_hops → 临时文件+rename 已落盘（revision=29 hash=7cbc54e2296584c8）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T02:47:18Z] 状态路由点火 route-fire | task=t.rv.final status=pass → t.close exhausted=false reentered=false
+[ledger-run 2026-08-22T02:47:18Z] 已唤醒 wait-signaled | task=t.rv.final 等到结果了
+[ledger-run 2026-08-22T02:47:18Z] 判据 acceptance | task=t.rv.final 在跑 required=["c.rv.final"]
+[ledger-run 2026-08-22T02:47:58Z] 原子写回 writeback-atomic | task=t.rv.final 拒关成功：不得 succeeded → 临时文件+rename 已落盘（revision=29 hash=fbbc16dfe08adbf3）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T02:47:58Z] 拒关成功 close-success-refused | task=t.rv.final route_contradicts_success: dest=t.close——不得写成 succeeded
+[ledger-run 2026-08-22T02:47:58Z] 轮次 round | 第 4 轮开始：前沿 ["t.close"]（墙钟已跑 2390s / 上限 140400s）
+[ledger-run 2026-08-22T02:47:58Z] 派单 dispatch | task=t.close 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pb-rv2 席位=pb-rv2 attempt=att-t.close-seq4-t1787366878080 delivery=del-t.close-seq4-t1787366878080 等席位预算=1800s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T02:47:58Z] 投递回执 send-ok | task=t.close case_id=ledger_perfbase_v1__t.close__r29 message_id=msg_c59fbb3f9c18 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T02:47:58Z] 派单落地 dispatch-landed | task=t.close 席位 pb-rv2 的收件箱已多出这条派单
+[ledger-run 2026-08-22T02:47:58Z] 等待 wait | task=t.close 在等的 key（case_id）=ledger_perfbase_v1__t.close__r29 team=remote-agent-android 预算=1800s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T02:52:27Z] 已唤醒 wait-signaled | task=t.close 等到结果了
+[ledger-run 2026-08-22T02:52:27Z] 判据 acceptance | task=t.close 在跑 required=["c.close"]
+[ledger-run 2026-08-22T02:53:05Z] 判据失败诊断 acceptance-diagnostic | task=t.close 判据 c.close 失败：exit_code=1 (期望 0) cwd=.worktrees/wt-pb-close argv=["/bin/sh", "tools/perfbase/judge-doc.sh", ".team/artifacts/perfbase-收账-*.md"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+tools/perfbase/judge-doc.sh: line 13: F�: unbound variable
+[ledger-run 2026-08-22T02:53:05Z] 原子写回 writeback-atomic | task=t.close 判据失败诊断落进 attempts[] → 临时文件+rename 已落盘（revision=29 hash=138819fb2895bb15）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T02:53:05Z] 原子写回 writeback-atomic | task=t.close 判据红下一步落盘 → 临时文件+rename 已落盘（revision=29 hash=0eecf5bfd38aaedd）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T02:53:05Z] 状态变坏 notify-bad-state | task=t.close 判据红 停机通知：已投递
+[ledger-run 2026-08-22T02:53:05Z] 判据红 acceptance-red | task=t.close required 未全过——关 attempt，默认 halt（该格已移出前沿；停机通知：已投递）
+[ledger-run 2026-08-22T02:53:05Z] 收工 finish | 停机原因=Failed 写回=["t.cperf", "t.repo", "t.repo", "t.rv.final", "t.rv.final"] 冻结=["t.close"] 不可判=[] 墙钟已跑 2698s
+[ledger-run 2026-08-22T02:53:05Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-22T02:53:05Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+ledger_id: ledger.perfbase.v1  revision: 26 → 29  wrote_back: ["t.cperf", "t.repo", "t.repo", "t.rv.final", "t.rv.final"]  frozen: ["t.close"]  unjudgeable: []  preflight_rejected: false  awaiting_human: false  idle_reason: None
+notice: ledger_id: ledger.perfbase.v1 | revision: 29 | 停机原因: Failed | 最后失败判据: task=t.close revision=29 判据红 acceptance_id=[c.close] 判据 c.close 失败：exit_code=1 (期望 0) cwd=.worktrees/wt-pb-close argv=["/bin/sh", "tools/perfbase/judge-doc.sh", ".team/artifacts/perfbase-收账-*.md"] error=exit_code_mismatch: expected 0, observed 1 | 各任务终态: t.app=Succeeded, t.base=Succeeded, t.base2=NotApplicable, t.close=FailedRetryable, t.core=Succeeded, t.cperf=Succeeded, t.esc1=NotApplicable, t.esc2=NotApplicable, t.esc3=NotApplicable, t.exh1=NotApplicable, t.exh2=NotApplicable, t.exh3=NotApplicable, t.fixblank=Succeeded, t.instr2=Succeeded, t.instr3=Succeeded, t.instr4=Succeeded, t.red=Succeeded, t.repo=Succeeded, t.rv.base=Blocked, t.rv.final=Blocked, t.rv.instr=Blocked, t.srv=Succeeded
+notice: ledger_id: ledger.perfbase.v1 | revision: 29 | 停机原因: Failed | 最后失败判据: t.close 判据未过 ｜ t.close：判据 c.close 失败：exit_code=1 (期望 0) cwd=.worktrees/wt-pb-close argv=["/bin/sh", "tools/perfbase/judge-doc.sh", ".team/artifacts/perfbase-收账-*.md"] error=exit_code_mismatch: expected 0, observed 1（stderr 末20行见账本 tasks.t.close.attempts[].artifact_refs） ｜ 未干完的任务（非 Succeeded）: t.base2=NotApplicable, t.close=FailedRetryable, t.esc1=NotApplicable, t.esc2=NotApplicable, t.esc3=NotApplicable, t.exh1=NotApplicable, t.exh2=NotApplicable, t.exh3=NotApplicable, t.rv.base=Blocked, t.rv.final=Blocked, t.rv.instr=Blocked ｜ 有 1 格在等裁定，问题在这些格：t.rv.final | 各任务终态: t.app=Succeeded, t.base=Succeeded, t.base2=NotApplicable, t.close=FailedRetryable, t.core=Succeeded, t.cperf=Succeeded, t.esc1=NotApplicable, t.esc2=NotApplicable, t.esc3=NotApplicable, t.exh1=NotApplicable, t.exh2=NotApplicable, t.exh3=NotApplicable, t.fixblank=Succeeded, t.instr2=Succeeded, t.instr3=Succeeded, t.instr4=Succeeded, t.red=Succeeded, t.repo=Succeeded, t.rv.base=Blocked, t.rv.final=Blocked, t.rv.instr=Blocked, t.srv=Succeeded

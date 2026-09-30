@@ -1,0 +1,13 @@
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Warning: Activity not started, its current task has been brought to the front
+ON_SESSION ['‹', '远控 leader', 'LAN', '查看', 'term-theme-dark source=app-theme', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C']
+BACKGROUND_HOME
+WAIT_65s
+RESUME
+AFTER_RESUME ['‹', '远控 leader', 'LAN', '查看', 'term-theme-dark source=app-theme', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C']
+SETTINGS ['设置', '主机配对', 'PAIRED', '当前只保留一个主机档案。重新配对成功后会覆盖现有档案。', '重新配对', '字体大小', '12 pt', '取代原捏合缩放：终端字号在此设置，进入会话前已确定，会话中不再变化。', '4', '6', '8', '10', '12', '14', '16', '18']
+DIAG_FILE diag-1787151700223.log
+DERIVED_HITS []
+FRAME_HITS []
+FAIL A-rf-cols 读不到 derived_cols（仪表没做够）
+EXIT:1

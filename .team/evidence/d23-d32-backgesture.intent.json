@@ -1,0 +1,6 @@
+{
+  "task_id": "d23-d32-backgesture",
+  "seat": "w-dev-backgesture",
+  "intent": "修复 D-23/D-32 返回手势缺陷：实现 MainNavState.onSystemBack() 和 selectedWorkspaceCwd，使 BackGestureNavTest 全绿",
+  "dispatched_at": "2026-08-12T15:00:00+08:00"
+}

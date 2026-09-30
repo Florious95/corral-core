@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,14 +35,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppText
+import dev.agentmirror.app.ui.components.HeaderRule
 import dev.agentmirror.app.ui.components.LanPill
 import dev.agentmirror.app.ui.components.LocalFloatingNavInset
 import dev.agentmirror.app.ui.components.PathText
+import dev.agentmirror.app.ui.components.RuleEdge
 import dev.agentmirror.app.ui.components.ScreenHeader
+import dev.agentmirror.app.ui.components.TokenText
+import dev.agentmirror.app.ui.components.edgeRule
 import dev.agentmirror.app.ui.components.glassCard
 import dev.agentmirror.app.ui.model.WorkspaceItem
 import dev.agentmirror.app.ui.theme.Dims
+import dev.agentmirror.app.ui.theme.ListRowStyle
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.ui.theme.TypeSizes
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -71,6 +78,7 @@ fun WorkspaceListScreen(
     bottomBar: @Composable () -> Unit = {},
 ) {
     val p = LocalAppPalette.current
+    val rowGap = LocalThemeSuite.current.geometry.listRowGap
     val totalSessions = remember(workspaces) { workspaces.sumOf { it.sessionCount } }
 
     Column(modifier.fillMaxSize().background(p.screenBackground)) {
@@ -79,7 +87,7 @@ fun WorkspaceListScreen(
             meta = "${workspaces.size} WORKSPACES · $totalSessions SESSIONS",
             trailing = if (connectionPath != null) ({ LanPill(connectionPath) }) else null,
         )
-        Box(Modifier.fillMaxWidth().height(Dims.hairline).background(p.divider))
+        HeaderRule()
         Box(
             Modifier
                 .weight(1f)
@@ -90,8 +98,8 @@ fun WorkspaceListScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag("workspace-list-scroll"),
-                contentPadding = PaddingValues(top = Dims.cardVGap, bottom = Dims.cardVGap + LocalFloatingNavInset.current),
-                verticalArrangement = Arrangement.spacedBy(Dims.cardVGap),
+                contentPadding = PaddingValues(top = rowGap, bottom = rowGap + LocalFloatingNavInset.current),
+                verticalArrangement = Arrangement.spacedBy(rowGap),
             ) {
                 items(workspaces, key = { it.id }) { item ->
                     WorkspaceRow(
@@ -168,6 +176,10 @@ private fun WorkspaceRow(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (LocalThemeSuite.current.recipes.listRow == ListRowStyle.RuledStrip) {
+        RuledWorkspaceRow(item, onClick, onLongClick, modifier)
+        return
+    }
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -218,5 +230,90 @@ private fun WorkspaceRow(
             AppText("会话", p.pathText, 10.5f.sp, lineHeightMultiplier = 1f)
         }
         AppText("›", p.starOff, 18.sp, fontFamily = FontFamily.Monospace, lineHeightMultiplier = 1f)
+    }
+}
+
+/**
+ * 通栏直角工作区行：56dp 等宽计数列（工作中 > 0 为猩红，否则待机灰）+ 竖直发丝线 + 名称 / 路径 + 会话数 + ›，
+ * 底部 1dp 发丝线。手势与 [WorkspaceRow] 相同（短按进入、长按操作面板）。
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RuledWorkspaceRow(
+    item: WorkspaceItem,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier,
+) {
+    val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val count = item.workingCount.coerceAtLeast(0)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(kit.geometry.workspaceRowHeight)
+            .background(if (pressed) p.glassCardFillPressed else p.glassCardFill)
+            .edgeRule(RuleEdge.Bottom, kit.colors.separator, kit.geometry.hairline)
+            .combinedClickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
+            .testTag("workspace-row-${item.id}"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .width(kit.geometry.numberColumnWidth)
+                .fillMaxHeight()
+                .edgeRule(RuleEdge.End, kit.colors.separator, kit.geometry.hairline)
+                .testTag("mahjong-status-badge"),
+            contentAlignment = Alignment.Center,
+        ) {
+            TokenText(
+                text = count.toString(),
+                color = if (count > 0) p.accent else kit.colors.statusPending,
+                token = kit.typography.numericBadge,
+                maxLines = 1,
+            )
+        }
+        Column(
+            Modifier
+                .weight(1f)
+                .padding(start = 14.dp, end = 12.dp),
+        ) {
+            AppText(
+                text = item.name,
+                color = p.rowTitleText,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Box(Modifier.height(Dims.subtitleGap))
+            PathText(item.path)
+        }
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            AppText(
+                text = item.sessionCount.toString(),
+                color = p.metaText,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Monospace,
+                lineHeightMultiplier = 1f,
+            )
+            AppText("会话", p.pathText, 10.5f.sp, lineHeightMultiplier = 1f)
+        }
+        AppText(
+            text = "›",
+            color = p.rowTitleText,
+            fontSize = 18.sp,
+            fontFamily = FontFamily.Monospace,
+            lineHeightMultiplier = 1f,
+            modifier = Modifier.padding(start = 12.dp, end = kit.geometry.pageInset),
+        )
     }
 }

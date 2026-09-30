@@ -1,0 +1,17 @@
+{
+  "name": "agentmirror-test-automation",
+  "version": "0.1.0",
+  "description": "独立自动化测试工程：WebSocket 协议客户端、通用断言库、隔离 daemon/tmux fixtures、按标签用例执行、JSON 报告",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node runner.js",
+    "test:pairing": "node runner.js --tag=pairing",
+    "test:workspace": "node runner.js --tag=workspace",
+    "test:keep": "node runner.js --keep"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "Apache-2.0"
+}

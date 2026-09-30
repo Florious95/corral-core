@@ -1,0 +1,69 @@
+{
+  "task_id": "plan-stage4-execution",
+  "status": "pass",
+  "case_id": "msg_7d84d148f948",
+  "summary": "阶段四执行方案先行稿 docs/stage4-execution-plan.md 交件：逐条覆盖 TESTPLAN 全部 43 条用例（非派单写的 41——TESTPLAN §10 已有算术勘误，A 组实为 17 条），每条给出通道归属（模拟器 UI 自动化 U / 宿主 T 对账 H / 真机 R，U=38 H=18 R=5，无纯 R 条——每例至少一条模拟器或宿主路径，兑现用户「模拟器能测的全测」；API 通道本批只承接 TS 网络 D1，43 条零 API 偷懒）；已知不可用面（相机 + Extended Controls GUI 窗口寻址）明列并全部用 adb shell 命令规避；每条给出 uiautomator 结构断言目标 / 截图屏位 / 失败四归因；按「同一 Gradle 模块同一时刻只放一席」给出 6 批排期形状（B1 首触→B2 后台视觉→B3 宿主 T→B4 性能→B5 修复回炉→B6 真机交付）；每类判定配必然非空阳性对照（假节点/uiautomator 通路、sips 尺寸非纯色、test-results XML 用例数非零、framestats N_frames>0、注入延迟被测出）；性能 A–F 六组中 F1 终端滚动帧率必须进（P-3 决策前提）并落专项字段，其余按去向后置（perf 管线/独立性能波次/真机）。红线零触碰：不跑用例、不改代码、无 git commit/push；写入仅 docs/stage4-execution-plan.md（write_scope 原文唯一项）。",
+  "tests": [
+    {
+      "argv": "bash -lc 'test -s docs/stage4-execution-plan.md'",
+      "rc": 0,
+      "result": "文件存在：309 行 28092 字节"
+    },
+    {
+      "argv": "bash -lc 'python3 tools/archwiki/build_wiki.py --check'",
+      "rc": 0,
+      "result": "T1-1/T1-2/T3-1..T3-4 全 PASS（19 包 31 条依赖边），exit 0"
+    },
+    {
+      "argv": "python3 content-check（43 用例逐条行存在 + 每行含 U/H/R 通道标记 + 六问齐 + 输入基 token 全在）",
+      "rc": 0,
+      "result": "rows found: 43, missing: NONE, rows without U/H/R channel: NONE; channel tally U=38 H=18 R=5, pure-R: NONE; 六问 通道归属/已知不可用面/判定方式/执行顺序与批次切分/阳性对照/性能场景 全 FOUND；grounding（TESTPLAN/perf-scenarios/round-findings/P-3/F1/016/013/wedding_user_a_api35/10.0.2.2:19983/uiautomator/capture-pane）全 FOUND"
+    },
+    {
+      "argv": "git status --porcelain（write_scope 校验）",
+      "rc": 0,
+      "result": "我的唯一写入 docs/stage4-execution-plan.md；app/server/e2e/tools 零改动；taskbook.yaml M 与 .team/*、agents/* 未跟踪均为派单前既有状态"
+    }
+  ],
+  "positive_control": {
+    "content_level": "产出为什么是真的，不只看 rc=0：43 条用例逐行存在于表（正则硬校验），每条含 U/H/R 通道标记；六问逐项关键词在文；输入基全部可追溯（TESTPLAN/perf-scenarios/round-findings/P-3/F1/016/013 均原文引用）；方案自身为执行席配了每类判定的必然非空对照（假节点断言/uiautomator 通路自证、sips 1080x2400 非纯色、test-results XML 用例数非零防 UP-TO-DATE 假绿、framestats N_frames>0、注入延迟必被测出）",
+    "coverage_guard": "已从源头消除三轮栽坑：T3-2 抓不住原型→U 类断言配必不存在假节点自证解析器存活；gradle UP-TO-DATE 假绿→测试后必须解析 TEST-*.xml 断言用例数非零；dev.agentmirror.terminal 不在扫描根→B4/修复轮对 :terminal:test 同法断言 XML 非零，并把 :terminal 显式纳入批次约束"
+  },
+  "coverage": {
+    "total_cases": 43,
+    "source_discrepancy": "派单与 taskbook 写 41；TESTPLAN §10 算术勘误（裁定席 msg_2e00d012b430）A 组实为 17 条，总计 43。方案按 43 逐条覆盖，不留 2 条死角",
+    "channel_tally": {"U_simulator_ui": 38, "H_host_reconcile": 18, "R_real_device": 5, "pure_R": 0},
+    "api_channel": "仅 TS 网络（D1 LAN-vs-tailnet 对比）承接；43 条中无一条划进 API 通道",
+    "previous_round_debt": "上一轮 dogfood 完全未执行 15 项（A9a/A10/A10a/A11/A12/B2-B3/B7-B8/C2/E1/E3/E7）与局部 2 项（C1 余 5 键、D5 缺 A9a）全部排入本批；A10/A12/A11 基本路径划模拟器（纯 adb 命令可驱动），全保真（Doze/厂商 ROM/真实通知投递）归真机补充，与模拟器基本路径并存"
+  },
+  "known_unusable": {
+    "camera": "AVD wedding_user_a_api35 无真实摄像头；真实扫码(A2)/拍照直传(C6 实拍面) 划真机",
+    "extended_controls": "Extended Controls GUI 窗口寻址已实证不可用(2026-08-10 空转八代)；凡依赖其 GUI 的能力一律不用，改用 adb shell 命令（权限弹窗/通知栏/锁屏/深色/飞行模式/旋转/sendevent 双指）",
+    "unrepresentable_real_device": "Doze/厂商 ROM 杀后台、真实锁屏策略、真实通知投递、真实多网卡与耗电——模拟器可测基本路径但全保真验收权在真机(016b)"
+  },
+  "perf_scenarios": {
+    "in_this_round": ["F1 终端滚动帧率（必须，P-3 决策前提：先量 F1 再决定是否接脏区局部重绘，量测前不施工）", "F2 App 冷启动时间与首屏内存（建议，一测即得）"],
+    "deferred": {
+      "perf_pipeline": ["B1 large_output", "D4 upload 耗时（perf-thresholds-enforce 基线缺口）"],
+      "independent_perf_wave": ["A1 首触端到端总账", "A2/A2b 按键往返", "A3 输出拆分", "A4 深翻", "B2 粘贴风暴", "B3 resize 风暴", "C1 舰队规模", "C2 多会话并发", "C3 多客户端", "D2 弱网", "D3b 切网/长断线/重连风暴", "E1b 补两态", "E2 长时老化（当前最大盲区，建议单独立案）", "E3 上传目录增长", "F3 App 内存峰值"],
+      "api_channel": ["D1 LAN vs tailnet 对比（perf-scenarios 通道分工明裁，待 feat-ts-wire/headscale 链稳定后接）"],
+      "real_device": ["F4 耗电（明裁不编数字，用户真机反馈）"]
+    },
+    "f1_decision_field": "B4 批次证据须含 { f1_frame_metrics, f1_dropped_frame_ratio, f1_decision: 整帧重绘达标可接受|接脏区局部重绘 }"
+  },
+  "batches": {
+    "shape": "B1 模拟器首触主干(A1-A9a) → B2 后台/通知/视觉(A10-A12+B+C1-C6+D5) → B3 宿主 T(D1-D4+C4/C5 H 面，可并行) → B4 性能(F1/F2) → B5 修复回炉(立账+修+复跑) → B6 真机交付",
+    "module_lock": ":app 与 :terminal 为两个独立 Gradle 锁；UI 自动化批次(B1/B2/B4) 独占 :app 编译，不得与 :app/:terminal 施工席并行；B3 用独立 daemon 端口可与任意批并行",
+    "transition_condition": "B1→B2→B4 均要求 :app/:terminal 无施工席在途；B5 修完每轮复跑 gate 三面确认 0 新回归(013 标尺)"
+  },
+  "changes": ["docs/stage4-execution-plan.md — 新建：43 条逐用例通道归属+判定+批次排期+阳性对照+F1 接入点六段成文"],
+  "deviation": [
+    "验收命令 python3 tools/archwiki/build_wiki.py --check 本身会重生成 docs/wiki/t3-report.md（报告模式副作用：仓库文件基名索引 2244→2263，来源为派单在途未跟踪文件被索引）。该文件不在本任务 write_scope，已用 git checkout -- 恢复 HEAD，未留任何越界写入。leader 复跑该验收命令时会再次出现同一重生成属工具预期行为，非本席改动。"
+  ],
+  "unverified": [
+    "真实相机扫码(A2 原始形态)/拍照直传(C6 实拍)——模拟器无相机，归真机",
+    "Doze/厂商 ROM 杀后台、真实锁屏策略、真实通知投递全保真维度——归真机",
+    "E1 捏合手势实机（sendevent 双指辅法 ≤2 轮失败则记缺口交真机，主法 settings user_rotation 已可验 resize 语义）",
+    "后置性能场景（§6.2 全表）——未验项显式交付，禁止计入已验收(016d)"
+  ]
+}

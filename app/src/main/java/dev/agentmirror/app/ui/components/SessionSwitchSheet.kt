@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 import dev.agentmirror.app.ui.theme.Motion
 import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.ui.theme.TypeSizes
@@ -78,6 +79,7 @@ fun SessionSwitchSheet(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalAppPalette.current
+    val geometry = LocalThemeSuite.current.geometry
     BoxWithConstraints(modifier.fillMaxSize()) {
         AnimatedVisibility(
             visible = visible,
@@ -120,7 +122,7 @@ fun SessionSwitchSheet(
                 Modifier
                     .fillMaxWidth()
                     .heightIn(max = maxHeight * 0.8f)
-                    .clip(RoundedCornerShape(topStart = Radii.sheetTop, topEnd = Radii.sheetTop))
+                    .clip(geometry.shape(RoundedCornerShape(topStart = Radii.sheetTop, topEnd = Radii.sheetTop)))
                     .background(p.sheetBackground)
                     .testTag("session-overlay")
                     .padding(bottom = 12.dp)
@@ -136,7 +138,7 @@ fun SessionSwitchSheet(
                         Modifier
                             .width(Dims.sheetGrabberWidth)
                             .height(Dims.sheetGrabberHeight)
-                            .clip(RoundedCornerShape(2.dp))
+                            .clip(geometry.shape(RoundedCornerShape(2.dp)))
                             .background(p.sheetGrabber)
                     )
                 }
@@ -157,7 +159,7 @@ fun SessionSwitchSheet(
                     Box(Modifier.weight(1f))
                     Box(
                         Modifier
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(geometry.shape(RoundedCornerShape(6.dp)))
                             .background(p.segmentedTrack)
                             .testTag("session-switch-workspace")
                             .padding(horizontal = 8.dp, vertical = 5.dp)
@@ -242,6 +244,7 @@ private fun SheetRow(
     onToggleStar: () -> Unit,
 ) {
     val p = LocalAppPalette.current
+    val geometry = LocalThemeSuite.current.geometry
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val bg = when {
@@ -263,7 +266,7 @@ private fun SheetRow(
                     .align(Alignment.CenterStart)
                     .width(Dims.sheetCurrentRailWidth)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(topEnd = 2.dp, bottomEnd = 2.dp))
+                    .clip(geometry.shape(RoundedCornerShape(topEnd = 2.dp, bottomEnd = 2.dp)))
                     .background(p.sheetCurrentRail)
             )
         }
@@ -277,10 +280,11 @@ private fun SheetRow(
             StarButton(starred = item.starred, onToggle = onToggleStar)
             SessionNameText(item.displayName, Modifier.weight(1f))
             if (isCurrent) {
+                val badgeShape = geometry.shape(RoundedCornerShape(5.dp))
                 Box(
                     Modifier
-                        .clip(RoundedCornerShape(5.dp))
-                        .border(Dims.hairline, p.currentBadgeBorder, RoundedCornerShape(5.dp))
+                        .clip(badgeShape)
+                        .border(Dims.hairline, p.currentBadgeBorder, badgeShape)
                         .padding(horizontal = 5.dp, vertical = 4.dp)
                 ) {
                     AppText(

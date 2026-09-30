@@ -1,0 +1,28 @@
+{
+  "task_id": "fix-viewport-restore-d38",
+  "status": "pass_jvm_pending_real_device",
+  "attempt": "第四次（前三次全部失败，本轮走 CLAUDE.md 回炉流程）",
+  "seats": {"review": "w-d38-probe", "test": "w-d38-test", "dev": "w-d38-dev"},
+  "at": "2026-08-14",
+  "commit": "3c8e2c2e3",
+  "why_first_three_failed": {
+    "false_account": "旧证据的根因写的是「onRealViewportChanged 把挤压几何当基线」——审查席用反射实证 v6 里根本没有这个方法，那描述的是 v3 补丁的行为。纪律①第三个实例。按一份描述着不存在代码的诊断修三次，修不到点上是必然的。",
+    "common_death_cause": "三版都在 TermSurfaceView 里推断 IME 状态。v1 用 height+imeInset（两值取自不同时刻→竞态）；v2 用 imeBottom（View 永远看不到键盘，恒 0，因为 Compose 的 imePadding() 作用在兄弟节点上、终端 Box 是被布局挤小的）；v3 用 Compose isImeVisible（在「IME 弹出」链上加状态→引入黑屏闪）。三版全是在 View 层做加法猜 IME，单测模拟理想时序全绿，真机时序不同全错。"
+  },
+  "v6_real_rootcause": "viewportSeeded=true 之后没有任何路径能调 recomputeGeometry() 更新 emulator.rows。首帧被 IME 挤压 seed 84 行 → IME 收起只更新 visibleRowsOverride=140、不动 emulator.rows → 渲染层 visibleRows = 140.coerceIn(1,84) = 84 → 56 行空黑（用户真机 1123px，吻合）。",
+  "the_key_difference": "第四次没有加任何 IME 状态推断，判据落在 presenter 层且是纯几何：viewportOutgrewEmulator()——视口行/列数是否超出内核。挤压恒 ≤ 内核（收缩只会更小）永不触发；只有内核行数过时偏低（IME 收起/分屏/回前台让视口真涨）才重算并 emit。这个判据天然区分「临时挤压」与「真实视口变化」，**不需要知道 IME 存不存在**——而前三版全部栽在「想知道 IME 现在什么状态」这个问题上。",
+  "v5_reuse": "捞了 v5 的 onWindowVisibilityChanged，但只捞事件入口、没捞逻辑。v5 那个 override 直接调 onViewportSizeChanged（会被 fix-ime-no-resize 吞掉），且所在文件同时含 D-31 stale-viewport 闪烁元凶，故未整文件捞回。",
+  "implementation": "2 文件 97 行：TermViewPresenter 加增长恢复分支 + 新增正交入口 onRealViewportChanged(widthPx,heightPx)；TermSurfaceView.onWindowVisibilityChanged 的 VISIBLE 分支触发。",
+  "acceptance_verified_by_leader": {
+    "probes": "P1/P2/P3/P5 FAIL、P4 PASS。失败原文均为 expected:<84> but was:<140>——84 是被挤压的旧值、140 是应有值，探针在说「缺陷条件不再成立」。",
+    "scenario": "S1 回前台重对齐 / S2 IME 挤压零 resize 锚定 / S3 几何扰动计数恒 1（黑屏闪可断言化）/ S4 首帧全高零额外 resize —— 4/4 绿。判别力已在干净 v6 HEAD 验证：S1 真红 expected<140> but was<84>，精确复现用户 56 行空黑。",
+    "full_suite": "444 条 4 失败，4 条全部是探针的预期 FAIL，其余 71 类全绿",
+    "cross_defect": "缺陷②的金丝雀 clipGuardEngageCount() 正常路径仍为 0——几何变化没把栅格带偏",
+    "archwiki": "strict-t3 exit 0（须在仓库根跑；在 app/ 下跑会给 exit 2）"
+  },
+  "leader_errors_this_round": [
+    "误报 P4 倒退：XML 解析正则跨界匹配，把 P5 的结果读成 P4 的，让开发席去追了一个不存在的回归。已订正。我要求席位『贴实际输出不要只给结论』，而我自己给的是没验证过的解析结果——同样的错。",
+    "P5 的验收判据定错：原要求『P5 必须转 FAIL』等于要求实现必须新增一个叫 onRealViewportChanged 的方法，那是在规定实现长什么样、不是在验收行为。已降为信息性。这是本轮第二次把验收线写成规定实现（第一次是缺陷② 的 B-字形）。"
+  ],
+  "pending": "真机实测。黑屏闪红线目前只有 JVM 证据（S3 扰动恒 1）——v3 的黑屏闪单测抓不到，必须真机。"
+}

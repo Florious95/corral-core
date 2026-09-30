@@ -42,7 +42,6 @@ import dev.agentmirror.app.ui.theme.TermPalette
 import dev.agentmirror.app.ui.theme.TerminalMetrics
 import dev.agentmirror.terminal.Cell
 import dev.agentmirror.terminal.CharWidth
-import dev.agentmirror.terminal.TerminalColor
 import dev.agentmirror.terminal.TerminalEmulator
 import dev.agentmirror.terminal.TextStyle
 import java.io.Closeable
@@ -670,6 +669,7 @@ class TermSurfaceView @JvmOverloads constructor(
         val tSuper = System.nanoTime()
         publishThemeChrome()
         val tChrome = System.nanoTime()
+        cellColors.clear() // Per-frame lifetime: theme/night changes cannot retain stale colours.
         bgRectCount = 0
         textDrawCount = 0
         measureTextCount = 0
@@ -1177,18 +1177,21 @@ class TermSurfaceView @JvmOverloads constructor(
     private fun imeVisible(): Boolean =
         ViewCompat.getRootWindowInsets(this)?.isVisible(WindowInsetsCompat.Type.ime()) == true
 
-    /** 终端色 → ARGB。色值与 083 §2 重映射都在 [TermPalette.colorFor]，这里不写字面量。 */
-    private fun colorFor(color: TerminalColor, background: Boolean): Int =
-        TermPalette.colorFor(color, background, isNight())
+    /** Immutable SGR styles are shared by their cells. Identity lookup avoids hashing every colour
+     *  and attribute per cell; only this frame's visible styles survive, shared by both draw passes. */
+    private val cellColors = java.util.IdentityHashMap<TextStyle, Pair<Int, Int>>()
 
-    /** SGR 7 反显：背景画笔改取 fg 字段（作为"前景默认"语义解析，即 background=false），
-     *  前景画笔改取 bg 字段（作为"背景默认"语义解析）——两个字段与 background 旗标一起互换，
-     *  这样 [TerminalColor.Default] 才会在反显下正确解出对侧默认色，而非塌缩成同一个默认值。 */
-    private fun resolvedBg(style: TextStyle): Int =
-        if (style.inverse) colorFor(style.fg, background = false) else colorFor(style.bg, background = true)
+    private fun resolvedColors(style: TextStyle): Pair<Int, Int> = cellColors.getOrPut(style) {
+        val dark = isNight()
+        val bg = TermPalette.colorFor(style.bg, background = true, dark = dark)
+        val fg = TermPalette.colorFor(style.fg, background = false, dark = dark, againstBg = bg)
+        // Resolve defaults and contrast before swapping, so inverse uses exactly the same pair.
+        if (style.inverse) bg to fg else fg to bg
+    }
 
-    private fun resolvedFg(style: TextStyle): Int =
-        if (style.inverse) colorFor(style.bg, background = true) else colorFor(style.fg, background = false)
+    private fun resolvedBg(style: TextStyle): Int = resolvedColors(style).second
+
+    private fun resolvedFg(style: TextStyle): Int = resolvedColors(style).first
 
     private fun isNight(): Boolean {
         val override = nightOverride

@@ -1,0 +1,47 @@
+{
+  "task_id": "fix-recovery-baseline",
+  "status": "pass",
+  "rechecked_at": "2026-08-11T00:09:00+08:00",
+  "rechecker": "w-recheck-settle",
+  "tests": [
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/api/...\"'",
+      "rc": 0,
+      "note": "recheck acceptance argv (with -count=1); real execution confirmed, 66 === RUN lines in -v run"
+    },
+    {
+      "argv": "bash -lc 'cd server && go test ./internal/api/...'",
+      "rc": 0,
+      "note": "original case acceptance argv verbatim"
+    }
+  ],
+  "positive_control": {
+    "focused_test": "TestDiscoveryRecoveryReachesConnectedClientFromStartFailure",
+    "focused_run": "go test -count=1 ./internal/api/ -run TestDiscoveryRecoveryReachesConnectedClientFromStartFailure -v => === RUN + --- PASS (0.05s)",
+    "skip_removed": true,
+    "source_evidence": "server/internal/api/discovery_failure_test.go: no t.Skip / Skipf / SkipNow remains",
+    "full_pkg_runs": "api -count=1: 66 === RUN lines, ok 5.180s; pairing -count=1: 26 === RUN lines, ok 0.692s"
+  },
+  "goal_checks": [
+    {
+      "claim": "TestDiscoveryRecoveryReachesConnectedClientFromStartFailure 的 t.Skip 已解除且单跑 PASS",
+      "verdict": "met",
+      "evidence": "focused -run -v shows === RUN TestDiscoveryRecoveryReachesConnectedClientFromStartFailure / --- PASS (0.05s); source has no t.Skip/Skipf/SkipNow"
+    },
+    {
+      "claim": "修复后首个成功扫描被当基线处理不推 delta 的问题解决（空 seq-1 listing 作为 recovery diff 基线）",
+      "verdict": "met",
+      "evidence": "server.go publishListing: prev==nil && prevSeq==0 only for true first snapshot; prev==nil after failed initial scan now diffs against empty seq-1 listing and bumps seq/fans out delta"
+    },
+    {
+      "claim": "空 listing 不再静默滞留至手动重 list（红线5 失败可见）",
+      "verdict": "met",
+      "evidence": "recovery now announces via delta; connected-client assertions in discovery_failure_test.go pass"
+    }
+  ],
+  "gaps": [],
+  "suggested_commit_files": [
+    "server/internal/api/server.go",
+    "server/internal/api/discovery_failure_test.go"
+  ]
+}

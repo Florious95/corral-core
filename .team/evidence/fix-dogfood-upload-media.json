@@ -1,0 +1,45 @@
+{
+  "task_id": "fix-dogfood-upload-media",
+  "status": "pass",
+  "rechecked_at": "2026-08-11T00:09:00+08:00",
+  "rechecker": "w-recheck-settle",
+  "tests": [
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'",
+      "rc": 0,
+      "note": "recheck acceptance argv; forced --rerun-tasks real execution: 345 tests 0 failures; AttachmentNameTest 4, AttachmentButtonTest 1, CameraPermissionCardTest 2 all fresh and green"
+    }
+  ],
+  "positive_control": {
+    "app_xml": "42 files, 345 tests, failures=0 errors=0 skipped=0, ALL fresh (mtime 00:08:20 > rerun start 00:07:55)",
+    "AttachmentNameTest": "tests=4 failures=0 fresh; missingExtension_isInferredFromMimeType, chineseNameWithExtension_isPreserved, duplicateDisplayNames_remainStableAndKeepExtension, missingDisplayName_usesTypedFallback all present",
+    "AttachmentButtonTest": "tests=1 failures=0 fresh; plusMenu_exposesReachableCameraAction present",
+    "CameraPermissionCardTest": "tests=2 failures=0 fresh; permanentlyDenied_showsReasonAndSettingsAction + secondDenial_isClassifiedAsPermanent present",
+    "gradle_rerun_forced": "initial -q run was UP-TO-DATE (XML mtime 23:43); --rerun-tasks forced real re-execution"
+  },
+  "goal_checks": [
+    {
+      "claim": "D-03 文件名取真实 displayName 并推导扩展名（含无扩展名/中文名/重名用例）",
+      "verdict": "met",
+      "evidence": "SessionScreen.queryDisplayName uses ContentResolver query on content URI (real MediaStore displayName, not uri.lastPathSegment); attachmentFileName preserves displayName and infers extension from MIME when missing. AttachmentNameTest covers missing-extension inference, Chinese name preserved, duplicate names stable, fallback when displayName missing"
+    },
+    {
+      "claim": "D-02 拍照直传入口存在",
+      "verdict": "met",
+      "evidence": "SessionScreen attachment menu exposes 拍照/相册 branching (onTakePhoto -> TakePicture pre-built MediaStore target camera-<ts>.jpg image/jpeg then same upload chain). AttachmentButtonTest.plusMenu_exposesReachableCameraAction clicks 添加图片附件 then 拍照 and asserts cameraOpened"
+    },
+    {
+      "claim": "D-01 权限二次拒绝后有可见原因与去系统设置引导",
+      "verdict": "met",
+      "evidence": "PairingScreen NoPermissionCard distinguishes Requestable/PermanentlyDenied via shouldShowRequestPermissionRationale; PermanentlyDenied shows reason '相机权限已被永久拒绝，请到系统设置中开启；也可改用下方手填连接。' and onOpenSettings routes to Settings.ACTION_APPLICATION_DETAILS_SETTINGS. CameraPermissionCardTest asserts both reason text and settings action"
+    }
+  ],
+  "gaps": [],
+  "suggested_commit_files": [
+    "app/app/src/main/java/dev/agentmirror/app/session/SessionScreen.kt",
+    "app/app/src/main/java/dev/agentmirror/app/pairing/PairingScreen.kt",
+    "app/app/src/test/java/dev/agentmirror/app/session/AttachmentNameTest.kt",
+    "app/app/src/test/java/dev/agentmirror/app/session/AttachmentButtonTest.kt",
+    "app/app/src/test/java/dev/agentmirror/app/pairing/CameraPermissionCardTest.kt"
+  ]
+}

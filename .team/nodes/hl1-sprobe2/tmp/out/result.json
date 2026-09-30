@@ -1,0 +1,22 @@
+{
+  "cols": 108,
+  "cwd": "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-sprobe2/tmp/cwd-static",
+  "data_hex_head200": "5354415449435f414c545f4d41524b45525f3039321b5b323b3148",
+  "data_len": 27,
+  "data_preview": "STATIC_ALT_MARKER_092\\e[2;1H",
+  "first_bin_data_len": 27,
+  "first_bin_kind": 1,
+  "first_bin_raw_len": 125,
+  "glyphs": "STATIC_ALT_MARKER_092",
+  "got_first_bin": true,
+  "got_snapshot": true,
+  "marker": "STATIC_ALT_MARKER_092",
+  "name": "bash",
+  "ref": "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-sprobe2/tmp/tmux/tmux-501/default\u001f%0",
+  "rows": 96,
+  "snapshot_has_marker": true,
+  "subscribe_ms": 108.358667,
+  "wire_hex_head200": "524101015d2f566f6c756d65732f6e766d652f50726f6a656374732fe8bf9ce7a88b4167656e74e5ae89e58d932f2e7465616d2f6e6f6465732f686c312d7370726f6265322f746d702f746d75782f746d75782d3530312f64656661756c741f25305354415449435f414c545f4d41524b45525f3039321b5b323b3148",
+  "wire_len": 125,
+  "world": "app渲染层"
+}

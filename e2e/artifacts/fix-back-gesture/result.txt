@@ -1,0 +1,3 @@
+left=level2
+right=level2
+d32=level3_to_level2_to_level1_to_pairing_root

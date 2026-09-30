@@ -1,0 +1,10 @@
+{
+  "task_id": "env-android",
+  "status": "pass",
+  "acceptance_results": [
+    {"cmd": "bash -lc 'java -version && ~/Library/Android/sdk/platform-tools/adb --version'", "exit": 0}
+  ],
+  "produced_at_sha": "1d046caa87a5+2",
+  "result_id": "res_e756ece38de0",
+  "notes": "现场优于预期：SDK 组件全部已存在，零安装。仅补 ~/.profile 与 ~/.zprofile 的 JAVA_HOME(openjdk@17)+PATH 前置。关键坑已沉淀：/usr/bin/java stub 遮蔽，brew link 无效，必须 PATH 前置。后续安卓任务一律用 bash -lc 使配置生效。"
+}

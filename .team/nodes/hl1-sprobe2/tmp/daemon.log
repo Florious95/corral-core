@@ -1,0 +1,92 @@
+time=2026-08-21T18:48:16.506+08:00 level=INFO msg="provider whitelist loaded" entries=6
+time=2026-08-21T18:48:16.506+08:00 level=INFO msg="single-instance guard acquired" pidfile=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-sprobe2/tmp/state/agentmirrord.pid
+time=2026-08-21T18:48:16.506+08:00 level=INFO msg="pairing token source=explicit"
+time=2026-08-21T18:48:16.506+08:00 level=INFO msg="agentmirrord starting" listen=127.0.0.1:22421 qr_listen="" token_source=explicit upload_dir=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-sprobe2/tmp/uploads max_upload_mib=20 list_interval=2s
+time=2026-08-21T18:48:16.506+08:00 level=DEBUG msg="listing loop started" interval=2s
+time=2026-08-21T18:48:16.506+08:00 level=DEBUG msg="level2 loop started" interval=2s heartbeat=8s
+time=2026-08-21T18:48:16.507+08:00 level=WARN msg="tailnet 未启用：未配置 TS authkey，仅 LAN 监听"
+                                                             
+                                                             
+    █▀▀▀▀▀█ ▀█▄ ▀▀ █▄ ▀  ▄ ██ ██  ▄▀ ██▄▄▀ ▀█▄█▄  █▀▀▀▀▀█    
+    █ ███ █ ▀▀ ▀▄ ▀ ▄ ▀▀▀▄█▄█ ▄ ▀▀███▀ █▀▀█ █ ▄▀▄ █ ███ █    
+    █ ▀▀▀ █ ▄  ▀██▀   ▄ ▀█▄ █▀▀▀█▄███▀▀ ▄▄█ █▄█   █ ▀▀▀ █    
+    ▀▀▀▀▀▀▀ ▀ ▀ ▀ ▀ ▀ ▀▄▀▄█▄█ ▀ █ ▀▄█▄▀▄▀ ▀ █▄▀ ▀ ▀▀▀▀▀▀▀    
+    █ ▀▄  ▀▀▄▀▀▄▄██▀█▄▀▄▄ █▀▀▀█▀█▀▀▀ ▄▀█  ▀ █▄▀ ▄  ▀▄ █ █    
+    ▄▀ ▀██▀▀▀ █▀▄   █ ▄▀█▀▀ ▀█▄██ █ █▄▄▀▄█ ▄ ▄ ▀▀▄ █  ▀██    
+    ▀▄▀█▄▀▀▀█ ▄▀ ▄█▀▀▀▄█▀▀▀█▄█▄ ▄█▀ █ ▀ ▀█▀█▀ █▀ ▀ █▄ ▄▀▄    
+    ▀▀▄█ ▀▀▄▄▄█▄███▄  █▄▀█▀▄▀▀▀▀█ ▄ █ █ █▀  ▄▄▄▀  ▀▀▄█▀▀▀    
+    ▄▄  ▄▄▀▀█ ▄▄██  █▀▄▄▄██  █▄▀▀▀ ██ ▀█  ▀▀█▀▀ ▄▀ ▄▀█▄▀▄    
+     █▀ ▀▀▀▀ ▄█ ▀  ▄ ██▀▀▀█▀▀  ▀██ ▀▄▀▀▀▄ ▀█▄█ ▄  ▄▀█▄  ▀    
+     █▄▀▀█▀▀██▄▄ █▀▄▀▄██ ▀█▄▄▄▄█ ▄▀█▀ ▀███▀▄▀▄ ▄ ▄▄█▀█▄▀█    
+     ▄▄▄█▄▀▄▀▄ █ ██▀▀▄ ▀█▀▀▄ █▄▀▀█▀   ▄▄▄█ █▄ █▀  ██ ▀▀ ▀    
+    ▀ ▄▄█▀▀▀██▀   █▀█▄▀█▀█▄▄█▀▀▀█▄ ▀▀▀▀ ▀▄ █▄ ▄ █▀▀▀█▀  ▀    
+     █▄██ ▀ █▄█▄▄▄▀▀█ █▄██▀ █ ▀ █  █▀ ▀▄█▄ ▀▄ ▀▀█ ▀ ██ ▀█    
+    ▄█████▀▀█▄ ▄▀ ▀█ ▀  ▄▄█▀█▀▀███▀█   █▄▀▀▄▀█  ▀█▀▀▀ ▄█▄    
+    ▀▄▀▄▀▀▀█▄ ▀██▀▄▀█ ▄▀    ▄█▄ █▀█ ▀█ █▄▀▄█▀▀ ███▀ ▀ ▄ █    
+     ▄ ▀██▀▄▀▀▄█▄▄▀ █▄▄█   █▀ ▀ ▀▄▄▀▀ ▄▄▀▄▀█▀▀▄ ▄█▀   ▄▄▀    
+    ██ ▀▀▀▀▀██▄ ▄▀██ ▀▀█ ▀▄▀▀█▀▀ ▀ █  █▀██ ██  █▀▀█▀ ▄  ▄    
+    ██  ▀▄▀█ █▀▀█  ▀▄█▀ ▀▀▀█▄ █▀▄█▀ █  ▀ ▀ ▀██ █▀█▀ ▄▀▄▀█    
+    ▀██▀▄▀▀▀▀▄███▀▀ ▀▀  ▄▄▀▀█▀█▀ █ ▀▄▀▀▀▄ ▀██▀▄█ ██  ▀ ▀█    
+    ▄▀ ▀▀█▀▀▄█▄▄▄█▀  ▄█ ▀▄ ▀▄▄█ █▀▀  ▀▀▀█  ▄▀▀ █▀▀▄█▄▀▀█▄    
+    ▀█▄▀▀▀▀▄▄▄▄ ▄  ▄▀ ▀ ██▄▄ █▀█ ▀ ▄ █ ▀ ▀ ██▀█▄▀▀█▀▄█▀▄▀    
+       ▀  ▀▀▄▀▄▀▀█ █▄▀▄ ▄▀ ▄█▀▀▀█  ▀██ █▀  █▀▄█▀█▀▀▀█▄▀▄▀    
+    █▀▀▀▀▀█ ▀██▀ ▄█   ▀█ ▄███ ▀ █ ▄  ▀ ██▄  █▄███ ▀ █▀ ▄█    
+    █ ███ █  ███▄▀ ▄ ▀█▀▄▄ ▀▀▀▀██ ▄▄█▀ █▀▀ ▄█▀▀ █████▀▄▄▀    
+    █ ▀▀▀ █ ▀█ ▄▀   █ █▄▀ ▀█▀ ▄▄▄  ▀ ▄ ▀█▄▀█▀█ ▄▀  ▄▀ █▀▀    
+    ▀▀▀▀▀▀▀ ▀  ▀  ▀ ▀  ▀ ▀▀▀▀▀ ▀ ▀▀▀    ▀▀▀▀▀  ▀▀▀▀ ▀ ▀ ▀    
+                                                             
+                                                             
+
+──────────────────────────────────────────────
+配对信息 · 用 App 扫码，或手填以下内容：
+  服务端 ws 地址 : ws://10.202.81.20:22421/ws
+  配对 token      : HL1SP21787309284
+  其他可达地址（若上面的连不上，改用下列之一）：
+    ws://10.202.81.20:22421/ws   [lan]
+    ws://192.168.31.116:22421/ws   [lan]
+    ws://100.75.207.88:22421/ws   [tailnet]
+time=2026-08-21T18:48:17.155+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/t115d24675 err="query tmux on /tmp/tmux-501/t115d24675: exit status 1: no server running on /tmp/tmux-501/t115d24675"
+time=2026-08-21T18:48:17.155+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/t115d24675 err="query tmux on /tmp/tmux-501/t115d24675: exit status 1: no server running on /tmp/tmux-501/t115d24675"
+time=2026-08-21T18:48:17.165+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/t115e31319 err="query tmux on /tmp/tmux-501/t115e31319: exit status 1: no server running on /tmp/tmux-501/t115e31319"
+time=2026-08-21T18:48:17.165+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/t115e31319 err="query tmux on /tmp/tmux-501/t115e31319: exit status 1: no server running on /tmp/tmux-501/t115e31319"
+time=2026-08-21T18:48:17.174+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/t115f44898 err="query tmux on /tmp/tmux-501/t115f44898: exit status 1: no server running on /tmp/tmux-501/t115f44898"
+time=2026-08-21T18:48:17.174+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/t115f44898 err="query tmux on /tmp/tmux-501/t115f44898: exit status 1: no server running on /tmp/tmux-501/t115f44898"
+time=2026-08-21T18:48:17.183+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/t115g47728 err="query tmux on /tmp/tmux-501/t115g47728: exit status 1: no server running on /tmp/tmux-501/t115g47728"
+time=2026-08-21T18:48:17.183+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/t115g47728 err="query tmux on /tmp/tmux-501/t115g47728: exit status 1: no server running on /tmp/tmux-501/t115g47728"
+time=2026-08-21T18:48:17.193+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-0bafa3965ade err="query tmux on /tmp/tmux-501/ta-0bafa3965ade: exit status 1: no server running on /tmp/tmux-501/ta-0bafa3965ade"
+time=2026-08-21T18:48:17.193+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-0bafa3965ade err="query tmux on /tmp/tmux-501/ta-0bafa3965ade: exit status 1: no server running on /tmp/tmux-501/ta-0bafa3965ade"
+time=2026-08-21T18:48:17.222+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-61709dcf801e err="query tmux on /tmp/tmux-501/ta-61709dcf801e: exit status 1: no server running on /tmp/tmux-501/ta-61709dcf801e"
+time=2026-08-21T18:48:17.222+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-61709dcf801e err="query tmux on /tmp/tmux-501/ta-61709dcf801e: exit status 1: no server running on /tmp/tmux-501/ta-61709dcf801e"
+time=2026-08-21T18:48:17.243+08:00 level=DEBUG msg="discovery: skipping unparsable pane line" socket=/tmp/tmux-501/ta-a9fd5b7defbd line="team-refactor-maintainability|6|%39|/Users/alauda/Documents/code/agent前沿探索/多agent协作|bash|87458|t.p9.review 零上下文设计审查已通过<|eos|> - grok|235x50|tester-t124"
+time=2026-08-21T18:48:17.243+08:00 level=DEBUG msg="discovery: skipping unparsable pane line" socket=/tmp/tmux-501/ta-a9fd5b7defbd line="team-refactor-maintainability|6|%39|/Users/alauda/Documents/code/agent前沿探索/多agent协作|bash|87458|t.p9.review 零上下文设计审查已通过<|eos|> - grok|235x50|tester-t124"
+time=2026-08-21T18:48:17.263+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-ed81bd4d8c17 err="query tmux on /tmp/tmux-501/ta-ed81bd4d8c17: exit status 1: no server running on /tmp/tmux-501/ta-ed81bd4d8c17"
+time=2026-08-21T18:48:17.263+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-ed81bd4d8c17 err="query tmux on /tmp/tmux-501/ta-ed81bd4d8c17: exit status 1: no server running on /tmp/tmux-501/ta-ed81bd4d8c17"
+time=2026-08-21T18:48:17.272+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-f1ad1b378fc7 err="query tmux on /tmp/tmux-501/ta-f1ad1b378fc7: exit status 1: no server running on /tmp/tmux-501/ta-f1ad1b378fc7"
+time=2026-08-21T18:48:17.272+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-f1ad1b378fc7 err="query tmux on /tmp/tmux-501/ta-f1ad1b378fc7: exit status 1: no server running on /tmp/tmux-501/ta-f1ad1b378fc7"
+time=2026-08-21T18:48:17.291+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-t121u01 err="query tmux on /tmp/tmux-501/ta-t121u01: exit status 1: no server running on /tmp/tmux-501/ta-t121u01"
+time=2026-08-21T18:48:17.291+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-t121u01 err="query tmux on /tmp/tmux-501/ta-t121u01: exit status 1: no server running on /tmp/tmux-501/ta-t121u01"
+time=2026-08-21T18:48:17.300+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-t121u01b err="query tmux on /tmp/tmux-501/ta-t121u01b: exit status 1: no server running on /tmp/tmux-501/ta-t121u01b"
+time=2026-08-21T18:48:17.300+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-t121u01b err="query tmux on /tmp/tmux-501/ta-t121u01b: exit status 1: no server running on /tmp/tmux-501/ta-t121u01b"
+time=2026-08-21T18:48:17.309+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-user-agents err="query tmux on /tmp/tmux-501/ta-user-agents: exit status 1: no server running on /tmp/tmux-501/ta-user-agents"
+time=2026-08-21T18:48:17.309+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-user-agents err="query tmux on /tmp/tmux-501/ta-user-agents: exit status 1: no server running on /tmp/tmux-501/ta-user-agents"
+time=2026-08-21T18:48:21.806+08:00 level=DEBUG msg="listing: first snapshot" seq=1
+time=2026-08-21T18:48:21.806+08:00 level=INFO msg="listing: refresh on open" req_id=1 had_cache=false prev_seq=0 prev_sessions=0 cur_sessions=48 cur_seq=1 refresh_err=""
+time=2026-08-21T18:48:21.902+08:00 level=DEBUG msg="listing: first snapshot" seq=1
+time=2026-08-21T18:48:21.917+08:00 level=INFO msg="ws: sendq health" conn=1 conn.deltas_dropped=0 conn.snapshots_pushed=1 conn.snapshots_from_resize=0 conn.snapshots_from_subscribe=1 conn.frames_sent=0 total.deltas_dropped=0 total.snapshots_pushed=1 total.snapshots_from_resize=0 total.subscribes=1 total.snapshots_from_subscribe=1 total.connections=1 total.queue_peak=0 total.frames_sent=0 close_reason="read_error: failed to get reader: received close frame: status = StatusNormalClosure and reason = \"done\""
+time=2026-08-21T18:48:21.970+08:00 level=DEBUG msg="pane restore size" ref="/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-sprobe2/tmp/tmux/tmux-501/default\x1f%0" err="tmux: server unreachable"
+time=2026-08-21T18:48:23.915+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-sprobe2/tmp/tmux/tmux-501/default err="query tmux on /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-sprobe2/tmp/tmux/tmux-501/default: exit status 1: no server running on /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-sprobe2/tmp/tmux/tmux-501/default"
+time=2026-08-21T18:48:23.935+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/t115d24675 err="query tmux on /tmp/tmux-501/t115d24675: exit status 1: no server running on /tmp/tmux-501/t115d24675"
+time=2026-08-21T18:48:23.944+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/t115e31319 err="query tmux on /tmp/tmux-501/t115e31319: exit status 1: no server running on /tmp/tmux-501/t115e31319"
+time=2026-08-21T18:48:23.954+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/t115f44898 err="query tmux on /tmp/tmux-501/t115f44898: exit status 1: no server running on /tmp/tmux-501/t115f44898"
+time=2026-08-21T18:48:23.963+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/t115g47728 err="query tmux on /tmp/tmux-501/t115g47728: exit status 1: no server running on /tmp/tmux-501/t115g47728"
+time=2026-08-21T18:48:23.971+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-0bafa3965ade err="query tmux on /tmp/tmux-501/ta-0bafa3965ade: exit status 1: no server running on /tmp/tmux-501/ta-0bafa3965ade"
+time=2026-08-21T18:48:23.998+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-61709dcf801e err="query tmux on /tmp/tmux-501/ta-61709dcf801e: exit status 1: no server running on /tmp/tmux-501/ta-61709dcf801e"
+time=2026-08-21T18:48:24.017+08:00 level=DEBUG msg="discovery: skipping unparsable pane line" socket=/tmp/tmux-501/ta-a9fd5b7defbd line="team-refactor-maintainability|6|%39|/Users/alauda/Documents/code/agent前沿探索/多agent协作|bash|87458|t.p9.review 零上下文设计审查已通过<|eos|> - grok|235x50|tester-t124"
+time=2026-08-21T18:48:24.036+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-ed81bd4d8c17 err="query tmux on /tmp/tmux-501/ta-ed81bd4d8c17: exit status 1: no server running on /tmp/tmux-501/ta-ed81bd4d8c17"
+time=2026-08-21T18:48:24.045+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-f1ad1b378fc7 err="query tmux on /tmp/tmux-501/ta-f1ad1b378fc7: exit status 1: no server running on /tmp/tmux-501/ta-f1ad1b378fc7"
+time=2026-08-21T18:48:24.062+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-t121u01 err="query tmux on /tmp/tmux-501/ta-t121u01: exit status 1: no server running on /tmp/tmux-501/ta-t121u01"
+time=2026-08-21T18:48:24.071+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-t121u01b err="query tmux on /tmp/tmux-501/ta-t121u01b: exit status 1: no server running on /tmp/tmux-501/ta-t121u01b"
+time=2026-08-21T18:48:24.080+08:00 level=DEBUG msg="discovery: skipping unreachable socket" socket=/tmp/tmux-501/ta-user-agents err="query tmux on /tmp/tmux-501/ta-user-agents: exit status 1: no server running on /tmp/tmux-501/ta-user-agents"
+time=2026-08-21T18:49:00.976+08:00 level=INFO msg="shutting down"
+time=2026-08-21T18:49:00.976+08:00 level=DEBUG msg="listing loop stopped"
+time=2026-08-21T18:49:00.976+08:00 level=DEBUG msg="level2 loop stopped"

@@ -1,0 +1,932 @@
+diff --git a/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt b/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt
+index e767a0ab2..b7bb8534f 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt
+@@ -335,9 +335,21 @@ class SessionViewModel(
+     /**
+      * 处理手势滚动（缺陷④ 远端滚动投送，由 TermSurfaceView 经 onRemoteScrollBy 回调触发）。
+      *
+-     * READY 状态：以 50ms 节流发 ScrollWheelFrame 到服务端；delta = -deltaLines（协议约定
+-     * delta<0=向上/看历史，deltaLines>0=看更早历史）。非 READY 状态降级到本地缓冲滚动，
+-     * 保证掉线中仍可看本地 scrollback。
++     * READY 状态：以 50ms 节流发 ScrollWheelFrame 到服务端；非 READY 状态降级到本地缓冲
++     * 滚动，保证掉线中仍可看本地 scrollback。
++     *
++     * 符号约定（回炉·第9轮订正——这里曾经有一次真实的符号反转 bug，QA 用透明 TCP 代理
++     * 实测出上滑被送成了正协议 delta，已在真机上验证修复）：
++     * deltaLines 的符号由调用方 TermSurfaceView.onScroll 决定，两条路径（本方法与
++     * presenter.onScrollBy 的本地降级分支）收到的是同一个值。TermSurfaceView 那边的
++     * `-dy/lineHeightPx` 计算已经产出协议原生的符号——上滑（想看更早历史）为负，
++     * 下滑（想回到实时）为正，与协议 delta<0=向上看历史的约定天然一致。
++     * **所以 READY 分支必须原样发出 accumulated，不能再反号**——旧代码在这里多反了一次
++     * 号，导致上滑变成发送正 delta（服务端解读为"回实时"，因为已经在 offset 0 会被夹住
++     * 不动，表现为冻屏）。
++     * 非 READY 的本地降级分支直接把同一个 deltaLines 转给 presenter.onScrollBy——但
++     * presenter 自己的符号约定是相反的（TermViewPresenter.onScrollBy 用 `next = current -
++     * deltaLines`，正值才是历史），这个不一致本轮不修，只钉住当前实际行为，不做改动。
+      *
+      * 50ms 节流说明：GestureDetector 在快速滑动时每 ~16ms 触发一次 onScroll；不节流时
+      * 每帧都发帧，链路负担大；50ms 约保留 20fps 的手势密度，足以响应滑动速度。
+@@ -346,8 +358,8 @@ class SessionViewModel(
+      *
+      * @contract
+      * @pre deltaLines 非零（调用方 TermSurfaceView 在 deltaLines==0 时不调用此方法）
+-     * @post READY 时：每次累加 deltaLines；间隔 ≥50ms 时发一帧 ScrollWheelFrame(delta=-accumulated)
+-     *       非 READY 时：presenter.onScrollBy(deltaLines) 本地降级
++     * @post READY 时：每次累加 deltaLines；间隔 ≥50ms 时发一帧 ScrollWheelFrame(delta=accumulated，原样不反号)
++     *       非 READY 时：presenter.onScrollBy(deltaLines) 本地降级（原样转发，不在此处改动）
+      * @err 帧校验失败由 conn 层静默（累计量为 0 时不发帧）
+      * @inv lastScrollSentMs 单调递增；pendingScrollDelta 发出后归零；connectionState 不被本方法改变
+      */
+@@ -364,10 +376,8 @@ class SessionViewModel(
+         val toSend = pendingScrollDelta
+         pendingScrollDelta = 0
+         if (toSend == 0) return
+-        // 协议约定：delta<0=向上看历史（scroll-up）。
+-        // 手势约定：deltaLines>0=presenter 向更早历史滚（正值=看旧内容），
+-        // 因此 delta=-toSend 使两端符号语义对齐。
+-        manager.sendScrollWheel(ref, -toSend)
++        // 原样发出：toSend 已经是协议原生符号（见本方法 KDoc）。
++        manager.sendScrollWheel(ref, toSend)
+     }
+ 
+     /** 离开会话页时释放：退订镜像（conn 层幂等），停用连接由服务/接线层决定。 */
+diff --git a/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt b/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt
+index 80a2c221a..3ca47fbbe 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt
+@@ -66,15 +66,35 @@ class TermSurfaceView @JvmOverloads constructor(
+      * 远端滚动回调（缺陷④）：由会话层（SessionViewModel）注入，将手势档位数投送到远端 pane。
+      * 注入后 onScroll 优先走此路径；null 则退回 presenter.onScrollBy（本地缓冲降级）。
+      *
+-     * 注意：SessionScreen 在 AndroidView update lambda 里永远设此回调（只要会话页存活），
+-     * 因此 null 分支在正常会话中不会触达——降级逻辑（READY 判断）实际由 SessionViewModel
+-     * 内部负责，View 层不感知连接状态。null 分支保留是为了在测试/预览中允许不注入 VM。
++     * 注意（回炉·第9轮订正，此前注释与实现不符）：SessionScreen 只在 AndroidView 的
++     * factory lambda 里设一次此回调，没有 update lambda——factory 只在该 View 首次进入
++     * 组合树时跑一次。只要 viewModel 实例在会话存活期间不换（当前代码里没有会重建它的
++     * 路径），factory 捕获的 `viewModel::onScrollWheel` 方法引用整个会话期间保持有效，
++     * null 分支实测不会在正常会话中触达；但这依赖"viewModel 不重建"这个未被强制校验的
++     * 假设，如果以后 AndroidView 因某种 recomposition 被换掉（未验证是否存在这样的路径），
++     * 这里就需要补 update lambda 重新绑定。降级逻辑（READY 判断）由 SessionViewModel 内部
++     * 负责，View 层不感知连接状态。null 分支保留是为了在测试/预览中允许不注入 VM。
+      */
+     var onRemoteScrollBy: ((deltaLines: Int) -> Unit)? = null
+ 
+     /** 像素高度对应一逻辑行的行高（视口向下滚动超过一行时对齐整格）。 */
+     private var lineHeightPx: Int = 0
+ 
++    /**
++     * 手势层像素余数累加器（回炉·第10轮：QA 实测出阅读式拖动 700px/1.5s 只送达 3 行，
++     * 应为 35 行——不是"慢滑"这种边缘场景，是任何不带甩动的正常拖动）。
++     *
++     * 根因：GestureDetector 每次 onScroll 的 dy 是"距上次回调的增量"，触屏高频采样下单次
++     * 增量常常不足一整行；此前每次都直接 `roundToInt` 判 0 就丢，不留余数——多次不足一行
++     * 的增量永远凑不成一行，九成以上位移在这一层就没了，SessionViewModel 的节流累加器
++     * 根本收不到已经被丢弃的值（那层管的是"发送节奏"，不是"丢失的像素"，两层各管一段，
++     * 中间这段没有累加器）。
++     *
++     * 修法：本字段累加每次 -dy（未取整的像素），取出的整行数发出后从累加器里扣掉，余下
++     * 的不足一行的量留着等下一次回调继续累加——像素永不凭空消失，只是"够一行才发一次"。
++     */
++    private var pendingScrollPx: Float = 0f
++
+     private var backToBottomLabel: String? = null
+ 
+     // ---- 绘制工具 ----
+@@ -119,12 +139,25 @@ class TermSurfaceView @JvmOverloads constructor(
+     private var baselinePx: Float = 0f
+ 
+     private val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
+-        override fun onDown(e: MotionEvent): Boolean = true
++        override fun onDown(e: MotionEvent): Boolean {
++            // 新手势开始：清空上一次手势收尾时留下的不足一行的余数（回炉·第10轮）。
++            // 理由：那点余数是上一次、可能早已结束的手势的残留位移，把它带进一个新的、
++            // 时间/方向都无关的手势会让新手势"平白多出"一点偏移——用户看不见这点偏移从
++            // 哪来，体感是"第一下滑动量不对"。清零的代价是跨手势边界丢一点不足一行的
++            // 像素（< lineHeightPx，视觉上不可感知），比制造一个不可解释的偏移更安全。
++            pendingScrollPx = 0f
++            return true
++        }
+         override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
+             // GestureDetector 的 distanceY 是”上一点 - 当前点”：手指下拖为负；
+             // Presenter 的正值才是看更早历史，因此必须反号以保持内容跟手移动。
+-            val deltaLines = (-dy / lineHeightPx.toFloat()).roundToInt()
++            // 像素余数累加（回炉·第10轮，见 pendingScrollPx 字段注释）：先把本次增量并入
++            // 累加器，再从累加器里取出能凑出的整行数，取出多少就扣多少，不清零整个累加器
++            // ——不足一行的部分留给下一次回调，像素不会在这一层消失。
++            pendingScrollPx += -dy
++            val deltaLines = (pendingScrollPx / lineHeightPx.toFloat()).toInt() // 向零截断，符号随累加器
+             if (deltaLines == 0) return true
++            pendingScrollPx -= deltaLines * lineHeightPx.toFloat()
+             val remoteScroll = onRemoteScrollBy
+             if (remoteScroll != null) {
+                 remoteScroll(deltaLines) // 远端路径；降级判断由 SessionViewModel 负责
+diff --git a/app/app/src/test/java/dev/agentmirror/app/session/ScrollWheelTest.kt b/app/app/src/test/java/dev/agentmirror/app/session/ScrollWheelTest.kt
+index 8dba0bec7..d10b978f8 100644
+--- a/app/app/src/test/java/dev/agentmirror/app/session/ScrollWheelTest.kt
++++ b/app/app/src/test/java/dev/agentmirror/app/session/ScrollWheelTest.kt
+@@ -21,8 +21,12 @@ package dev.agentmirror.app.session
+ // 这批测试要先在无实现的 HEAD 上编译红（undefined: onScrollWheel/inCopyMode/ScrollWheelFrame
+ // 等），在实现后全绿。红证已在 git worktree 上验证（见 evidence/feat-remote-scroll-forward.json）。
+ //
+-// T-sw1: READY 状态下 onScrollWheel(+3) → 发出 delta=-3（向上，看历史）。钉死方向符号。
+-// T-sw2: READY 状态下 onScrollWheel(-2) → 发出 delta=+2（向下，看最新）。
++// T-sw1/T-sw2 订正（回炉·第9轮，QA 用透明 TCP 代理实测出真实符号后修正）：
++// deltaLines 的符号由 TermSurfaceView.onScroll 决定、已是协议原生符号——上滑（看历史）
++// 为负、下滑（看最新）为正，onScrollWheel 原样转发，不再反号（旧版本这里多反了一次号，
++// 是本轮冻屏 bug 的真根因，不是最初怀疑的"手势层丢帧"）。
++// T-sw1: READY 状态下 onScrollWheel(-3)（模拟上滑）→ 发出 delta=-3（原样，不反号）。
++// T-sw2: READY 状态下 onScrollWheel(+2)（模拟下滑）→ 发出 delta=+2（原样，不反号）。
+ // T-sw3: 50ms 节流——500ms 内只发一帧（不多发，不漏发）。
+ // T-sw4: App 侧无额外延迟——frame 在 onScrollWheel 调用时同步发出（节流窗口外不加时延）。
+ // T-sw5: 非 READY（STOPPED）时 onScrollWheel → 不发网络帧，走本地缓冲降级。
+@@ -98,29 +102,31 @@ class ScrollWheelTest {
+     // ---- T-sw1: 方向断言 — 向上（看历史）------------------------------------
+ 
+     /**
+-     * 手势向上（deltaLines>0，presenter 约定正值=看更早历史）→ ScrollWheelFrame.delta<0
+-     * （协议约定 delta<0=scroll-up/向上/看历史）。钉死符号不反转。
++     * 手势向上（TermSurfaceView.onScroll 产出的 deltaLines<0，已是协议原生符号）→
++     * ScrollWheelFrame.delta<0（协议约定 delta<0=scroll-up/向上/看历史）。原样转发，
++     * 不反号。回炉·第9轮订正：这里曾经断言过"deltaLines>0=向上"，那是本次冻屏 bug 的
++     * 真根因——QA 用透明 TCP 代理实测出上滑被送成了正协议 delta。
+      */
+     @Test
+-    fun `READY onScrollWheel positive deltaLines sends negative delta`() {
++    fun `READY onScrollWheel negative deltaLines sends negative delta unchanged`() {
+         val h = Harness()
+         assertEquals(ConnectionState.READY, h.vm.connectionState)
+ 
+-        h.vm.onScrollWheel(3) // deltaLines=+3 = 手势向上，看更早历史
++        h.vm.onScrollWheel(-3) // deltaLines=-3 = 手势向上，看更早历史（TermSurfaceView 的真实符号）
+ 
+         val frames = h.scrollWheelFrames()
+         assertEquals("exactly one frame sent", 1, frames.size)
+         assertTrue("delta must be negative (scroll-up)", frames[0].delta < 0)
+-        assertEquals("delta = -deltaLines", -3, frames[0].delta)
++        assertEquals("delta = deltaLines，原样不反号", -3, frames[0].delta)
+     }
+ 
+     // ---- T-sw2: 方向断言 — 向下（看最新）------------------------------------
+ 
+     @Test
+-    fun `READY onScrollWheel negative deltaLines sends positive delta`() {
++    fun `READY onScrollWheel positive deltaLines sends positive delta unchanged`() {
+         val h = Harness()
+ 
+-        h.vm.onScrollWheel(-2) // deltaLines=-2 = 手势向下，看最新内容
++        h.vm.onScrollWheel(2) // deltaLines=+2 = 手势向下，看最新内容（TermSurfaceView 的真实符号）
+ 
+         val frames = h.scrollWheelFrames()
+         assertEquals(1, frames.size)
+@@ -229,25 +235,27 @@ class ScrollWheelTest {
+      * 若直接丢弃则该帧只携带首次的 deltaLines（~1–2 行），
+      * 若累加则该帧携带窗口内所有 deltaLines 之和——才能反映真实位移幅度。
+      *
+-     * 断言：窗口内 3 次调用（deltaLines=5, 7 在首帧之后）+ 窗口外 1 次（deltaLines=1），
+-     * 共产生 2 帧：第一帧 delta=-3（首次立即发），第二帧 delta=-(5+7+1)=-13（累计发送）。
++     * 断言：窗口内 3 次调用（deltaLines=-5, -7 在首帧之后）+ 窗口外 1 次（deltaLines=-1），
++     * 共产生 2 帧：第一帧 delta=-3（首次立即发，原样不反号），
++     * 第二帧 delta=-5+-7+-1=-13（累计发送，原样不反号）。
++     * 全用负值（模拟连续上滑）：回炉·第9轮订正，deltaLines 已是协议原生符号，不再反号。
+      */
+     @Test
+     fun `throttle window accumulates deltaLines and sends sum on window expiry`() {
+         val h = Harness()
+ 
+-        h.vm.onScrollWheel(3) // 第一帧：立即发出 delta=-3，窗口开始
+-        h.vm.onScrollWheel(5) // 窗口内：累加 5，不发
+-        h.vm.onScrollWheel(7) // 窗口内：累加 12，不发
++        h.vm.onScrollWheel(-3) // 第一帧：立即发出 delta=-3，窗口开始
++        h.vm.onScrollWheel(-5) // 窗口内：累加 -5，不发
++        h.vm.onScrollWheel(-7) // 窗口内：累加 -12，不发
+ 
+         Thread.sleep(60)      // 窗口过期
+ 
+-        h.vm.onScrollWheel(1) // 触发发送：累加 1 后 pending=13，发出 delta=-13
++        h.vm.onScrollWheel(-1) // 触发发送：累加 -1 后 pending=-13，发出 delta=-13
+ 
+         val frames = h.scrollWheelFrames()
+         assertEquals("two frames: one immediate + one accumulated", 2, frames.size)
+         assertEquals("first frame carries only its own deltaLines", -3, frames[0].delta)
+-        assertEquals("second frame carries accumulated sum 5+7+1=13", -13, frames[1].delta)
++        assertEquals("second frame carries accumulated sum -5-7-1=-13", -13, frames[1].delta)
+     }
+ 
+     // ---- T-sw7: 协议层 ScrollWheelFrame validate -------------------------
+diff --git a/server/internal/api/scroll_api_test.go b/server/internal/api/scroll_api_test.go
+index 9b90d92c6..019d125c8 100644
+--- a/server/internal/api/scroll_api_test.go
++++ b/server/internal/api/scroll_api_test.go
+@@ -1,15 +1,17 @@
+ package api
+ 
+-// scroll_api_test.go: API-layer red tests for handleScrollWheel.
+-// All tests use an isolated tmux socket — production daemon (pid 70317) and
+-// user tmux are never touched.
++// scroll_api_test.go: API-layer tests for handleScrollWheel
++// (feat-remote-scroll-forward v2.1). All tests use an isolated tmux socket —
++// production daemon and user tmux are never touched.
+ //
+ // T-api1: unsubscribed ref → ErrorFrame, no tmux contact
+-// T-api2: dead pane (InjectScroll fails) → ErrorFrame, failure visible
+-// T-api3: bare shell → scroll → PaneModeChanged{InCopyMode:true};
+-//         then Input → PaneModeChanged{InCopyMode:false}
++// T-api2: dead pane (ScrollState fails) → ErrorFrame, failure visible
++// T-api3: bare shell → scroll → KindSnapshot carrying history content
++//         (never PaneModeChanged — copy-mode is gone in v2.1); then Input →
++//         a fresh KindSnapshot resync (scrollOffset reset to realtime)
+ 
+ import (
++	"bytes"
+ 	"context"
+ 	"encoding/json"
+ 	"testing"
+@@ -103,63 +105,42 @@ func TestScrollWheelDeadPaneReturnsError(t *testing.T) {
+ 	}
+ }
+ 
+-// TestScrollWheelEntersCopyModeAndInputExitsIt is the end-to-end notification
+-// test: a bare shell (mouse_any_flag=0) receives a scroll → InjectScroll
+-// enters copy-mode → server emits PaneModeChanged{InCopyMode:true}; then the
+-// client sends TypeInput → handleInput pre-flight exits copy-mode → server
+-// emits PaneModeChanged{InCopyMode:false}. Both PaneModeChanged frames must
+-// arrive with the correct direction.
+-func TestScrollWheelEntersCopyModeAndInputExitsIt(t *testing.T) {
++// TestScrollWheelPushesHistorySnapshotAndInputResyncsToRealtime is the
++// end-to-end notification test for v2.1: a bare shell with real scrollback
++// receives a scroll → handleScrollWheel captures the history range via
++// capture-pane -S/-E (never copy-mode) and pushes it as a KindSnapshot
++// carrying the marker that had scrolled off-screen; then the client sends
++// TypeInput → handleInput resets the server-held scrollOffset to 0 and
++// pushes a fresh realtime KindSnapshot (no PaneModeChanged anywhere — that
++// mechanism belonged to the abandoned copy-mode design).
++func TestScrollWheelPushesHistorySnapshotAndInputResyncsToRealtime(t *testing.T) {
+ 	te := startTmuxEnv(t, "sh")
++	const marker = "SCROLL_API_HISTORY_MARKER_71fd"
++	generateBacklogAndWait(t, te, marker, 60) // pane is 24 rows; 60 lines pushes it well into history
+ 
+ 	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
+-	te.readBinaryFrame() // snapshot
+-
+-	// --- phase 1: scroll up → expect PaneModeChanged{InCopyMode:true} ---
+-	te.wsEnv.sendFrame(&protocol.ScrollWheel{Ref: te.ref(), Delta: -1})
+-
+-	// pane_mode_changed is S→C only and rejected by UnmarshalFrame (correct);
+-	// use readNextControl which reads the raw envelope without the C→S decoder.
+-	env1 := readNextControl(t, te.wsEnv)
+-	if env1.Type != string(protocol.TypePaneModeChanged) {
+-		t.Fatalf("phase1: expected %q, got %q", protocol.TypePaneModeChanged, env1.Type)
++	initial := te.readBinaryFrame()
++	if bytes.Contains(initial.Data, []byte(marker)) {
++		t.Fatalf("setup invalid: marker already visible in first snapshot — %q", initial.Data)
+ 	}
+-	var pmc1 protocol.PaneModeChanged
+-	if err := json.Unmarshal(env1.Payload, &pmc1); err != nil {
+-		t.Fatalf("phase1: decode PaneModeChanged: %v", err)
+-	}
+-	if !pmc1.InCopyMode {
+-		t.Errorf("phase1: InCopyMode = false, want true")
++
++	// --- phase 1: scroll up → expect a KindSnapshot carrying the marker ---
++	te.wsEnv.sendFrame(&protocol.ScrollWheel{Ref: te.ref(), Delta: -80})
++	scrolled := te.readBinaryFrame()
++	if scrolled.Kind != protocol.KindSnapshot {
++		t.Fatalf("phase1: expected KindSnapshot, got kind %v", scrolled.Kind)
+ 	}
+-	if pmc1.Ref != te.ref() {
+-		t.Errorf("phase1: Ref = %q, want %q", pmc1.Ref, te.ref())
++	if !bytes.Contains(scrolled.Data, []byte(marker)) {
++		t.Errorf("phase1: scrolled snapshot does not contain marker %q: %q", marker, scrolled.Data)
+ 	}
+ 
+-	// --- phase 2: input → expect PaneModeChanged{InCopyMode:false} ---
++	// --- phase 2: input → expect a fresh realtime KindSnapshot resync ---
+ 	te.wsEnv.sendFrame(&protocol.Input{ReqID: 1, Ref: te.ref(), Text: "x"})
+-
+-	// Drain until we see pane_mode_changed (InputAck may arrive first).
+-	deadline := time.Now().Add(5 * time.Second)
+-	var gotExit bool
+-	for time.Now().Before(deadline) {
+-		env2 := readNextControl(t, te.wsEnv)
+-		if env2.Type != string(protocol.TypePaneModeChanged) {
+-			continue // InputAck or other S→C control frame
+-		}
+-		var pmc2 protocol.PaneModeChanged
+-		if err := json.Unmarshal(env2.Payload, &pmc2); err != nil {
+-			t.Fatalf("phase2: decode PaneModeChanged: %v", err)
+-		}
+-		if pmc2.InCopyMode {
+-			t.Errorf("phase2: InCopyMode = true, want false (copy-mode should have exited)")
+-		}
+-		if pmc2.Ref != te.ref() {
+-			t.Errorf("phase2: Ref = %q, want %q", pmc2.Ref, te.ref())
+-		}
+-		gotExit = true
+-		break
++	resync := te.readBinaryFrame()
++	if resync.Kind != protocol.KindSnapshot {
++		t.Fatalf("phase2: expected a realtime KindSnapshot resync on typing, got kind %v", resync.Kind)
+ 	}
+-	if !gotExit {
+-		t.Error("phase2: never received PaneModeChanged{InCopyMode:false} after Input")
++	if bytes.Contains(resync.Data, []byte(marker)) {
++		t.Errorf("phase2: resync snapshot should show the live screen, not the scrolled-back marker: %q", resync.Data)
+ 	}
+ }
+diff --git a/server/internal/api/ws_conn.go b/server/internal/api/ws_conn.go
+index 5d39f19cb..aa2279b2f 100644
+--- a/server/internal/api/ws_conn.go
++++ b/server/internal/api/ws_conn.go
+@@ -85,6 +85,15 @@ type subscription struct {
+ 	// @err Resize failures are logged and not returned to the already-unsubscribing client
+ 	restoreOnce sync.Once
+ 	restoreSize func()
++
++	// scrollOffset is this subscription's current history-scroll offset
++	// (feat-remote-scroll-forward v2.1): 0 = realtime, N>0 = scrolled N lines
++	// into history. The server is the only writer (handleScrollWheel/
++	// handleInput); it never reads tmux's #{scroll_position} (empirically
++	// empty outside copy-mode — docs/remote-scroll-forward-design-v2.md 实测
++	// E — and this design never enters copy-mode). relay() reads it on every
++	// chunk to decide whether DELTA forwarding is suppressed.
++	scrollOffset atomic.Int32
+ }
+ 
+ // serveConn owns the connection from accept to close.
+@@ -397,6 +406,17 @@ func (c *wsConn) subscribed(ref string) bool {
+ 	return c.subs[ref] != nil
+ }
+ 
++// subscriptionFor returns the live subscription for ref on this connection,
++// if any (feat-remote-scroll-forward v2.1): handleScrollWheel/handleInput
++// need the subscription object itself, not just a bool, to read/reset its
++// scrollOffset.
++func (c *wsConn) subscriptionFor(ref string) (*subscription, bool) {
++	c.subsMu.Lock()
++	defer c.subsMu.Unlock()
++	sub := c.subs[ref]
++	return sub, sub != nil
++}
++
+ // closeSubscriptions drains every live subscription on this connection —
+ // cancelling its relay and detaching its pipe — without closing the connection
+ // itself. It is the graceful-shutdown drain: Server.Close calls it on every
+@@ -473,6 +493,17 @@ func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte)
+ 			if !ok {
+ 				return
+ 			}
++			if sub.scrollOffset.Load() != 0 {
++				// Scrolled into history (feat-remote-scroll-forward v2.1):
++				// suppress DELTA forwarding so new live output cannot tear
++				// the scrolled-back view the client is looking at.
++				// handleScrollWheel/handleInput reconcile with a fresh
++				// realtime SNAPSHOT when the offset returns to 0, which also
++				// resumes forwarding — this check re-reads the live offset
++				// on every chunk, no separate "paused" flag to fall out of
++				// sync with scrollOffset itself.
++				continue
++			}
+ 			frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
+ 				Kind: protocol.KindDelta,
+ 				Ref:  sub.ref,
+diff --git a/server/internal/api/ws_handler.go b/server/internal/api/ws_handler.go
+index 5ee4edd52..096bed440 100644
+--- a/server/internal/api/ws_handler.go
++++ b/server/internal/api/ws_handler.go
+@@ -193,16 +193,18 @@ func (c *wsConn) handleInput(i protocol.Input) {
+ 		ack(false, protocol.InputFailSessionNotFound)
+ 		return
+ 	}
+-	// Copy-mode safety bailout (feat-remote-scroll-forward leader Q2 mandate):
+-	// if the pane is in tmux copy-mode when the user types, the keystrokes
+-	// would be consumed by copy-mode commands rather than reaching the
+-	// shell/TUI. Exit copy-mode first so text arrives at its intended target.
+-	// This is a best-effort pre-flight: a PaneInMode failure is non-fatal
+-	// (the injection proceeds; the pane will likely report ErrPaneNotFound).
+-	// ExitCopyMode is idempotent — cancel on a normal pane is a tmux no-op.
+-	if inMode, modeErr := br.PaneInMode(c.ctx); modeErr == nil && inMode {
+-		if exitErr := br.ExitCopyMode(c.ctx); exitErr == nil {
+-			c.send(&protocol.PaneModeChanged{Ref: i.Ref, InCopyMode: false})
++	// Scroll-offset reset (feat-remote-scroll-forward v2.1): if the client is
++	// scrolled into history, typing means "I'm done looking, get me back to
++	// live" — reset the offset and push a fresh realtime snapshot so the
++	// mirror stream (suppressed by relay while offset != 0) resumes before
++	// the injected keystroke's effect, if any, arrives as a DELTA. Unlike the
++	// old copy-mode design this is pure UX reconciliation, not a routing
++	// fix: there is no copy-mode anymore to swallow keystrokes, so Inject/
++	// SendKeys below always reaches the pane regardless of scrollOffset.
++	// Best-effort: a failed snapshot re-capture does not block the input.
++	if sub, subOK := c.subscriptionFor(i.Ref); subOK && sub.scrollOffset.Swap(0) != 0 {
++		if snap, snapErr := snapshotWithCursor(c.ctx, br); snapErr == nil {
++			c.pushSnapshot(i.Ref, snap)
+ 		}
+ 	}
+ 
+@@ -246,14 +248,29 @@ func (c *wsConn) handleInput(i protocol.Input) {
+ }
+ 
+ // handleScrollWheel delivers one scroll-wheel gesture to a remote pane
+-// (feat-remote-scroll-forward). No ack on success — the mirror delta stream
++// (feat-remote-scroll-forward v2.1). No ack on success — the pushed SNAPSHOT
+ // carries the visual result, and a per-notch round-trip at ~123ms RTT would
+ // make the gesture feel sticky. TypeError on failure (pane gone / tmux error).
+-// When the pane enters copy-mode, pushes TypePaneModeChanged so the App can
+-// show a minimal indicator (leader Q2 mandate: user must know when copy-mode
+-// is active to avoid "typed but nothing happened" confusion).
++//
++// The server is the sole holder of scrollOffset (this subscription's own
++// atomic field) — it never reads tmux's #{scroll_position} (empty outside
++// copy-mode, and this design never enters copy-mode). Each call updates the
++// offset, clamps it to the pane's available history, and captures+pushes the
++// resulting viewport via capture-pane -S/-E (bridge.Pane.Scrollback) — the
++// same primitive Scrollback paging already uses, never copy-mode
++// (docs/remote-scroll-pipe-pane-probe.md root cause: copy-mode never writes
++// to the pty, so the client's only real channel, pipe-pane, would see 0
++// bytes for a scroll no matter how it was driven).
++//
++// Alt-screen apps (vim/less/htop) report historySize=0 from ScrollState
++// regardless of delta, so any scroll on them clamps straight back to offset
++// 0 and this pushes the pane's own unchanged current screen — content-level
++// proof to the client that nothing moved, with no separate wire signal
++// needed (leader corrected Q3: no new SNAPSHOT field, no new wire kind; see
++// docs/remote-scroll-forward-design-v2.md).
+ func (c *wsConn) handleScrollWheel(sw protocol.ScrollWheel) {
+-	if !c.subscribed(sw.Ref) {
++	sub, ok := c.subscriptionFor(sw.Ref)
++	if !ok {
+ 		c.sendError(protocol.ErrCodeSessionNotFound, "not subscribed to session")
+ 		return
+ 	}
+@@ -263,18 +280,87 @@ func (c *wsConn) handleScrollWheel(sw protocol.ScrollWheel) {
+ 		c.sendError(protocol.ErrCodeSessionNotFound, "unknown session ref")
+ 		return
+ 	}
+-	enteredCopyMode, err := br.InjectScroll(c.ctx, sw.Delta)
++
++	// altScreen itself is not branched on here: ScrollState already forces
++	// historySize to 0 when altScreen is true, which is enough to make the
++	// clamp below land back on offset 0 for alt-screen panes.
++	_, historySize, err := br.ScrollState(c.ctx)
++	if err != nil {
++		if errors.Is(err, bridge.ErrPaneNotFound) {
++			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
++		} else {
++			c.sendError(protocol.ErrCodeInternal, "scroll state query failed")
++		}
++		return
++	}
++
++	newOffset := sub.scrollOffset.Load()
++	if sw.Delta < 0 {
++		newOffset += -sw.Delta // up: further into history
++	} else {
++		newOffset -= sw.Delta // down: back toward realtime
++		if newOffset < 0 {
++			newOffset = 0
++		}
++	}
++	if newOffset > int32(historySize) {
++		newOffset = int32(historySize) // clamp to #{history_size} (design v2.1 硬约束5)
++	}
++	sub.scrollOffset.Store(newOffset)
++
++	if newOffset == 0 {
++		// Realtime: reconcile with a fresh live snapshot and let relay's
++		// scrollOffset==0 check resume DELTA forwarding on its own.
++		snap, snapErr := snapshotWithCursor(c.ctx, br)
++		if snapErr != nil {
++			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
++			return
++		}
++		c.pushSnapshot(sw.Ref, snap)
++		return
++	}
++
++	_, height, err := br.Size(c.ctx)
++	if err != nil {
++		if errors.Is(err, bridge.ErrPaneNotFound) {
++			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
++		} else {
++			c.sendError(protocol.ErrCodeInternal, "pane size query failed")
++		}
++		return
++	}
++	start := -int(newOffset)
++	end := start + height - 1
++	data, err := br.Scrollback(c.ctx, start, end)
+ 	if err != nil {
+ 		if errors.Is(err, bridge.ErrPaneNotFound) {
+ 			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
+ 		} else {
+-			c.sendError(protocol.ErrCodeInternal, "scroll injection failed")
++			c.sendError(protocol.ErrCodeInternal, "scroll capture failed")
+ 		}
+ 		return
+ 	}
+-	if enteredCopyMode {
+-		c.send(&protocol.PaneModeChanged{Ref: sw.Ref, InCopyMode: true})
++	// Trim trailing blank rows, consistent with snapshotWithCursor/
++	// handleScrollback: capture-pane emits blank bottom rows as bare LFs.
++	data = bytes.TrimRight(data, "\n")
++	c.pushSnapshot(sw.Ref, data)
++}
++
++// pushSnapshot encodes and sends one KindSnapshot binary frame
++// (feat-remote-scroll-forward v2.1 shared helper for handleScrollWheel's
++// realtime/history captures and handleInput's typing-resets-scroll
++// reconciliation).
++func (c *wsConn) pushSnapshot(ref string, data []byte) {
++	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
++		Kind: protocol.KindSnapshot,
++		Ref:  ref,
++		Data: data,
++	})
++	if err != nil {
++		c.sendError(protocol.ErrCodeInternal, "cannot encode snapshot")
++		return
+ 	}
++	c.sendBinary(frame)
+ }
+ 
+ // handleScrollback fetches one line range of history (docs/protocol.md §4.2,
+diff --git a/server/internal/bridge/bridge.go b/server/internal/bridge/bridge.go
+index 3d27da74a..ef0d29eb0 100644
+--- a/server/internal/bridge/bridge.go
++++ b/server/internal/bridge/bridge.go
+@@ -4,7 +4,8 @@ package bridge
+ // snapshot (capture-pane -e), scrollback paging (capture-pane -S/-E), whole
+ // input injection with a decidable ack (send-keys / paste-buffer, requirement
+ // 003), resize (window-size latest + resize-window, requirement 005), and
+-// scroll-wheel forwarding (feat-remote-scroll-forward).
++// scroll state querying (feat-remote-scroll-forward v2.1: ScrollState +
++// Scrollback/Snapshot — never tmux copy-mode, see ScrollState's doc).
+ //
+ // A Pane is mirror-and-inject only: it never kills, detaches, or otherwise
+ // mutates the target pane's runtime state beyond what the caller explicitly
+@@ -289,95 +290,51 @@ func (p *Pane) Size(ctx context.Context) (int, int, error) {
+ 	return w, h, nil
+ }
+ 
+-// InjectScroll delivers one scroll-wheel event to the pane
+-// (feat-remote-scroll-forward). delta < 0 = up (toward history); delta > 0 =
+-// down. Always uses tmux copy-mode; see inline rationale.
+-//
+-//   - pane not in copy-mode → enter copy-mode -e, then scroll N lines;
+-//     returns enteredCopyMode=true so the caller can push PaneModeChanged.
+-//   - pane already in copy-mode → scroll only; returns enteredCopyMode=false.
+-//
+-// Note: the original design intended a mouse_any_flag=1 branch that injected
+-// raw SGR/X10 bytes via `send-keys -H`. That was proved ineffective (see
+-// docs/remote-scroll-forward-design.md §已知局限): tmux forwards real mouse
+-// events via `send-keys -M` which requires a live mouse-event callback and
+-// cannot be synthesised externally. Direct byte injection writes to the PTY
+-// but bypasses tmux's mouse pipeline; confirmed by experiment that less and
+-// vim with mouse=a do not respond. copy-mode is used for all panes instead.
+-//
+-// Effective tiers:
+-//
+-//	① Non-alt-screen TUI (Claude Code)  → copy-mode works ✓
+-//	② Alt-screen apps (vim/less/htop)   → copy-mode has no scrollback ✗
+-//	③ Bare shell                         → copy-mode works ✓
++// ScrollState reports whether the pane is currently on the alternate screen
++// and how many lines of history capture-pane -S/-E can reach right now
++// (feat-remote-scroll-forward v2.1). This replaces the earlier copy-mode
++// based InjectScroll entirely: root-cause probe evidence
++// (docs/remote-scroll-pipe-pane-probe.md) showed copy-mode changes only
++// tmux's own rendering view and never writes a byte to the pane's pty, so a
++// pipe-pane subscriber (the client's only mirror channel) saw 0 bytes for
++// every scroll. capture-pane -S/-E reads history directly without ever
++// entering copy-mode (design doc 实测 C/D), so the caller (handleScrollWheel)
++// captures and pushes the content itself instead of asking tmux to change
++// view state.
+ //
++// On the alternate screen, historySize is always reported as 0 regardless of
++// what tmux's own #{history_size} counter says: that counter tracks the
++// swapped-out normal screen, not the alt-screen buffer capture-pane -S/-E
++// actually reads from while alternate_on=1 (design doc 实测 A/已知局限 — alt-
++// screen apps like vim/less/htop have no reachable scrollback). Reporting the
++// real counter would let a caller believe a scroll could succeed when it
++// structurally cannot.
+ // @contract
+-// @pre pane 存在（requirePane 前置）；delta != 0（Validate 已拒绝 0）
+-// @post pane 处于 copy-mode 并已滚动 abs(delta) 行；不追加 Enter
+-// @err pane 不存在→ErrPaneNotFound；server 不可达/超时→ErrServerUnreachable/ErrTmuxTimeout
+-// @inv copy-mode 进入幂等（已在 copy-mode 时直接 scroll）
+-func (p *Pane) InjectScroll(ctx context.Context, delta int32) (enteredCopyMode bool, err error) {
++// @pre none — requirePane 前置精确存在性检查（display-message -t 对已死 pane id 不会报错，而是静默回退到别的活动 pane，见 requirePane 注释）
++// @post 返回 (altScreen, historySize)；historySize>=0；altScreen 时 historySize 恒为 0
++// @err pane 不存在→ErrPaneNotFound；server 不可达/超时→ErrServerUnreachable/ErrTmuxTimeout；解析失败→fmt.Errorf
++// @inv 纯只读查询，不改变 pane 状态，不进 copy-mode
++func (p *Pane) ScrollState(ctx context.Context) (altScreen bool, historySize int, err error) {
+ 	if err := p.requirePane(ctx); err != nil {
+-		return false, err
++		return false, 0, err
+ 	}
+-
+-	// Query copy-mode state only — mouse_any_flag no longer routes differently.
+ 	out, err := runTmux(ctx, p.socket, p.timeout,
+-		"display-message", "-p", "-t", p.target, "#{pane_in_mode}")
++		"display-message", "-p", "-t", p.target, "#{alternate_on} #{history_size}")
+ 	if err != nil {
+-		return false, err
++		return false, 0, err
+ 	}
+-	paneInMode := strings.TrimSpace(string(out)) == "1"
+-
+-	up := delta < 0
+-	direction := "scroll-up"
+-	if !up {
+-		direction = "scroll-down"
++	fields := strings.Fields(strings.TrimSpace(string(out)))
++	if len(fields) < 2 {
++		return false, 0, fmt.Errorf("tmux: unexpected display-message output %q", out)
+ 	}
+-	// No mouse tracking: copy-mode fallback.
+-	if !paneInMode {
+-		if _, err = runTmux(ctx, p.socket, p.timeout, "copy-mode", "-e", "-t", p.target); err != nil {
+-			return false, err
+-		}
+-		enteredCopyMode = true
++	if fields[0] == "1" {
++		return true, 0, nil
+ 	}
+-	count := delta
+-	if count < 0 {
+-		count = -count
+-	}
+-	_, err = runTmux(ctx, p.socket, p.timeout,
+-		"send-keys", "-X", "-N", strconv.Itoa(int(count)), "-t", p.target, direction)
+-	return enteredCopyMode, err
+-}
+-
+-// PaneInMode reports whether the pane is currently in tmux copy-mode.
+-// Used by handleInput to detect and clear stale copy-mode before injecting text.
+-// @contract
+-// @pre pane 存在（tmux 在调用时惰性判定）
+-// @post 返回 pane_in_mode 格式变量的布尔值
+-// @err tmux 失败→ErrPaneNotFound/ErrServerUnreachable/ErrTmuxTimeout
+-// @inv 纯只读查询
+-func (p *Pane) PaneInMode(ctx context.Context) (bool, error) {
+-	out, err := runTmux(ctx, p.socket, p.timeout,
+-		"display-message", "-p", "-t", p.target, "#{pane_in_mode}")
+-	if err != nil {
+-		return false, err
++	n, convErr := strconv.Atoi(fields[1])
++	if convErr != nil {
++		return false, 0, fmt.Errorf("tmux: parse history_size %q: %w", fields[1], convErr)
+ 	}
+-	return strings.TrimSpace(string(out)) == "1", nil
+-}
+-
+-// ExitCopyMode sends send-keys -X cancel to exit tmux copy-mode. Used by
+-// handleInput as a safety bailout: if a pane is in copy-mode when the user
+-// types, the cancel restores normal input before the text is injected.
+-// Idempotent: cancel on a pane not in copy-mode is a tmux no-op.
+-// @contract
+-// @pre pane 存在（tmux 在调用时惰性判定）
+-// @post copy-mode 已退出（pane_in_mode 变为 0）
+-// @err tmux 失败→ErrPaneNotFound/ErrServerUnreachable/ErrTmuxTimeout
+-// @inv 只发 send-keys -X cancel，不触碰 pane 其他运行态
+-func (p *Pane) ExitCopyMode(ctx context.Context) error {
+-	_, err := runTmux(ctx, p.socket, p.timeout, "send-keys", "-X", "-t", p.target, "cancel")
+-	return err
++	return false, n, nil
+ }
+ 
+ // Socket exposes the socket the Pane is bound to. An empty string means the
+diff --git a/server/internal/bridge/scroll_test.go b/server/internal/bridge/scroll_test.go
+index b8c839b88..5ba025360 100644
+--- a/server/internal/bridge/scroll_test.go
++++ b/server/internal/bridge/scroll_test.go
+@@ -1,16 +1,14 @@
+ package bridge
+ 
+-// scroll_test.go: red tests for InjectScroll, PaneInMode, ExitCopyMode.
++// scroll_test.go: tests for ScrollState (feat-remote-scroll-forward v2.1).
+ // All tests use an isolated tmux socket (newTestTMUX) — production daemon
+-// and user tmux are never touched (bridge red line).
++// and user tmux are never touched.
+ //
+-// T1: bare shell (mouse_any_flag=0) → copy-mode entered
+-// T2: vim+mouse (mouse_any_flag=1) → copy-mode entered (unified path;
+-//     send-keys -H mouse bytes proved ineffective, see design doc §已知局限)
+-// T5: PaneInMode reports correctly
+-// T6: ExitCopyMode exits copy-mode (pane_in_mode 1→0)
+-// T7: InjectScroll on dead pane → ErrPaneNotFound
+-// T8: already-in-copy-mode → scroll only (enteredCopyMode=false)
++// T1: bare shell (no history yet) → altScreen=false, historySize=0
++// T2: bare shell with history → altScreen=false, historySize>0 and grows
++// T3: alt-screen app (vim) → altScreen=true, historySize forced to 0
++//     regardless of the pane's real #{history_size}
++// T4: dead pane → ErrPaneNotFound
+ 
+ import (
+ 	"context"
+@@ -30,155 +28,96 @@ func queryFlag(t *testing.T, tt *testTMUX, pane *Pane, format string) string {
+ }
+ 
+ // waitForPane waits until the pane's running program has settled (brief sleep
+-// so e.g. vim has time to draw its screen and set mouse flags).
++// so e.g. vim has time to draw its screen and enter the alternate screen).
+ func waitForPane(d time.Duration) { time.Sleep(d) }
+ 
+-// TestInjectScrollEntersCopyModeForBareShell verifies that when mouse_any_flag=0
+-// (bare shell), InjectScroll enters copy-mode (no raw bytes reach the pane's
+-// input). This is the safety-critical path: injecting mouse bytes into a bare
+-// shell would produce garbage on the command line.
+-func TestInjectScrollEntersCopyModeForBareShell(t *testing.T) {
++// TestScrollStateBareShellNoHistory verifies a freshly created bare shell
++// reports altScreen=false and historySize=0 (nothing has scrolled off yet).
++func TestScrollStateBareShellNoHistory(t *testing.T) {
+ 	tt := newTestTMUX(t)
+-	// bare sh: mouse_any_flag=0
+ 	pane := tt.newPane(t, "sh")
+ 	ctx := context.Background()
+ 
+-	// Confirm mouse_any_flag is 0 before the call.
+-	if queryFlag(t, tt, pane, "#{mouse_any_flag}") != "0" {
+-		t.Fatal("precondition: mouse_any_flag should be 0 for bare sh")
+-	}
+-
+-	enteredCopyMode, err := pane.InjectScroll(ctx, -1) // scroll up
++	altScreen, historySize, err := pane.ScrollState(ctx)
+ 	if err != nil {
+-		t.Fatalf("InjectScroll: %v", err)
++		t.Fatalf("ScrollState: %v", err)
+ 	}
+-	if !enteredCopyMode {
+-		t.Error("expected enteredCopyMode=true for bare shell scroll-up")
++	if altScreen {
++		t.Error("expected altScreen=false for a bare shell")
+ 	}
+-
+-	// Pane must be in copy-mode after the call.
+-	if queryFlag(t, tt, pane, "#{pane_in_mode}") != "1" {
+-		t.Error("pane_in_mode should be 1 after entering copy-mode")
++	if historySize != 0 {
++		t.Errorf("expected historySize=0 for a fresh pane, got %d", historySize)
+ 	}
+ }
+ 
+-// TestInjectScrollDoesNotEnterCopyModeWhenAlreadyInIt verifies that when the
+-// pane is already in copy-mode, InjectScroll scrolls without re-entering
+-// copy-mode (enteredCopyMode=false — no state transition, no PaneModeChanged).
+-func TestInjectScrollDoesNotEnterCopyModeWhenAlreadyInIt(t *testing.T) {
++// TestScrollStateBareShellWithHistory verifies historySize reflects real
++// scrollback once output has pushed lines above the visible screen, and
++// tracks #{history_size} directly (no copy-mode involved anywhere).
++func TestScrollStateBareShellWithHistory(t *testing.T) {
+ 	tt := newTestTMUX(t)
+-	pane := tt.newPane(t, "sh")
++	pane := tt.newPane(t, "sh -c 'seq 1 200; exec sh'")
+ 	ctx := context.Background()
+ 
+-	// Manually enter copy-mode.
+-	if _, err := tt.run("copy-mode", "-e", "-t", pane.target); err != nil {
+-		t.Fatalf("enter copy-mode: %v", err)
+-	}
+-	if queryFlag(t, tt, pane, "#{pane_in_mode}") != "1" {
+-		t.Fatal("precondition: pane_in_mode should be 1")
++	deadline := time.Now().Add(5 * time.Second)
++	for {
++		if queryFlag(t, tt, pane, "#{history_size}") != "0" {
++			break
++		}
++		if time.Now().After(deadline) {
++			t.Fatal("timed out waiting for seq output to build scrollback")
++		}
++		time.Sleep(20 * time.Millisecond)
+ 	}
+ 
+-	enteredCopyMode, err := pane.InjectScroll(ctx, -1)
++	altScreen, historySize, err := pane.ScrollState(ctx)
+ 	if err != nil {
+-		t.Fatalf("InjectScroll in copy-mode: %v", err)
++		t.Fatalf("ScrollState: %v", err)
+ 	}
+-	if enteredCopyMode {
+-		t.Error("expected enteredCopyMode=false when pane already in copy-mode")
++	if altScreen {
++		t.Error("expected altScreen=false for a bare shell")
+ 	}
+-	// Still in copy-mode.
+-	if queryFlag(t, tt, pane, "#{pane_in_mode}") != "1" {
+-		t.Error("pane should still be in copy-mode")
++	if historySize <= 0 {
++		t.Errorf("expected historySize>0 after 200 lines of output, got %d", historySize)
+ 	}
+ }
+ 
+-// TestInjectScrollMouseTrackingPathFallsToCopyMode verifies that even when
+-// mouse_any_flag=1 (app has mouse tracking), InjectScroll uses copy-mode.
+-// Rationale: send-keys -H mouse bytes are silently ineffective (proved by
+-// experiment — less/vim do not respond); copy-mode is the only reliable path
+-// for non-alt-screen panes regardless of mouse_any_flag.
+-func TestInjectScrollMouseTrackingPathFallsToCopyMode(t *testing.T) {
++// TestScrollStateAltScreenForcesZeroHistory verifies that for an alt-screen
++// app (vim), ScrollState reports altScreen=true and historySize=0 even though
++// the pane may carry a real #{history_size} counter underneath — that counter
++// tracks the swapped-out normal screen, not what capture-pane -S/-E can
++// actually reach while alternate_on=1 (design doc 实测 A). Reporting the real
++// count would let a caller believe a scroll could succeed when it cannot.
++func TestScrollStateAltScreenForcesZeroHistory(t *testing.T) {
+ 	tt := newTestTMUX(t)
+-	// vim with set mouse=a: mouse_any_flag=1
+ 	pane := tt.newPane(t, "vim -c 'set mouse=a' /dev/null")
+ 	ctx := context.Background()
+ 
+-	waitForPane(1500 * time.Millisecond) // let vim draw and set mouse mode
+-
+-	flag := queryFlag(t, tt, pane, "#{mouse_any_flag}")
+-	if flag != "1" {
+-		t.Skipf("vim+mouse did not enable mouse tracking (flag=%q); skipping", flag)
+-	}
+-
+-	enteredCopyMode, err := pane.InjectScroll(ctx, -1) // scroll up
+-	if err != nil {
+-		t.Fatalf("InjectScroll (mouse tracking): %v", err)
+-	}
+-	// Unified path: always enters copy-mode.
+-	if !enteredCopyMode {
+-		t.Error("expected enteredCopyMode=true (unified copy-mode path regardless of mouse_any_flag)")
+-	}
+-	if queryFlag(t, tt, pane, "#{pane_in_mode}") != "1" {
+-		t.Error("pane_in_mode should be 1 (in copy-mode) on unified path")
+-	}
+-}
+-
+-// TestPaneInMode verifies PaneInMode reports correctly for both states.
+-func TestPaneInMode(t *testing.T) {
+-	tt := newTestTMUX(t)
+-	pane := tt.newPane(t, "sh")
+-	ctx := context.Background()
+-
+-	inMode, err := pane.PaneInMode(ctx)
+-	if err != nil {
+-		t.Fatalf("PaneInMode (normal): %v", err)
+-	}
+-	if inMode {
+-		t.Error("PaneInMode should be false for normal shell")
+-	}
++	waitForPane(1500 * time.Millisecond) // let vim draw and enter the alternate screen
+ 
+-	if _, err := tt.run("copy-mode", "-e", "-t", pane.target); err != nil {
+-		t.Fatalf("enter copy-mode: %v", err)
++	if queryFlag(t, tt, pane, "#{alternate_on}") != "1" {
++		t.Skip("vim did not enter the alternate screen; skipping")
+ 	}
+ 
+-	inMode, err = pane.PaneInMode(ctx)
++	altScreen, historySize, err := pane.ScrollState(ctx)
+ 	if err != nil {
+-		t.Fatalf("PaneInMode (copy-mode): %v", err)
+-	}
+-	if !inMode {
+-		t.Error("PaneInMode should be true after entering copy-mode")
+-	}
+-}
+-
+-// TestExitCopyMode verifies ExitCopyMode transitions pane_in_mode from 1 to 0.
+-func TestExitCopyMode(t *testing.T) {
+-	tt := newTestTMUX(t)
+-	pane := tt.newPane(t, "sh")
+-	ctx := context.Background()
+-
+-	if _, err := tt.run("copy-mode", "-e", "-t", pane.target); err != nil {
+-		t.Fatalf("enter copy-mode: %v", err)
+-	}
+-	if queryFlag(t, tt, pane, "#{pane_in_mode}") != "1" {
+-		t.Fatal("precondition: pane_in_mode should be 1")
++		t.Fatalf("ScrollState: %v", err)
+ 	}
+-
+-	if err := pane.ExitCopyMode(ctx); err != nil {
+-		t.Fatalf("ExitCopyMode: %v", err)
++	if !altScreen {
++		t.Error("expected altScreen=true for vim on the alternate screen")
+ 	}
+-
+-	if queryFlag(t, tt, pane, "#{pane_in_mode}") != "0" {
+-		t.Error("pane_in_mode should be 0 after ExitCopyMode")
++	if historySize != 0 {
++		t.Errorf("expected historySize forced to 0 on the alternate screen, got %d", historySize)
+ 	}
+ }
+ 
+-// TestInjectScrollDeadPane verifies InjectScroll returns ErrPaneNotFound on a
+-// dead pane (requirePane fires before any tmux action).
+-func TestInjectScrollDeadPane(t *testing.T) {
++// TestScrollStateDeadPane verifies ScrollState returns ErrPaneNotFound on a
++// dead pane, matching every other read-only Pane query.
++func TestScrollStateDeadPane(t *testing.T) {
+ 	tt := newTestTMUX(t)
+ 	dead := tt.deadPane(t)
+ 	ctx := context.Background()
+ 
+-	_, err := dead.InjectScroll(ctx, -1)
++	_, _, err := dead.ScrollState(ctx)
+ 	if !isErrPaneNotFound(err) {
+ 		t.Errorf("expected ErrPaneNotFound, got %v", err)
+ 	}

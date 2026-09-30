@@ -1,0 +1,20 @@
+argv: bash -lc 'env -u TEAM_AGENT_* bash -lc "cd server && go test ./internal/api -run \"TestConnectedIdleEconomy(ScopedDiscoverySeamExists|SamplingDoesNotFanOutFleet)\" -count=1 -v"'
+exit_code: 1
+
+=== RUN   TestConnectedIdleEconomyScopedDiscoverySeamExists
+    connected_idle_economy_test.go:27: Options has no DiscoverySocketDirs seam; an isolated daemon would still scan host default tmux sockets
+--- FAIL: TestConnectedIdleEconomyScopedDiscoverySeamExists (0.00s)
+=== RUN   TestConnectedIdleEconomySamplingDoesNotFanOutFleet
+=== RUN   TestConnectedIdleEconomySamplingDoesNotFanOutFleet/panes_3
+    connected_idle_economy_test.go:67: 3-pane stable fleet dispatched 3 samples without a global pacing permit; want <= 1
+=== RUN   TestConnectedIdleEconomySamplingDoesNotFanOutFleet/panes_27
+    connected_idle_economy_test.go:67: 27-pane stable fleet dispatched 27 samples without a global pacing permit; want <= 1
+=== RUN   TestConnectedIdleEconomySamplingDoesNotFanOutFleet/panes_200
+    connected_idle_economy_test.go:67: 200-pane stable fleet dispatched 187 samples without a global pacing permit; want <= 1
+--- FAIL: TestConnectedIdleEconomySamplingDoesNotFanOutFleet (0.00s)
+    --- FAIL: TestConnectedIdleEconomySamplingDoesNotFanOutFleet/panes_3 (0.00s)
+    --- FAIL: TestConnectedIdleEconomySamplingDoesNotFanOutFleet/panes_27 (0.00s)
+    --- FAIL: TestConnectedIdleEconomySamplingDoesNotFanOutFleet/panes_200 (0.00s)
+FAIL
+FAIL github.com/agentmirror/agentmirror/internal/api 0.858s
+FAIL

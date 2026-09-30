@@ -1,0 +1,11 @@
+{
+  "head": "695299cfeea16fc7550419035e47794a68e38ff0",
+  "parent": "8168ed50ef72fdc166c541b02af9a25f9065e39d",
+  "tree": "8dde5e1f75f776f0929b7155ae711e82ecefcb42",
+  "date": "2026-09-08T09:35:49Z",
+  "blob": "0ca6d5b656a49e24edfd947589966520e18d7da6",
+  "sha256": "28d74cfa48fde96e45623ff38b87f7355cf8cd4897b4de97c1e5a5890f454b31",
+  "verified": true,
+  "ci": "not_queried",
+  "required_oracle_roots": 14
+}

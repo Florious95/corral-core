@@ -1,0 +1,1 @@
+{"task_id":"state-parser","status":"pass","acceptance_results":[{"cmd":"bash -lc cd server && go test ./internal/agentstate/...","exit":0}],"result_id":"res_ebaea6bb1278","notes":"Claude/Codex 表驱动适配器+UTF-8 感知 ANSI 剥离+Track 沿触发，24 例含阳性对照；herdr 合规借鉴。重大现场发现：wrapper shell 下 pane_current_command=bash 致舰队场景降级 unknown→已立项 state-ident-wrapper 补齐。"}

@@ -181,4 +181,10 @@ class OkHttpWebSocketTransportTest {
         assertFalse(transport.sendText("x"))
         assertFalse(transport.sendBinary(byteArrayOf(1)))
     }
+
+    @Test
+    fun productionClientSendsKeepalivePings() {
+        // 升级后 socket 读超时被清零：没有 Ping 就发现不了 NAT 静默丢弃的半开连接。
+        assertEquals(15_000, OkHttpWebSocketTransport.defaultClient().pingIntervalMillis)
+    }
 }

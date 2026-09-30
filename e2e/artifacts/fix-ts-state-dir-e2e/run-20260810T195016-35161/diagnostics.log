@@ -1,0 +1,155 @@
+## headscale-configtest.log
+
+
+## headscale.stderr
+
+
+## headscale-cli.stderr
+
+
+## derper.stderr
+2026/08/10 19:51:09 No mesh key configured
+2026/08/10 19:51:09 derper: serving on 127.0.0.1:43914 with TLS
+2026/08/10 19:51:09 Using self-signed certificate for IP address "127.0.0.1". Configure it in DERPMap using: (https://tailscale.com/s/custom-derp)
+  {"Name":"custom","RegionID":900,"HostName":"127.0.0.1","CertName":"sha256-raw:a6949088cf34f3aefa18dcb6ce90d9e7f14865b2ee7e744194bdd57f7ec40832"}
+
+
+## sandbox-check.log
+
+
+## go-build.log
+go: tailscale.com@v1.102.2 requires go >= 1.26.5; switching to go1.26.5
+
+
+## daemon.stderr
+time=2026-08-10T19:51:11.050+08:00 level=INFO msg="single-instance guard acquired" pidfile=TASK_TMP/daemon-state/agentmirrord.pid
+time=2026-08-10T19:51:11.050+08:00 level=INFO msg="pairing token source=explicit"
+time=2026-08-10T19:51:11.050+08:00 level=INFO msg="agentmirrord starting" listen=127.0.0.1:43920 qr_listen="" token_source=explicit upload_dir="" max_upload_mib=20 list_interval=2s
+time=2026-08-10T19:51:11.050+08:00 level=INFO msg="tailnet 已启用" hostname=MacBook-Pro.local state_dir=TASK_TMP/daemon-state/tsnet
+time=2026-08-10T19:51:11.050+08:00 level=INFO msg="tailnet 入网中（等待 Tailscale 控制面握手）…"
+2026/08/10 19:51:11 tsnet running state path TASK_TMP/daemon-state/tsnet/tailscaled.state
+2026/08/10 19:51:11 tsnet starting with hostname "MacBook-Pro.local", varRoot "TASK_TMP/daemon-state/tsnet"
+2026/08/10 19:51:11 LocalBackend state is NeedsLogin; running StartLoginInteractive...
+2026/08/10 19:51:11 AuthLoop: state is Starting; done
+time=2026-08-10T19:51:14.174+08:00 level=INFO msg="tailnet 已入网" ip=100.64.0.1
+time=2026-08-10T19:51:43.475+08:00 level=INFO msg="shutting down"
+
+
+## app-install.log
+Performing Streamed Install
+Success
+
+
+## app-test-install.log
+Success
+
+
+## app-wrapper-prepare.log
+SELinux: Loaded file context from:
+		/system/etc/selinux/plat_file_contexts
+		/system_ext/etc/selinux/system_ext_file_contexts
+		/vendor/etc/selinux/vendor_file_contexts
+SELinux: Loaded file context from:
+		/system/etc/selinux/plat_file_contexts
+		/system_ext/etc/selinux/system_ext_file_contexts
+		/vendor/etc/selinux/vendor_file_contexts
+
+
+## app-restore.log
+Performing Streamed Install
+Success
+
+
+## instrumentation.log
+INSTRUMENTATION_RESULT: api_status=pass
+INSTRUMENTATION_RESULT: connection_manager_ready=yes
+INSTRUMENTATION_RESULT: listing_received=yes
+INSTRUMENTATION_RESULT: pairing_entry=onQrText_pass
+INSTRUMENTATION_RESULT: secret_source=environment
+INSTRUMENTATION_RESULT: session_present=yes
+INSTRUMENTATION_RESULT: socks5_path=explicit_tsnet_proxy_socket_factory
+INSTRUMENTATION_RESULT: tsnet_start_called=yes
+INSTRUMENTATION_RESULT: tsnet_state_file=yes
+INSTRUMENTATION_RESULT: workspace_cwd_match=yes
+INSTRUMENTATION_CODE: -1
+
+
+## app-logcat-redacted.log
+uralnetworks: libneuralnetworks.so
+08-10 19:51:20.380 10041 10041 D nativeloader: InitDefaultPublicLibraries for_preload=0: libandroid.so:libaaudio.so:libamidi.so:libbinder_ndk.so:libc.so:libcamera2ndk.so:libclang_rt.hwasan-aarch64-android.so:libdl.so:libEGL.so:libGLESv1_CM.so:libGLESv2.so:libGLESv3.so:libjnigraphics.so:liblog.so:libmediandk.so:libm.so:libnativewindow.so:libOpenMAXAL.so:libOpenSLES.so:libRS.so:libstdc++.so:libsync.so:libvulkan.so:libwebviewchromium_plat_support.so:libz.so
+08-10 19:51:20.380 10041 10041 D nativeloader: Configuring clns-shared-1 for other apk /system/framework/android.hidl.base-V1.0-java.jar. target_sdk_version=35, uses_libraries=, library_path=, permitted_path=/data:/mnt/expand
+08-10 19:51:20.380 10041 10041 D nativeloader: InitExtendedPublicLibraries: 
+08-10 19:51:20.382 10041 10041 I nativeloader: InitVendorPublicLibraries skipped: Failed to read /vendor/etc/public.libraries.txt: No such file or directory
+08-10 19:51:20.383 10041 10041 D nativeloader: InitProductPublicLibraries: 
+08-10 19:51:20.383 10041 10041 D ApplicationLoaders: Created zygote-cached class loader: /system/framework/android.hidl.base-V1.0-java.jar
+08-10 19:51:20.391 10041 10041 D nativeloader: Configuring clns-shared-2 for other apk /system/framework/android.hidl.manager-V1.0-java.jar. target_sdk_version=35, uses_libraries=, library_path=, permitted_path=/data:/mnt/expand
+08-10 19:51:20.392 10041 10041 D ApplicationLoaders: Created zygote-cached class loader: /system/framework/android.hidl.manager-V1.0-java.jar
+08-10 19:51:20.394 10041 10041 D nativeloader: Configuring clns-shared-3 for other apk /system/framework/android.test.base.jar. target_sdk_version=35, uses_libraries=, library_path=, permitted_path=/data:/mnt/expand
+08-10 19:51:20.395 10041 10041 D ApplicationLoaders: Created zygote-cached class loader: /system/framework/android.test.base.jar
+08-10 19:51:20.398 10041 10041 D nativeloader: Configuring clns-shared-4 for other apk /system/framework/org.apache.http.legacy.jar. target_sdk_version=35, uses_libraries=, library_path=, permitted_path=/data:/mnt/expand
+08-10 19:51:20.399 10041 10041 D ApplicationLoaders: Created zygote-cached class loader: /system/framework/org.apache.http.legacy.jar
+08-10 19:51:20.401 10041 10041 D nativeloader: Configuring clns-shared-5 for other apk /system_ext/framework/androidx.window.extensions.jar. target_sdk_version=35, uses_libraries=, library_path=, permitted_path=/data:/mnt/expand
+08-10 19:51:20.401 10041 10041 D ApplicationLoaders: Created zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+08-10 19:51:20.402 10041 10041 D nativeloader: Configuring clns-shared-6 for other apk /system_ext/framework/androidx.window.sidecar.jar. target_sdk_version=35, uses_libraries=, library_path=, permitted_path=/data:/mnt/expand
+08-10 19:51:20.402 10041 10041 D ApplicationLoaders: Created zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+08-10 19:51:20.402 10041 10041 V WrapperInitTiming: CacheNonBootClasspathClassLoaders took to complete: 28ms
+08-10 19:51:20.402 10041 10041 I Resources: Preloading resources...
+08-10 19:51:20.409 10041 10041 W Resources: Preloaded drawable resource #0x10802cb (android:drawable/dialog_background_material) that varies with configuration!!
+08-10 19:51:20.414 10041 10041 W Resources: Preloaded drawable resource #0x1080846 (android:drawable/progress_horizontal_material) that varies with configuration!!
+08-10 19:51:20.415 10041 10041 W Resources: Preloaded drawable resource #0x108084a (android:drawable/progress_indeterminate_horizontal_material) that varies with configuration!!
+08-10 19:51:20.419 10041 10041 I Resources: ...preloaded 63 resources in 17ms.
+08-10 19:51:20.427 10041 10041 I Resources: ...preloaded 41 resources in 7ms.
+08-10 19:51:20.427 10041 10041 V WrapperInitTiming: PreloadResources took to complete: 25ms
+08-10 19:51:20.479 10041 10041 I Zygote  : Preloading shared libraries...
+08-10 19:51:20.479 10041 10041 D nativeloader: Load libandroid.so using system ns (caller=/system/framework/framework.jar!classes5.dex): ok
+08-10 19:51:20.480 10041 10041 D nativeloader: Load libjnigraphics.so using system ns (caller=/system/framework/framework.jar!classes5.dex): ok
+08-10 19:51:20.485 10041 10041 D nativeloader: Load libcompiler_rt.so using system ns (caller=/system/framework/framework.jar!classes5.dex): ok
+08-10 19:51:20.485 10041 10041 E dev.agentmirror.app: Unable to find pattern file or unable to map it for am
+08-10 19:51:20.486 10041 10041 D nativeloader: Load libwebviewchromium_loader.so using system ns (caller=/system/framework/framework.jar!classes4.dex): ok
+08-10 19:51:20.487 10041 10041 I Zygote  : Called ZygoteHooks.endPreload()
+08-10 19:51:20.487 10041 10041 I Zygote  : Installed AndroidKeyStoreProvider in 0ms.
+08-10 19:51:20.488 10041 10041 I Zygote  : Warmed up JCA providers in 1ms.
+08-10 19:51:20.488 10041 10041 D Zygote  : end preload
+08-10 19:51:20.501 10041 10041 D nativeloader: Load libstats_jni.so using APEX ns com_android_os_statsd for caller /apex/com.android.os.statsd/javalib/framework-statsd.jar: ok
+08-10 19:51:20.551 10041 10041 W ActivityThread: Package uses different ABI(s) than its instrumentation: package[dev.agentmirror.app]: arm64-v8a, null instrumentation[dev.agentmirror.app.fixstatee2e]: null, null
+08-10 19:51:20.557 10041 10041 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+08-10 19:51:20.557 10041 10041 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+08-10 19:51:20.575 10041 10041 W dev.agentmirror.app: ClassLoaderContext classpath element mismatch. expected=/system/framework/android.test.base.jar, found=/system_ext/framework/androidx.window.extensions.jar (PCL[]{PCL[/system/framework/android.test.base.jar*724373495]#PCL[/system/framework/android.test.mock.jar*1452759902]} | PCL[]{PCL[/system_ext/framework/androidx.window.extensions.jar*1060046784]#PCL[/system_ext/framework/androidx.window.sidecar.jar*2147524027]})
+08-10 19:51:20.580 10041 10041 W dev.agentmirror.app: ClassLoaderContext classpath size mismatch. expected=0, found=1 (PCL[] | PCL[/system/framework/android.test.runner.jar*2496447986]{PCL[/system_ext/framework/androidx.window.extensions.jar*1060046784]#PCL[/system_ext/framework/androidx.window.sidecar.jar*2147524027]})
+08-10 19:51:20.580 10041 10041 W dev.agentmirror.app: ClassLoaderContext classpath size mismatch. expected=0, found=2 (PCL[] | PCL[/system/framework/android.test.runner.jar*2496447986:/system/framework/android.test.mock.jar*1452759902]{PCL[/system_ext/framework/androidx.window.extensions.jar*1060046784]#PCL[/system_ext/framework/androidx.window.sidecar.jar*2147524027]})
+08-10 19:51:20.581 10041 10041 W ziparchive: Unable to open '/data/app/~~iyLJDn82vqbAECs25BoV1g==/dev.agentmirror.app.fixstatee2e-KU8ySh0byUxjohYhZFXDrA==/base.dm': No such file or directory
+08-10 19:51:20.581 10041 10041 W ziparchive: Unable to open '/data/app/~~iyLJDn82vqbAECs25BoV1g==/dev.agentmirror.app.fixstatee2e-KU8ySh0byUxjohYhZFXDrA==/base.dm': No such file or directory
+08-10 19:51:20.586 10041 10041 W ziparchive: Unable to open '/data/app/~~GDScyhznoLVT5pn9f0z70A==/dev.agentmirror.app-QT_8WKy6lYM25lviIpUpiQ==/base.dm': No such file or directory
+08-10 19:51:20.586 10041 10041 W ziparchive: Unable to open '/data/app/~~GDScyhznoLVT5pn9f0z70A==/dev.agentmirror.app-QT_8WKy6lYM25lviIpUpiQ==/base.dm': No such file or directory
+08-10 19:51:21.015 10041 10041 D nativeloader: Configuring clns-7 for other apk /system/framework/android.test.runner.jar:/system/framework/android.test.mock.jar:/system/framework/android.test.base.jar:/data/app/~~iyLJDn82vqbAECs25BoV1g==/dev.agentmirror.app.fixstatee2e-KU8ySh0byUxjohYhZFXDrA==/base.apk:/data/app/~~GDScyhznoLVT5pn9f0z70A==/dev.agentmirror.app-QT_8WKy6lYM25lviIpUpiQ==/base.apk. target_sdk_version=35, uses_libraries=, library_path=/data/app/~~iyLJDn82vqbAECs25BoV1g==/dev.agentmirror.app.fixstatee2e-KU8ySh0byUxjohYhZFXDrA==/lib/arm64:/data/app/~~GDScyhznoLVT5pn9f0z70A==/dev.agentmirror.app-QT_8WKy6lYM25lviIpUpiQ==/lib/arm64:/data/app/~~iyLJDn82vqbAECs25BoV1g==/dev.agentmirror.app.fixstatee2e-KU8ySh0byUxjohYhZFXDrA==/base.apk!/lib/arm64-v8a:/data/app/~~GDScyhznoLVT5pn9f0z70A==/dev.agentmirror.app-QT_8WKy6lYM25lviIpUpiQ==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/37/dev.agentmirror.app
+08-10 19:51:21.017 10041 10041 D CompatChangeReporter: Compat change id reported: 202956589; UID 3710207; state: ENABLED
+08-10 19:51:21.028 10041 10041 V GraphicsEnvironment: Currently set values for:
+08-10 19:51:21.028 10041 10041 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+08-10 19:51:21.028 10041 10041 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+08-10 19:51:21.028 10041 10041 V GraphicsEnvironment: Global.Settings values are invalid: number of packages: 0, number of values: 0
+08-10 19:51:21.028 10041 10041 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+08-10 19:51:21.041 10041 10041 D ApplicationLoaders: Returning zygote-cached class loader: /system/framework/android.test.base.jar
+08-10 19:51:21.046 10041 10041 D nativeloader: Configuring clns-8 for other apk /system/framework/android.test.mock.jar. target_sdk_version=35, uses_libraries=ALL, library_path=/data/app/~~iyLJDn82vqbAECs25BoV1g==/dev.agentmirror.app.fixstatee2e-KU8ySh0byUxjohYhZFXDrA==/lib/arm64:/data/app/~~GDScyhznoLVT5pn9f0z70A==/dev.agentmirror.app-QT_8WKy6lYM25lviIpUpiQ==/lib/arm64, permitted_path=/data:/mnt/expand
+08-10 19:51:21.049 10041 10041 D ApplicationLoaders: Returning zygote-cached class loader: /system/framework/android.test.base.jar
+08-10 19:51:21.057 10041 10041 D nativeloader: Configuring clns-9 for other apk /system/framework/android.test.runner.jar. target_sdk_version=35, uses_libraries=ALL, library_path=/data/app/~~iyLJDn82vqbAECs25BoV1g==/dev.agentmirror.app.fixstatee2e-KU8ySh0byUxjohYhZFXDrA==/lib/arm64:/data/app/~~GDScyhznoLVT5pn9f0z70A==/dev.agentmirror.app-QT_8WKy6lYM25lviIpUpiQ==/lib/arm64, permitted_path=/data:/mnt/expand
+08-10 19:51:21.058 10041 10041 W dev.agentmirror.app: ClassLoaderContext shared library size mismatch. Expected=2, found=3 (PCL[]{PCL[/system/framework/android.test.base.jar*724373495]#PCL[/system/framework/android.test.mock.jar*1452759902]} | PCL[]{PCL[/system/framework/android.test.base.jar*724373495]#PCL[/system/framework/android.test.mock.jar*1452759902]#PCL[/system/framework/android.test.runner.jar*2496447986]{PCL[/system/framework/android.test.base.jar*724373495]#PCL[/system/framework/android.test.mock.jar*1452759902]}};PCL[/system/framework/android.test.runner.jar*2496447986:/system/framework/android.test.mock.jar*1452759902:/system/framework/android.test.base.jar*724373495:/data/app/~~iyLJDn82vqbAECs25BoV1g==/dev.agentmirror.app.fixstatee2e-KU8ySh0byUxjohYhZFXDrA==/base.apk*718125839:/data/app/~~GDScyhznoLVT5pn9f0z70A==/dev.agentmirror.app-QT_8WKy6lYM25lviIpUpiQ==/base.apk*3217645481]{PCL[/system_ext/framework/androidx.window.extensions.jar*1060046784]#PCL[/system_ext/framework/androidx.window.sidecar.jar*2147524027]})
+08-10 19:51:21.058 10041 10041 W dev.agentmirror.app: ClassLoaderContext classpath size mismatch. expected=0, found=1 (PCL[] | PCL[/system/framework/android.test.runner.jar*2496447986]{PCL[/system/framework/android.test.base.jar*724373495]#PCL[/system/framework/android.test.mock.jar*1452759902]#PCL[/system/framework/android.test.runner.jar*2496447986]{PCL[/system/framework/android.test.base.jar*724373495]#PCL[/system/framework/android.test.mock.jar*1452759902]}};PCL[/system/framework/android.test.runner.jar*2496447986:/system/framework/android.test.mock.jar*1452759902:/system/framework/android.test.base.jar*724373495:/data/app/~~iyLJDn82vqbAECs25BoV1g==/dev.agentmirror.app.fixstatee2e-KU8ySh0byUxjohYhZFXDrA==/base.apk*718125839:/data/app/~~GDScyhznoLVT5pn9f0z70A==/dev.agentmirror.app-QT_8WKy6lYM25lviIpUpiQ==/base.apk*3217645481]{PCL[/system_ext/framework/androidx.window.extensions.jar*1060046784]#PCL[/system_ext/framework/androidx.window.sidecar.jar*2147524027]})
+08-10 19:51:21.068 10041 10041 W dev.agentmirror.app: ClassLoaderContext classpath size mismatch. expected=0, found=2 (PCL[] | PCL[/system/framework/android.test.runner.jar*2496447986:/system/framework/android.test.mock.jar*1452759902]{PCL[/system/framework/android.test.base.jar*724373495]#PCL[/system/framework/android.test.mock.jar*1452759902]#PCL[/system/framework/android.test.runner.jar*2496447986]{PCL[/system/framework/android.test.base.jar*724373495]#PCL[/system/framework/android.test.mock.jar*1452759902]}};PCL[/system/framework/android.test.runner.jar*2496447986:/system/framework/android.test.mock.jar*1452759902:/system/framework/android.test.base.jar*724373495:/data/app/~~iyLJDn82vqbAECs25BoV1g==/dev.agentmirror.app.fixstatee2e-KU8ySh0byUxjohYhZFXDrA==/base.apk*718125839:/data/app/~~GDScyhznoLVT5pn9f0z70A==/dev.agentmirror.app-QT_8WKy6lYM25lviIpUpiQ==/base.apk*3217645481]{PCL[/system_ext/framework/androidx.window.extensions.jar*1060046784]#PCL[/system_ext/framework/androidx.window.sidecar.jar*2147524027]})
+08-10 19:51:21.069 10041 10041 W ziparchive: Unable to open '/data/app/~~iyLJDn82vqbAECs25BoV1g==/dev.agentmirror.app.fixstatee2e-KU8ySh0byUxjohYhZFXDrA==/base.dm': No such file or directory
+08-10 19:51:21.069 10041 10041 W ziparchive: Unable to open '/data/app/~~iyLJDn82vqbAECs25BoV1g==/dev.agentmirror.app.fixstatee2e-KU8ySh0byUxjohYhZFXDrA==/base.dm': No such file or directory
+08-10 19:51:21.085 10041 10041 W ziparchive: Unable to open '/data/app/~~GDScyhznoLVT5pn9f0z70A==/dev.agentmirror.app-QT_8WKy6lYM25lviIpUpiQ==/base.dm': No such file or directory
+08-10 19:51:21.085 10041 10041 W ziparchive: Unable to open '/data/app/~~GDScyhznoLVT5pn9f0z70A==/dev.agentmirror.app-QT_8WKy6lYM25lviIpUpiQ==/base.dm': No such file or directory
+08-10 19:51:21.449 10041 10041 D CompatChangeReporter: Compat change id reported: 279646685; UID 3710207; state: ENABLED
+08-10 19:51:21.504 10041 10397 D nativeloader: Load /data/app/~~GDScyhznoLVT5pn9f0z70A==/dev.agentmirror.app-QT_8WKy6lYM25lviIpUpiQ==/base.apk!/lib/arm64-v8a/libgojni.so using ns clns-7 from class loader (caller=/data/app/~~GDScyhznoLVT5pn9f0z70A==/dev.agentmirror.app-QT_8WKy6lYM25lviIpUpiQ==/base.apk!classes10.dex): ok
+08-10 19:51:21.620 10041 10397 I GoLog   : tsnet running state path /data/user/37/dev.agentmirror.app/files/tsnet/node-instrumentation/tailscaled.state
+08-10 19:51:21.624 10041 10397 I GoLog   : tsnet starting with hostname "agentmirror-api-e2e", varRoot "/data/user/37/dev.agentmirror.app/files/tsnet/node-instrumentation"
+08-10 19:51:21.628 10041 10397 I GoLog   : LocalBackend state is NeedsLogin; running StartLoginInteractive...
+08-10 19:51:21.740 10041 10041 W fix-ts-state-di: type=1400 audit(0.0:2069): avc:  denied  { read } for  name="route" dev="proc" ino=4026532011 scontext=u:r:untrusted_app:s0:c207,c256,c549,c768 tcontext=u:object_r:proc_net:s0 tclass=file permissive=0
+08-10 19:51:21.748 10041 10408 I GoLog   : AuthLoop: state is Starting; done
+08-10 19:51:25.044 10041 10041 W fix-ts-state-di: type=1400 audit(0.0:2070): avc:  denied  { read } for  name="somaxconn" dev="proc" ino=908019 scontext=u:r:untrusted_app:s0:c207,c256,c549,c768 tcontext=u:object_r:proc_net:s0 tclass=file permissive=0
+08-10 19:51:25.131 10041 10856 D TrafficStats: tagSocket(80) with statsTag=0xffffffff, statsUid=-1
+08-10 19:51:25.515 10041 10909 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+08-10 19:51:25.817 10041 10429 I GoLog   : socks5: client connection failed: from backend to client: read tcp 100.64.0.2:41798: operation aborted
+08-10 19:51:25.827 10041 10429 I GoLog   : localapi tcp serve error: use of closed network connection
+08-10 19:51:25.827 10041 10842 I GoLog   : socks5: SOCKS5 server exited: use of closed network connection
+

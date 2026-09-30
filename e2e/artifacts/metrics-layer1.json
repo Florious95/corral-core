@@ -1,0 +1,34 @@
+{
+  "first_frame": {
+    "count": 6,
+    "min_ms": 49.601,
+    "max_ms": 71.418833,
+    "avg_ms": 54.74604866666667,
+    "p50_ms": 50.0905,
+    "p90_ms": 54.761042,
+    "samples": [
+      71.418833,
+      54.761042,
+      49.601,
+      52.750458,
+      49.854459,
+      50.0905
+    ],
+    "scenario": [
+      "shell",
+      "shell",
+      "shell",
+      "shell",
+      "shell",
+      "claude"
+    ]
+  },
+  "aging": {
+    "restart_rounds_ok": 0,
+    "restart_rounds_fail": 0,
+    "reconnect_rounds_ok": 0,
+    "reconnect_rounds_fail": 0
+  },
+  "layer1_pass": true,
+  "layer3_pass": false
+}

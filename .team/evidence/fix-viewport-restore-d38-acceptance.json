@@ -1,0 +1,48 @@
+{
+  "task_id": "fix-viewport-restore-d38",
+  "stage": "acceptance-after-fix",
+  "ts": "2026-08-14",
+  "author": "w-d38-dev",
+  "changes": [
+    "app/app/src/main/java/dev/agentmirror/app/termview/TermViewPresenter.kt",
+    "app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt"
+  ],
+  "fix_summary": "D-38 回炉修复（v6 真根因：viewportSeeded=true 后无路径能 recomputeGeometry 更新 emulator.rows）。",
+  "fix_details": [
+    "1) onViewportSizeChanged 首帧后加 viewportOutgrewEmulator() 增长分支：视口行/列数超出内核时 recomputeGeometry() 并 emit——挤压恒<=内核不触发，只有内核行数过时偏低才恢复（区分临时挤压与真实视口的判据）。",
+    "2) 新增正交入口 onRealViewportChanged(widthPx,heightPx)：语义=真实视口事件，复用同一增长判据，挤压不 shrink 终端。",
+    "3) TermSurfaceView.onWindowVisibilityChanged VISIBLE 分支调 onRealViewportChanged + postFrame()——回前台时 View bounds 未变也主动重放当前视口。不带任何 IME/insets 状态推断（避 v3 黑屏闪死因）。"
+  ],
+  "probe_acceptance": {
+    "command": "./gradlew :app:testDebugUnitTest --tests \"dev.agentmirror.app.termview.D38ViewportRestoreProbe\"",
+    "P1_emulatorRowsStuckAtSqueezedValueAfterViewGrows": "FAIL (defect gone) — emulator.rows now 140 not 84",
+    "P2_windowCappedByStaleEmulatorRows": "FAIL (defect gone) — window now 140 rows not 84",
+    "P3_foregroundReturnViaSizeChangedCannotRecoverGeometry": "FAIL (defect gone) — repeated onViewportSizeChanged recovers to 140",
+    "P4_ifFirstFrameIsFullHeightNoDefect": "PASS (no regression) — healthy path unaffected",
+    "P5_onRealViewportChangedDoesNotExistInV6": "FAIL (informational) — onRealViewportChanged now exists"
+  },
+  "scenario_acceptance": {
+    "command": "./gradlew :app:testDebugUnitTest --tests \"dev.agentmirror.app.termview.D38ViewportRestoreScenarioTest\"",
+    "S1_foregroundReturnRealignsGeometry": "PASS",
+    "S2_imePushPushesViewportWithoutResize": "PASS",
+    "S3_geometryDisturbanceIsBoundedToOne": "PASS",
+    "S4_fullHeightFirstFrameDoesNotTriggerExtraResize": "PASS"
+  },
+  "guard_tests": {
+    "TermViewImeResizePresenterProbeTest": "PASS (4/4)",
+    "TermSurfaceSessionBindingRegressionTest": "PASS (1/1)",
+    "TermSurfacePinchGestureTest": "PASS (1/1)",
+    "SessionImeResizeProtocolRegressionTest": "PASS (1/1)"
+  },
+  "full_suite": {
+    "command": "./gradlew :app:testDebugUnitTest",
+    "result": "441 tests, 4 failed — all 4 are D38ViewportRestoreProbe P1/P2/P3/P5 (intended FAIL per acceptance); no other class failed"
+  },
+  "gates": {
+    "archwiki_strict_t3": "exit 0 (T1-1/T1-2/T3-1/T3-2/T3-3/T3-4 all PASS)",
+    "basegen": "clean"
+  },
+  "canary": "TermColsGridConvergenceDiscriminationTest passed — clipGuardEngageCount()==0 on healthy path, >0 on pathological grid; geometry change does not break defect-2 convergence.",
+  "coordination": "w-diag-dev grid records (setMeasuredCellWidth + onFontSizeChanged) coexist without conflict; onRealViewportChanged not hooked to grid per agreement.",
+  "caveats": "Not committed (halt is default). Real-device verification of black-screen-flash red line is separate (w-d38-test / emulator); JVM evidence shows geometry disturbance count stays bounded (S3)."
+}

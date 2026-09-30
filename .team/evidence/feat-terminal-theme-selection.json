@@ -1,0 +1,92 @@
+{
+  "task_id": "feat-terminal-theme-selection",
+  "seat": "w-theme",
+  "status": "in_progress",
+  "date": "2026-08-14",
+  "summary": "白底/混搭成因已定案：Claude Code 自身主题设置，非我方渲染层缺陷。用户 /theme dark 一行解决，验证了这条结论。SGR 7 反显是独立真缺陷，继续做。OSC 11 应答方向调查完整但降级不做，原因见下方第三段。App 自主调色板（需求 051）等用户回话再排。",
+
+  "ruled_out": [
+    {
+      "claim": "TermSurfaceView.kt 的 xterm-256 索引色映射把暗色算成了浅色（leader 初始假设）",
+      "method": "逐行代入验证：16-231 立方 cube(v)=0 if v==0 else 55+40v，分量 0/95/135/175/215/255，与 xterm 标准公式一致；r=c/36, g=(c/6)%6, b=c%6（c=index-16）代入多组下标核对，无换位无颠倒。232-255 灰阶 v=8+10*(i-232)，i=232→8（近黑）、i=255→238（浅灰非纯白），方向正确，无'该暗判亮'。",
+      "verdict": "映射本身正确，不是 bug",
+      "file_line": "app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt:547-560"
+    },
+    {
+      "claim": "TermSurfaceView 渲染层把 Claude Code 发的暗色 SGR 画成了近白色块",
+      "method": "隔离 pty 抓 Claude Code 画'用户消息块'的确切字节：`\\x1b[48;5;237m\\x1b[38;5;239m❯ \\x1b[38;5;231mhello world\\x1b[39m`。代入①验证过的映射：237→RGB(58,58,58) 深灰底，231→RGB(255,255,255) 纯白字——这是深灰底+白字的正常深色配色，渲染出来不该是刺眼白底。",
+      "verdict": "这条 SGR 本身不是白底元凶（缺口：当时没抓到 Claude Code 真正回复正文时的渲染，未完全排除其他 UI 元素，但已排除这条最初怀疑的输入回显）",
+      "caveat": "此条未 100% 闭环即被更高优先级证据（用户 /theme dark 直接解决）盖过，不再补测"
+    }
+  ],
+
+  "observed": [
+    {
+      "claim": "Claude Code / cursor-agent 都主动发 OSC 11 背景色查询探测终端",
+      "method": "隔离 pty 直跑 claude / cursor-agent 二进制，实录 raw bytes",
+      "evidence": "两者均发 `\\x1b]11;?\\x07`；claude 某些版本还额外发 DCS 包装 `\\x1bPtmux;\\x1b\\x1b]11;?\\x07\\x1b\\\\`（tmux passthrough 语法）"
+    },
+    {
+      "claim": "256 色索引 vs truecolor 的分野是各 CLI 自定的，不是统一现象",
+      "method": "同上",
+      "evidence": "Claude Code 全程只用 `38;5;N`/`48;5;N` 索引色；cursor-agent 背景色用 truecolor `\\x1b[48;2;21;21;21m`——调色板改动碰不到后者"
+    },
+    {
+      "claim": "OSC 11 查询是活探测，有因果关系，不是摆设",
+      "method": "隔离 pty 回复 OSC11=白色 / 设 COLORFGBG=0;15 两条独立通路测试",
+      "evidence": "默认(无应答)/COLORFGBG=暗 → claude 用 220/244 号色（暗色系）；回复白色 或 COLORFGBG=0;15（浅）→ 色号变 137/241（浅色系）。两条通路独立验证成立"
+    },
+    {
+      "claim": "cursor-agent 确实在用 SGR 7 反显，不是假设",
+      "method": "同上，隔离 pty 抓 cursor-agent 实际字节",
+      "evidence": "`\\x1b[2m\\x1b[7mP\\x1b[27m` 包一个字符（高亮提示词快捷键首字母）"
+    },
+    {
+      "claim": "本机 Terminal.app 深色预设前景比我们的 DEFAULT_FG 更亮，'我们偏亮要压一档'的假设方向是反的",
+      "method": "直接解本机 ~/Library/Preferences/com.apple.Terminal.plist 的 NSKeyedArchiver TextColor 字段（NSWhite/NSRGB），非记忆/非推断",
+      "evidence": "Pro 预设前景 NSWhite=0.94758064 → RGB(242,242,242)，比 DEFAULT_FG=0xE8E8E8=(232,232,232) 更亮。iTerm2/VS Code 本机未装，明确未验证，未纳入决策"
+    },
+    {
+      "claim": "detached（无客户端 attach，即我方服务端 pipe-pane 旁路的真实拓扑）下 OSC 11 查询无人应答，claude 落暗色分支",
+      "method": "隔离 tmux socket：`tmux new-session -d ... claude`，不 attach 任何客户端，等 4 秒后 `capture-pane -e` 看渲染色号",
+      "evidence": "只有暗色系（220/244/246/174），无 137/241 浅色标记"
+    },
+    {
+      "claim": "attached（有真实客户端挂在同一 session）下，tmux 会把裸 OSC 11 转发给该客户端，由它的答案决定 claude 的主题分支",
+      "method": "隔离 tmux socket：先用隔离 pty 伪装外层终端 attach-session，再在里面启动 claude（顺序保证赶上首次查询），伪终端收到 `\\x1b]11;?` 后回复白色",
+      "evidence": "实测 replied=True，claude 色号中出现 137/241（浅色系）——与 detached 组唯一变量是'有没有客户端 attach'，结果不同，逐字节可比对"
+    },
+    {
+      "claim": "allow-passthrough 默认关闭",
+      "method": "`tmux show-options -pA allow-passthrough`（tmux 3.6a）",
+      "evidence": "off。但本轮实测的 claude v2.1.181 未使用 DCS 包装，只发裸 OSC10/11，所以这个开关对本次复现不是决定因素；裸 OSC 走的是另一条不受它管的路径"
+    },
+    {
+      "claim": "tmux 原生存在'控制模式客户端代 pane 应答查询'的钩子",
+      "method": "man tmux 通读 refresh-client 一节",
+      "evidence": "`refresh-client -r`：control mode（-C/-CC）客户端可用 `pane-id:report转义序列` 格式代 pane 提供报告，man 原话点名 'such as the response to OSC 10'。代价：现在服务端是纯 pipe-pane，非 control mode，切换是连接方式级改动，未评估是否划算，只记存在"
+    }
+  ],
+
+  "why_not_pursued": {
+    "osc11_response": [
+      "根因不在这里：用户显式执行 `/theme dark` 后混搭直接消失，我方零代码改动——证明 CLI 一旦被用户显式设定主题就不再依赖自动探测，OSC 11 这条路对『已配置主题的用户』零收益，投入产出比低",
+      "竞态是固有矛盾不是实现缺陷：用户 Mac 上很可能还独立开着一个真实终端 attach 着同一 tmux session（①②对照实验已证实 tmux 会把裸 OSC11 转发给它），我方无法保证抢到应答权；即便抢到，也未必是好结果——用户在 Mac 上看同一个 pane 时会被迫套用『手机屏幕的底色』，两块屏幕底色需求本就可能不同，这不是谁实现得好就能解决的，是『同一个 pane 被两端共享、两端期望的底色可能不同』的结构性矛盾",
+      "结论：refresh-client -r 这个原生钩子留档（见 observed 最后一条），将来若真要做，不用重新发现这条路；但本轮不做，不写设计文档"
+    ],
+    "app_palette": "需求 051-主题设置 存在，等用户对'是否要 App 自己的可选主题'回话后再排，本轮不动"
+  },
+
+  "sgr7_reverse_video": {
+    "status": "implemented",
+    "root_cause": ":terminal 模块 Style.kt 正确解析 SGR 7/27 写入 TextStyle.inverse；TermSurfaceView 画格取色时全程不读这个字段，解析结果在渲染边界被静默丢弃",
+    "fix": "新增 resolvedBg()/resolvedFg()（TermSurfaceView.kt:517-524），按 style.inverse 互换 fg/bg 字段与 colorFor 的 background 旗标；:344 背景取色、:386-398 drawTextRuns 的 run 切分与取色改用这两个函数",
+    "implementation_detail_beyond_original_scope": "drawTextRuns 原按 cell.style.fg（TerminalColor 值）分 run；反显格 fg 字段本身不变（只有 inverse 翻转），若仍按 fg 分 run，两个 inverse 不同但 fg 相同的格会被并进同一个 draw run 只取到其中一格的颜色。改为按 resolvedFg() 解析出的最终 Int 色值分 run，drawGlyphRuns 签名相应从接收 TerminalColor 改为接收已解析的 Int——比最初设计的'改一处'多动了一个函数签名，但收口点仍是唯一的（resolvedBg/resolvedFg），非三处独立取色",
+    "tests": "app/app/src/test/kotlin/dev/agentmirror/app/termview/TermSgrReverseVideoTest.kt 三条：显式双色反显、裸反显（贴 cursor-agent 真实字节）、SGR27 复位后作用域不泄漏",
+    "mutation_selfcheck": "resolvedBg/resolvedFg 内的 inverse 判断硬编码 false → 三条全红；硬编码 true（全局翻转）→ 仅第 3 条（作用域）转红，1/2 因夹具恰好全区反显而巧合仍绿——符合设计意图（第 3 条专挡全局开关式误实现）",
+    "gates": "./gradlew :app:testDebugUnitTest 全绿；python3 tools/archwiki/build_wiki.py --check --strict-t3 exit 0",
+    "not_touched": "DEFAULT_FG/DEFAULT_BG 原样未动（leader 已定论：Terminal.app Pro 预设前景 242 比我们的 232 更亮，我们不偏亮，没有要压的东西）"
+  },
+
+  "notes": "两次'假设→实测→推翻假设'的完整回合（256 色映射一次、Terminal.app 前景亮度一次）均由本机实测数据/逐行公式核对推翻 leader 最初假设，未顺着改一个没坏的东西。SGR 7 反显已实现+红测+定点变异自证+双门全绿，未 commit，等 leader 复核。"
+}

@@ -1,0 +1,74 @@
+{
+  "verdict": "pass",
+  "thresholds": {
+    "online_mean_cpu_percent_max": 5.0,
+    "state_window_seconds_min": 60,
+    "pane_count": 27,
+    "deterministic_fleet_sizes": [
+      3,
+      27,
+      200
+    ],
+    "fairness_seconds_max": 60
+  },
+  "discovery": {
+    "mode": "explicit_scoped_socket_dirs",
+    "socket_dir": "/tmp/am-cidle.DhGORv/tmux/tmux-501",
+    "default_socket_dirs_opened": false,
+    "team_agent_socket_opened": false
+  },
+  "process_snapshot_deviation": "ps read-only snapshot; classification only beneath self-owned pane roots; raw process table not recorded or displayed; zero production interaction",
+  "states": [
+    {
+      "state": "zero_connection",
+      "panes": 27,
+      "wall_start_ns": 1786300177739782000,
+      "wall_end_ns": 1786300237782428000,
+      "wall_seconds": 60.042646016,
+      "cpu_start_raw": "0:00.02",
+      "cpu_end_raw": "0:00.02",
+      "cpu_start_seconds": 0.02,
+      "cpu_end_seconds": 0.02,
+      "cpu_delta_seconds": 0.0,
+      "mean_cpu_percent": 0.0,
+      "capture_start": 0,
+      "capture_end": 0,
+      "capture_delta": 0,
+      "capture_per_second": 0.0
+    },
+    {
+      "state": "connected_zero_subscription",
+      "panes": 27,
+      "wall_start_ns": 1786300242005602000,
+      "wall_end_ns": 1786300302043990000,
+      "wall_seconds": 60.038387968,
+      "cpu_start_raw": "0:00.11",
+      "cpu_end_raw": "0:01.60",
+      "cpu_start_seconds": 0.11,
+      "cpu_end_seconds": 1.6,
+      "cpu_delta_seconds": 1.49,
+      "mean_cpu_percent": 2.481746,
+      "capture_start": 16,
+      "capture_end": 256,
+      "capture_delta": 240,
+      "capture_per_second": 3.997442
+    },
+    {
+      "state": "connected_single_subscription",
+      "panes": 27,
+      "wall_start_ns": 1786300308650763000,
+      "wall_end_ns": 1786300368684999000,
+      "wall_seconds": 60.034235904,
+      "cpu_start_raw": "0:01.77",
+      "cpu_end_raw": "0:03.21",
+      "cpu_start_seconds": 1.77,
+      "cpu_end_seconds": 3.21,
+      "cpu_delta_seconds": 1.44,
+      "mean_cpu_percent": 2.398631,
+      "capture_start": 280,
+      "capture_end": 520,
+      "capture_delta": 240,
+      "capture_per_second": 3.997719
+    }
+  ]
+}

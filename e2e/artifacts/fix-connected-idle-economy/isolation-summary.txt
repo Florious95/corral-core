@@ -1,0 +1,6 @@
+scoped_socket_dir=/tmp/am-cidle.DhGORv/tmux/tmux-501
+tmux_target_count=594
+capture_total=520
+out_of_scope_targets=0
+default_socket_dirs_opened=false
+team_agent_socket_opened=false

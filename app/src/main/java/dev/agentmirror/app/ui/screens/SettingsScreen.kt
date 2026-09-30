@@ -51,24 +51,30 @@ import dev.agentmirror.app.session.ShortcutCommand
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.CardOutlineButton
 import dev.agentmirror.app.ui.components.CardTonalButton
+import dev.agentmirror.app.ui.components.HeaderRule
 import dev.agentmirror.app.ui.components.LocalFloatingNavInset
 import dev.agentmirror.app.ui.components.MicroPill
 import dev.agentmirror.app.ui.components.ScreenHeader
 import dev.agentmirror.app.ui.components.StandaloneLiquidToggle
 import dev.agentmirror.app.ui.theme.Appearance
 import dev.agentmirror.app.ui.theme.Dims
+import dev.agentmirror.app.ui.theme.HeaderStyle
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.ui.theme.TermSchemeCatalog
 import dev.agentmirror.app.ui.theme.TermSchemeColors
 import dev.agentmirror.app.ui.theme.TermThemeFamilyDef
 import dev.agentmirror.app.ui.theme.TermThemeStore
 import dev.agentmirror.app.ui.theme.TerminalMetrics
+import dev.agentmirror.app.ui.theme.ThemeId
+import dev.agentmirror.app.ui.theme.ThemeRegistry
 import dev.agentmirror.app.ui.theme.TypeSizes
 import dev.agentmirror.app.ui.theme.currentTerminalPalette
 
 /**
  * 设置页：iOS 分组卡结构，五组——主机配对 / 会话与输入 / 终端 / 界面 / 支持。
+ * 「界面」组里「外观」（浅 / 深 / 跟随系统）与「界面风格」（[ThemeRegistry] 注册的套件）是两个独立选项。
  * 快捷命令不再平铺在本页，只留一行入口（数量 + 各 Provider 覆盖），点进二级页管理，
  * 命令再多本页高度也不变。每组一张 FlatGlass 卡，行首彩色图标砖，行间发丝线。
  * [scrollState] 由容器持有：进出二级页后回到原滚动位置。
@@ -97,10 +103,13 @@ fun SettingsScreen(
     shortcutCommands: List<ShortcutCommand> = emptyList(),
     onOpenShortcutCommands: () -> Unit = {},
     scrollState: ScrollState = rememberScrollState(),
+    themeId: ThemeId = ThemeRegistry.default.metadata.id,
+    onThemeChange: (ThemeId) -> Unit = {},
 ) {
     val p = LocalAppPalette.current
     Column(modifier.fillMaxSize().background(p.screenBackground).statusBarsPadding()) {
         ScreenHeader(title = "设置", meta = null)
+        if (LocalThemeSuite.current.recipes.header == HeaderStyle.Display) HeaderRule()
         Column(
             Modifier
                 .weight(1f)
@@ -235,6 +244,15 @@ fun SettingsScreen(
             SettingsSectionLabel("界面")
             SettingsGroup {
                 SettingsRow(
+                    glyph = SettingsGlyph.Style,
+                    title = "界面风格",
+                    subtitle = "仅改变界面外观；主机、会话、草稿和终端配色保持不变。",
+                    modifier = Modifier.testTag("settings-theme-suite-row"),
+                    trailing = { SettingsValueText(ThemeRegistry[themeId].metadata.englishTitle) },
+                    below = { ThemeSuiteSegmented(selected = themeId, onSelect = onThemeChange) },
+                )
+                SettingsGroupDivider()
+                SettingsRow(
                     glyph = SettingsGlyph.Appearance,
                     title = "外观",
                     subtitle = "列表、设置和外壳跟随这里；终端正文见「终端主题」。",
@@ -322,7 +340,7 @@ private fun FontSizeChip(
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val shape = RoundedCornerShape(Radii.chip)
+    val shape = LocalThemeSuite.current.geometry.shape(RoundedCornerShape(Radii.chip))
     val bg = when {
         selected -> p.accent.copy(alpha = SelectedTintAlpha)
         pressed -> p.chipPressed
@@ -372,7 +390,7 @@ private fun TerminalPreviewLine(
     Box(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(Radii.previewBox))
+            .clip(LocalThemeSuite.current.geometry.shape(RoundedCornerShape(Radii.previewBox)))
             .background(background)
             .padding(horizontal = 14.dp, vertical = 11.dp),
         contentAlignment = Alignment.CenterStart,
@@ -394,10 +412,38 @@ private fun AppearanceSegmented(
     selected: Appearance,
     onSelect: (Appearance) -> Unit,
 ) {
-    val p = LocalAppPalette.current
     val options = remember { listOf(Appearance.Light, Appearance.Dark, Appearance.System) }
-    val trackShape = RoundedCornerShape(Radii.segmentedTrack)
-    val itemShape = RoundedCornerShape(Radii.segmentedItem)
+    SettingsSegmented(options = options, selected = selected, onSelect = onSelect, label = { it.label() })
+}
+
+/** 界面风格选择：选项、顺序与文案全部来自 [ThemeRegistry]，点选即时生效。 */
+@Composable
+private fun ThemeSuiteSegmented(
+    selected: ThemeId,
+    onSelect: (ThemeId) -> Unit,
+) {
+    val options = remember { ThemeRegistry.suites.map { it.metadata } }
+    SettingsSegmented(
+        options = options,
+        selected = ThemeRegistry[selected].metadata,
+        onSelect = { onSelect(it.id) },
+        label = { it.title },
+        optionTag = { "theme-suite-option-${it.id.value}" },
+    )
+}
+
+@Composable
+private fun <T> SettingsSegmented(
+    options: List<T>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    label: (T) -> String,
+    optionTag: ((T) -> String)? = null,
+) {
+    val p = LocalAppPalette.current
+    val geometry = LocalThemeSuite.current.geometry
+    val trackShape = geometry.shape(RoundedCornerShape(Radii.segmentedTrack))
+    val itemShape = geometry.shape(RoundedCornerShape(Radii.segmentedItem))
     Row(
         Modifier
             .fillMaxWidth()
@@ -426,11 +472,18 @@ private fun AppearanceSegmented(
                     .then(
                         if (isOn) Modifier.border(FlatHairline, p.accent.copy(alpha = SelectedStrokeAlpha), itemShape) else Modifier,
                     )
-                    .clickable(interactionSource = interaction, indication = null, enabled = !isOn) { onSelect(option) },
+                    .clickable(interactionSource = interaction, indication = null, enabled = !isOn) { onSelect(option) }
+                    .then(
+                        if (optionTag != null) {
+                            Modifier.testTag(optionTag(option)).semantics { this.selected = isOn }
+                        } else {
+                            Modifier
+                        },
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 AppText(
-                    text = option.label(),
+                    text = label(option),
                     color = if (isOn) p.segmentedSelectedText else p.segmentedText,
                     fontSize = TypeSizes.segmentedItem,
                     fontWeight = if (isOn) FontWeight.SemiBold else FontWeight.Medium,
@@ -522,9 +575,9 @@ private fun ThemeSearchField(query: String, onQueryChange: (String) -> Unit) {
         Modifier
             .fillMaxWidth()
             .height(40.dp)
-            .clip(RoundedCornerShape(Radii.input))
+            .clip(LocalThemeSuite.current.geometry.shape(RoundedCornerShape(Radii.input)))
             .background(p.inputBackground)
-            .border(Dims.hairline, p.inputBorder, RoundedCornerShape(Radii.input))
+            .border(Dims.hairline, p.inputBorder, LocalThemeSuite.current.geometry.shape(RoundedCornerShape(Radii.input)))
             .padding(horizontal = 12.dp)
             .testTag("term-theme-search"),
         verticalAlignment = Alignment.CenterVertically,
@@ -570,7 +623,7 @@ private fun TermThemeSlotRow(
 ) {
     val p = LocalAppPalette.current
     val colors = slotColors(family, darkSlot)
-    val shape = RoundedCornerShape(Radii.cardButton)
+    val shape = LocalThemeSuite.current.geometry.shape(RoundedCornerShape(Radii.cardButton))
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     Row(
@@ -652,7 +705,7 @@ private fun TermThemeFamilyRow(
 
 @Composable
 private fun MiniSwatch(colors: TermSchemeColors) {
-    Row(Modifier.clip(RoundedCornerShape(3.dp))) {
+    Row(Modifier.clip(LocalThemeSuite.current.geometry.shape(RoundedCornerShape(3.dp)))) {
         swatchArgb(colors).forEach { argb ->
             Box(
                 Modifier
@@ -669,7 +722,7 @@ private fun PickerSwatch(colors: TermSchemeColors) {
         Modifier
             .width(54.dp)
             .height(38.dp)
-            .clip(RoundedCornerShape(4.dp)),
+            .clip(LocalThemeSuite.current.geometry.shape(RoundedCornerShape(4.dp))),
     ) {
         swatchArgb(colors).forEach { argb ->
             Box(

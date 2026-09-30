@@ -1,0 +1,78 @@
+blocker=tsnet state dir not exposed by cmd
+main.go: cmd passes ListenAddr/Hostname/AuthKey/ControlURL but no Dir
+   128		group, err := tsnetd.New(tsnetd.Options{
+   129			ListenAddr: cfg.ListenAddr,
+   130			Hostname:   hostname(),
+   131			AuthKey:    cfg.TSAuthKey,
+   132			// 自建控制面接缝（headscale，011 部署自由）：env-only，缺省官方控制面。
+   133			ControlURL: os.Getenv("TS_CONTROL_URL"),
+   134		}, logger)
+tsnetd.go: Dir defaults to os.UserConfigDir and is created there
+    45		// Dir is the directory where tsnet persists node state (private keys,
+    46		// control-plane cache). Empty resolves to DefaultDir, the platform user
+    47		// config directory. The directory is created and only touched when the
+    48		// tailnet is enabled.
+    49		Dir string
+   130		dir := opts.Dir
+   131		if dir == "" {
+   132			dir, err = DefaultDir()
+   133			if err != nil {
+   134				lan.Close()
+   135				return nil, fmt.Errorf("tsnetd: resolve default state dir: %w", err)
+   136			}
+   137		}
+   138		if err := os.MkdirAll(dir, 0o700); err != nil {
+   139			lan.Close()
+   140			return nil, fmt.Errorf("tsnetd: create state dir %q: %w", dir, err)
+   141		}
+   142	
+   143		g.ts = &tsnet.Server{
+   144			Hostname:   opts.Hostname,
+   145			AuthKey:    authKey,
+   146			Dir:        dir,
+   147			ControlURL: opts.ControlURL,
+   148			Logf: func(format string, args ...any) {
+   149				// tsnet's Logf is printf-style; slog takes a single message, so
+   150				// format first then log at debug level.
+   151				logger.Debug("tsnet " + fmt.Sprintf(format, args...))
+   152			},
+   153		}
+   154		logger.Info("tailnet 已启用", "hostname", opts.Hostname, "state_dir", dir)
+   155		return g, nil
+   156	}
+   157	
+   158	// DefaultDir returns the platform user-config directory that tsnet node
+   159	// state is persisted to when Options.Dir is empty. It is the Go user config
+   160	// directory (e.g. $XDG_CONFIG_HOME or ~/.config on Linux) joined with
+   161	// agentmirror/tsnet, keeping per-user state without root privileges.
+   162	func DefaultDir() (string, error) {
+   163		base, err := os.UserConfigDir()
+   164		if err != nil {
+   165			return "", fmt.Errorf("tsnetd: resolve user config dir: %w", err)
+   166		}
+   167		return filepath.Join(base, "agentmirror", "tsnet"), nil
+config.go: StateDir is pidfile-only; no tsnet state-dir field/resolution
+    61		// TSAuthKey is the Tailscale node auth key (feat-ts-wire 扩权: flag
+    62		// -ts-authkey, env TS_AUTHKEY — the tailscale-conventional name tsnetd
+    63		// already honors, not AGENTMIRROR_*). Non-empty enables the embedded
+    64		// tailnet node AND rides the pairing QR's ts_authkey field (011
+    65		// pre-authorized distribution). Same red line as Token: never logged,
+    66		// never echoed; the QR is its only legal exit (docs/protocol.md §2.1).
+    67		TSAuthKey string
+    68	
+    69		// StateDir is where the daemon keeps its single-instance pidfile
+    70		// (agentmirrord.pid). Empty resolves to the pairing token dir (the shared
+    71		// per-user agentmirror config root). Overridable via AGENTMIRROR_STATE_DIR
+    72		// so tests and the e2e harness can isolate concurrent instances (taskbook
+    73		// #fix-daemon-idle-cpu single-instance guard).
+    74		StateDir string
+   176			ListenAddr:   resolve(resolution{flagName: "listen", envKey: "AGENTMIRROR_LISTEN", def: "0.0.0.0:9900"}),
+   177			QRListenAddr: resolve(resolution{flagName: "qr-listen", envKey: "AGENTMIRROR_QR_LISTEN", def: ""}),
+   178			LogLevel:     resolve(resolution{flagName: "log-level", envKey: "AGENTMIRROR_LOG_LEVEL", def: "info"}),
+   179			Token:        resolve(resolution{flagName: "token", envKey: "AGENTMIRROR_TOKEN", def: ""}),
+   180			Host:         resolve(resolution{flagName: "host", envKey: "AGENTMIRROR_HOST", def: ""}),
+   181			UploadDir:    resolve(resolution{flagName: "upload-dir", envKey: "AGENTMIRROR_UPLOAD_DIR", def: ""}),
+   182			StateDir:     resolve(resolution{flagName: "state-dir", envKey: "AGENTMIRROR_STATE_DIR", def: ""}),
+   183			// feat-ts-wire 扩权：env key 沿用 tailscale 惯例名 TS_AUTHKEY（tsnetd 既有契约）。
+   184			TSAuthKey: resolve(resolution{flagName: "ts-authkey", envKey: "TS_AUTHKEY", def: ""}),
+   185		}

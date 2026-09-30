@@ -1,0 +1,184 @@
+diff --git a/app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt b/app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt
+index 71bbf2d18..f317abba3 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt
+@@ -40,6 +40,8 @@ import dev.agentmirror.app.conn.FramePayload
+ import dev.agentmirror.app.service.MirrorForegroundService
+ import dev.agentmirror.app.service.OnScreenFallbackPump
+ import dev.agentmirror.app.service.ServiceWire
++import dev.agentmirror.app.termview.SharedPreferencesTerminalGeometryStore
++import dev.agentmirror.app.termview.TerminalGeometryStore
+ import dev.agentmirror.app.tsnet.ConnectionPath
+ 
+ /**
+@@ -107,6 +109,21 @@ fun SessionRoute(
+ /** 安全构造会话 VM：获取共享 manager（未配置抛错则返回 null）→ 启动连接 → 注入生产上传器。
+  *  internal（fix-reconnect-stale-config 同根并案）：上传基地址统一收口锁定的测试缝。
+  *  [context] 为前台服务启动所需（进入会话即确保服务在运行，幂等）；纯 JVM 测试传 null。 */
++/**
++ * 本次进会话的 subscribe 尺寸：优先用持久化的上次真实几何（消除白推快照，见
++ * TerminalGeometryStore）；无持久化（首装）回落 INITIAL 猜测。
++ *
++ * @contract
++ * @pre store 可为 null（纯 JVM 测试无 context）；null 时回落 INITIAL
++ * @post store 有持久化值时返回它；否则返回 INITIAL_ROWS/INITIAL_COLS
++ * @err none
++ * @inv 纯函数，零副作用
++ */
++internal fun subscribeDims(store: TerminalGeometryStore?): Pair<Int, Int> {
++    store?.read()?.let { if (it.first > 0 && it.second > 0) return it }
++    return INITIAL_ROWS to INITIAL_COLS
++}
++
+ internal fun createSessionViewModel(ref: String, context: Context? = null): SessionViewModel? {
+     val manager = runCatching {
+         // connListener 传空壳：manager 已存在时被忽略；新建时包装监听把事件经 uiConnector 扇出，
+@@ -123,14 +140,18 @@ internal fun createSessionViewModel(ref: String, context: Context? = null): Sess
+     context?.let(MirrorForegroundService::start)
+     // 上传基地址与认证 token 均取 ServiceWire 的当前配对配置链：HTTP 上传与 WebSocket
+     // 认证同源。token 只作为参数下传，禁止日志/回显；配置未落地时 manager() 已阻止建 VM。
++    // subscribe 尺寸用持久化的上次真实几何（消除白推快照；无持久化回落 INITIAL）。
++    val geometryStore = context?.let { SharedPreferencesTerminalGeometryStore(it) }
++    val (subRows, subCols) = subscribeDims(geometryStore)
+     return SessionViewModel(
+         manager,
+         HttpUrlConnectionUploader(),
+         ServiceWire.uploadBaseUrl,
+         ref,
+-        INITIAL_ROWS,
+-        INITIAL_COLS,
++        subRows,
++        subCols,
+         uploadToken = ServiceWire.currentConfig()?.token,
++        geometryStore = geometryStore,
+     )
+ }
+ 
+diff --git a/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt b/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt
+index 5ae7cdf6a..4de3128f9 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt
+@@ -30,6 +30,7 @@ import dev.agentmirror.app.conn.FrameError
+ import dev.agentmirror.app.conn.FramePayload
+ import dev.agentmirror.app.conn.InputKey
+ import dev.agentmirror.app.termview.TermViewPresenter
++import dev.agentmirror.app.termview.TerminalGeometryStore
+ import dev.agentmirror.terminal.TerminalEmulator
+ 
+ /**
+@@ -55,6 +56,8 @@ class SessionViewModel(
+     initialCols: Int,
+     /** 上传认证与持久连接共用配对 token；只下传给 uploader，不记录、不回显。 */
+     internal val uploadToken: String? = null,
++    /** 终端几何持久化（进会话白推快照优化）；纯 JVM 测试可 null（不持久化）。 */
++    private val geometryStore: TerminalGeometryStore? = null,
+ ) : ConnectionManager.Listener {
+ 
+     /** 终端内核：snapshot 重放 + delta 追加 + 本地 scrollback（006 本地化滚动）。 */
+@@ -66,7 +69,7 @@ class SessionViewModel(
+         if (manager.resize(ref, rows, cols)) {
+             emulator.resize(cols, rows)
+         }
+-    }
++    }.also { it.geometryStore = geometryStore }
+ 
+     // ---- 可观察 UI 状态（Compose 直接读）----
+ 
+diff --git a/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt b/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt
+index 20e698d0b..426303c03 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt
+@@ -115,6 +115,12 @@ class TermSurfaceView @JvmOverloads constructor(
+             }
+             return true
+         }
++
++        override fun onScaleEnd(detector: ScaleGestureDetector) {
++            // 手势结束：清除捏合抑制并持久化真实几何一次（进会话白推快照优化）。
++            // 捏合期间不写（防每步磁盘 IO 卡顿）；onPinchEnd 内部去重 + SharedPreferences apply 异步。
++            presenter?.onPinchEnd()
++        }
+     })
+ 
+     private val frameCallback = object : Choreographer.FrameCallback {
+diff --git a/app/app/src/main/java/dev/agentmirror/app/termview/TermViewPresenter.kt b/app/app/src/main/java/dev/agentmirror/app/termview/TermViewPresenter.kt
+index 3e82a908f..e294184b3 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/termview/TermViewPresenter.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/termview/TermViewPresenter.kt
+@@ -195,6 +195,9 @@ class TermViewPresenter(
+         if (!viewportSeeded && widthPx > 0 && heightPx > 0) {
+             viewportSeeded = true
+             recomputeGeometry()
++            // 真实视口首次建立：持久化真实几何（进会话白推快照优化主场景——非捏合、纯粹进出
++            // 会话也必须落盘，leader msg_2752c15e58d0：不能只在捏合结束写）。值变才写（去重）。
++            persistGeometry()
+         }
+         // 首帧之后：挤压/复原只改可见行数（视口上推），不再 emit resize。
+         val rowsBefore = visibleRows
+@@ -219,6 +222,9 @@ class TermViewPresenter(
+     fun onFontSizeChanged(newCellWidth: Int, newCellHeight: Int) {
+         cellWidth = newCellWidth
+         cellHeight = newCellHeight
++        // 捏合手势进行中（leader msg_2752c15e58d0）：手势每步几何都变、去重挡不住，
++        // 抑制 persist 直到 onPinchEnd。
++        markGestureInProgress()
+         recomputeGeometry()
+         // 捏合改字格后可见行数随之变化（同一视口高 ÷ 新字格高），重排跟随新栅格。
+         updateVisibleRows()
+@@ -236,6 +242,56 @@ class TermViewPresenter(
+         }
+     }
+ 
++    /** 当前按像素视口与字格算出的真实 rows/cols（无正尺寸则 null）。 */
++    private val currentRealGeometry: Pair<Int, Int>?
++        get() {
++            if (viewportWidthPx <= 0 || viewportHeightPx <= 0 || cellWidth <= 0 || cellHeight <= 0) return null
++            return (viewportHeightPx / cellHeight) to (viewportWidthPx / cellWidth)
++        }
++
++    /**
++     * 几何持久化 store（进会话白推快照优化，leader msg_410379707d90）。由接线层注入；
++     * 注入前 persistGeometry 为 no-op（纯 JVM 测试可只测 store 本身）。
++     */
++    var geometryStore: TerminalGeometryStore? = null
++
++    /** 捏合手势进行中（leader msg_2752c15e58d0：手势每步几何都变、去重挡不住，必须抑制写入）。 */
++    private var gestureInProgress = false
++
++    /**
++     * 捏合手势开始/进行中标记：由 [onFontSizeChanged]（View onScale）置位。
++     * 手势期间 [persistGeometry] 为 no-op（防每步磁盘 IO 卡顿）；[onPinchEnd] 清除并落盘一次。
++     */
++    private fun markGestureInProgress() {
++        gestureInProgress = true
++    }
++
++    /**
++     * 捏合手势结束：清除抑制并持久化一次（View onScaleEnd 调用）。
++     * 这是「手势结束才写」的唯一入口；值变才写（去重）。
++     */
++    fun onPinchEnd() {
++        gestureInProgress = false
++        persistGeometry()
++    }
++
++    /**
++     * 持久化当前真实几何（进会话白推快照优化）。
++     *
++     * 调用点：真实视口首次建立（onViewportSizeChanged seed 时，主场景——非捏合进出会话）+
++     * 捏合手势结束（[onPinchEnd]）。**手势进行中不写**（防捏合每步磁盘 IO 卡顿）。
++     * 写入纪律：只在值变化时写（去重）、apply 异步。无正尺寸或 store 未注入时 no-op。
++     */
++    fun persistGeometry() {
++        if (gestureInProgress) return
++        val store = geometryStore ?: return
++        val real = currentRealGeometry ?: return
++        val cached = store.read()
++        if (cached != real) {
++            store.write(real.first, real.second)
++        }
++    }
++
+     // ---- 帧消费：脏区合并 + 行数据 ----
+ 
+     /**

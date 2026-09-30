@@ -1,0 +1,81 @@
+name: multisocket-discovery
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "internal/discovery/**"
+      - ".github/workflows/multisocket-discovery.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discovery:
+    name: Frozen-base red and current-head green discovery tests
+    runs-on: macos-14
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Set up Go from module
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Ensure hosted tmux
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v tmux >/dev/null 2>&1; then brew install tmux; fi
+          command -v tmux
+          tmux -V
+      - name: Verify exact checkout and clean tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          mkdir -p "$RUNNER_TEMP/multisocket-discovery"
+          printf 'sha=%s\n' "$(git rev-parse HEAD)" | tee "$RUNNER_TEMP/multisocket-discovery/checkout.txt"
+      - name: Prove frozen-base red
+        shell: bash
+        env:
+          BASE_SHA: b98504e742ed1e7c7475767c512934b07eac592b
+        run: |
+          set -euo pipefail
+          old="$RUNNER_TEMP/multisocket-base"
+          git worktree add --detach "$old" "$BASE_SHA"
+          cp internal/discovery/scan_filter_test.go "$old/internal/discovery/scan_filter_test.go"
+          cp internal/discovery/socket_inventory_regression_test.go "$old/internal/discovery/socket_inventory_regression_test.go"
+          log="$RUNNER_TEMP/multisocket-discovery/red.log"
+          set +e
+          (cd "$old" && go test -race -count=1 ./internal/discovery -run 'TestDiscoverIncludesTeamSocketWithSamePaneIdentity|TestDiscoverScanFilterCommandBoundary' -v) 2>&1 | tee "$log"
+          rc=${PIPESTATUS[0]}
+          set -e
+          printf 'sha=%s\nbase=%s\ncommand=go test -race -count=1 ./internal/discovery -run TestDiscoverIncludesTeamSocketWithSamePaneIdentity|TestDiscoverScanFilterCommandBoundary -v\nexit=%s\n' "$BASE_SHA" "$BASE_SHA" "$rc" | tee "$RUNNER_TEMP/multisocket-discovery/red-receipt.txt"
+          test "$rc" -ne 0
+          grep -F -- '--- FAIL: TestDiscoverIncludesTeamSocketWithSamePaneIdentity' "$log"
+          grep -F -- '--- FAIL: TestDiscoverScanFilterCommandBoundary' "$log"
+      - name: Run current-head green discovery controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/multisocket-discovery/green.log"
+          go test -race -count=1 -timeout=8m ./internal/discovery -v 2>&1 | tee "$log"
+          for name in TestDiscoverIncludesTeamSocketWithSamePaneIdentity TestDiscoverScanFilterCommandBoundary; do
+            grep -F -- "--- PASS: $name " "$log"
+            test "$(grep -F -- "--- PASS: $name " "$log" | wc -l | tr -d ' ')" -eq 1
+            ! grep -F -- "--- SKIP: $name" "$log"
+          done
+          printf 'sha=%s\ncommand=go test -race -count=1 -timeout=8m ./internal/discovery -v\nexit=0\n' "$(git rev-parse HEAD)" | tee "$RUNNER_TEMP/multisocket-discovery/green-receipt.txt"
+      - name: Upload red and green evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multisocket-discovery-${{ github.run_id }}
+          path: ${{ runner.temp }}/multisocket-discovery

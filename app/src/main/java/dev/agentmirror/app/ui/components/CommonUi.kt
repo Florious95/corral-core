@@ -53,12 +53,15 @@ import com.kyant.backdrop.backdrops.emptyBackdrop
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.model.SessionStatus
 import dev.agentmirror.app.ui.theme.AppPalette
-import dev.agentmirror.app.ui.theme.DarkPalette
 import dev.agentmirror.app.ui.theme.Dims
+import dev.agentmirror.app.ui.theme.HeaderStyle
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 import dev.agentmirror.app.ui.theme.Motion
 import dev.agentmirror.app.ui.theme.Radii
+import dev.agentmirror.app.ui.theme.TextToken
 import dev.agentmirror.app.ui.theme.TypeSizes
+import dev.agentmirror.app.ui.theme.isDark
 
 /** StatusChip / RunningDot 共用的三态色与文案。颜色全部来自 [AppPalette]，组件内无字面量色值。 */
 data class StatusVisuals(
@@ -130,6 +133,30 @@ fun AppText(
     )
 }
 
+/** 按风格文字令牌渲染；[TextToken.uppercase] 只影响拉丁字母。 */
+@Composable
+fun TokenText(
+    text: String,
+    color: Color,
+    token: TextToken,
+    modifier: Modifier = Modifier,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip,
+) {
+    AppText(
+        text = if (token.uppercase) text.uppercase() else text,
+        color = color,
+        fontSize = token.size,
+        modifier = modifier,
+        fontWeight = token.weight,
+        fontFamily = token.family,
+        lineHeightMultiplier = token.lineHeight,
+        letterSpacing = token.tracking,
+        maxLines = maxLines,
+        overflow = overflow,
+    )
+}
+
 /** 目录路径 —— 等宽、单行、尾部省略 */
 @Composable
 fun PathText(path: String, modifier: Modifier = Modifier) {
@@ -169,11 +196,12 @@ fun SessionNameText(name: String, modifier: Modifier = Modifier) {
 @Composable
 fun StatusChip(status: SessionStatus, modifier: Modifier = Modifier) {
     val p = LocalAppPalette.current
+    val geometry = LocalThemeSuite.current.geometry
     val v = statusVisuals(p, status)
     Row(
         modifier = modifier
             .height(Dims.statusChipHeight)
-            .clip(RoundedCornerShape(Radii.statusChip))
+            .clip(geometry.shape(RoundedCornerShape(Radii.statusChip)))
             .background(v.chipBg)
             .padding(horizontal = Dims.statusChipHPadding),
         verticalAlignment = Alignment.CenterVertically,
@@ -194,14 +222,14 @@ fun StatusChip(status: SessionStatus, modifier: Modifier = Modifier) {
                 Modifier
                     .size(Dims.statusDotSize)
                     .alpha(pulse)
-                    .clip(CircleShape)
+                    .clip(geometry.shape(CircleShape))
                     .background(v.lamp)
             )
         } else {
             Box(
                 Modifier
                     .size(Dims.statusDotSize)
-                    .clip(CircleShape)
+                    .clip(geometry.shape(CircleShape))
                     .background(v.lamp)
             )
         }
@@ -225,7 +253,7 @@ fun MicroPill(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(Radii.pill))
+            .clip(LocalThemeSuite.current.geometry.shape(RoundedCornerShape(Radii.pill)))
             .background(backgroundColor)
             .padding(horizontal = 7.dp, vertical = 5.dp)
     ) {
@@ -312,7 +340,7 @@ fun StarButton(
     Box(
         modifier = modifier
             .size(Dims.tapTargetMin)
-            .clip(CircleShape)
+            .clip(LocalThemeSuite.current.geometry.shape(CircleShape))
             .background(if (pressed) p.rowPressed else Color.Transparent)
             .clickable(interactionSource = interaction, indication = null, onClick = onToggle),
         contentAlignment = Alignment.Center,
@@ -350,6 +378,10 @@ fun ScreenHeader(
     modifier: Modifier = Modifier,
     trailing: @Composable (() -> Unit)? = null,
 ) {
+    if (LocalThemeSuite.current.recipes.header == HeaderStyle.Display) {
+        DisplayScreenHeader(title, meta, modifier, trailing)
+        return
+    }
     val p = LocalAppPalette.current
     Row(
         modifier = modifier
@@ -391,6 +423,44 @@ fun ScreenHeader(
     }
 }
 
+/** 展示型页头：猩红眉题（meta）在上、重字重大标题在下，底部重线由 [HeaderRule] 负责。 */
+@Composable
+private fun DisplayScreenHeader(
+    title: String,
+    meta: String?,
+    modifier: Modifier,
+    trailing: @Composable (() -> Unit)?,
+) {
+    val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = kit.geometry.pageInset, end = kit.geometry.pageInset, top = 12.dp, bottom = 14.dp)
+            .testTag("screen-header"),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        Column(Modifier.weight(1f)) {
+            if (meta != null) {
+                TokenText(meta, kit.colors.eyebrow, kit.typography.eyebrow, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Box(Modifier.height(6.dp))
+            }
+            TokenText(title, p.titleText, kit.typography.pageTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (trailing != null) {
+            Box(Modifier.width(10.dp))
+            trailing()
+        }
+    }
+}
+
+/** 页头下的截断线：液态玻璃为 1dp 发丝线，直角风格为 2dp 墨色重线。 */
+@Composable
+fun HeaderRule() {
+    val kit = LocalThemeSuite.current
+    Box(Modifier.fillMaxWidth().height(kit.geometry.headerRule).background(kit.colors.headerRule))
+}
+
 /**
  * 顶栏 FlatGlass 药丸按钮：44dp 触控地板（[Dims.pillTouchFloor]）内嵌 34dp 可见胶囊（[Dims.pillHeight]），
  * 半透微透底 + 0.5dp 发丝光边 + 顶亮/底暗，按压叠一层变暗蒙层；禁用整体 45% 透明。
@@ -420,16 +490,27 @@ fun GlassPillButton(
             ),
         contentAlignment = Alignment.Center,
     ) {
+        val kit = LocalThemeSuite.current
         Row(
             modifier = Modifier
                 .height(Dims.pillHeight)
-                .flatGlass(
-                    shape = CircleShape,
-                    fill = glass.fill,
-                    hairline = glass.hairline,
-                    topGlint = glass.topGlint,
-                    bottomShade = glass.bottomShade,
-                    overlay = if (pressed && enabled) glass.pressDim else Color.Transparent,
+                .then(
+                    if (kit.surfaces.isGlass) {
+                        Modifier.flatGlass(
+                            shape = CircleShape,
+                            fill = glass.fill,
+                            hairline = glass.hairline,
+                            topGlint = glass.topGlint,
+                            bottomShade = glass.bottomShade,
+                            overlay = if (pressed && enabled) glass.pressDim else Color.Transparent,
+                        )
+                    } else {
+                        Modifier.ruledSurface(
+                            fill = if (pressed && enabled) LocalAppPalette.current.rowPressed else Color.Transparent,
+                            stroke = LocalAppPalette.current.outlineButtonBorder,
+                            strokeWidth = kit.geometry.hairline,
+                        )
+                    },
                 )
                 .padding(contentPadding),
             verticalAlignment = Alignment.CenterVertically,
@@ -495,7 +576,7 @@ fun TonalTextButton(
     Box(
         modifier = modifier
             .height(Dims.actionButtonHeight)
-            .clip(RoundedCornerShape(Radii.actionButton))
+            .clip(LocalThemeSuite.current.geometry.shape(RoundedCornerShape(Radii.actionButton)))
             .background(if (pressed) p.accentContainerPressed else p.accentContainer)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(horizontal = Dims.actionButtonHPadding),
@@ -518,7 +599,7 @@ fun CardTonalButton(
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val shape = RoundedCornerShape(Radii.cardButton)
+    val shape = LocalThemeSuite.current.geometry.shape(RoundedCornerShape(Radii.cardButton))
     Box(
         modifier = modifier
             .height(Dims.cardButtonHeight)
@@ -550,12 +631,13 @@ fun CardOutlineButton(
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    val shape = LocalThemeSuite.current.geometry.shape(RoundedCornerShape(Radii.cardButton))
     Box(
         modifier = modifier
             .height(Dims.cardButtonHeight)
-            .clip(RoundedCornerShape(Radii.cardButton))
+            .clip(shape)
             .background(if (pressed) p.outlineButtonPressed else Color.Transparent)
-            .border(Dims.hairline, p.outlineButtonBorder, RoundedCornerShape(Radii.cardButton))
+            .border(Dims.hairline, p.outlineButtonBorder, shape)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -573,8 +655,8 @@ fun SettingsCard(
     modifier: Modifier = Modifier,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
-    val dark = LocalAppPalette.current === DarkPalette
-    val shape = RoundedCornerShape(Radii.card)
+    val dark = LocalAppPalette.current.isDark
+    val shape = LocalThemeSuite.current.geometry.shape(RoundedCornerShape(Radii.card))
     Column(
         modifier = modifier
             .fillMaxWidth()

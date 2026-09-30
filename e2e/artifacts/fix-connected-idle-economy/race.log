@@ -1,0 +1,4 @@
+argv: bash -lc 'env -u TEAM_AGENT_* bash -lc "cd server && go test -race ./internal/api -run \"TestConnectedIdleEconomy\" -count=1"'
+exit_code: 0
+
+ok  github.com/agentmirror/agentmirror/internal/api  2.052s

@@ -1,0 +1,79 @@
+2026-08-19T23:07:30.133 [lifecycle] ON_CREATE
+2026-08-19T23:07:30.459 [ws] conn state STOPPED → CONNECTING
+2026-08-19T23:07:30.593 [ws] conn state CONNECTING → AUTHENTICATING
+2026-08-19T23:07:30.601 [lifecycle] ON_START
+2026-08-19T23:07:30.653 [ws] conn state AUTHENTICATING → READY
+2026-08-19T23:07:31.984 [refresh] applyListing seq=246 workspaces=7 refreshing_prev=false refreshing_next=false
+2026-08-19T23:07:33.805 [refresh] enterLevel1 list cached=7 first_frame=already refreshing_prev=false refreshing_next=false
+2026-08-19T23:07:34.172 [refresh] applyListing seq=246 workspaces=7 refreshing_prev=false refreshing_next=false
+2026-08-19T23:07:38.651 [favorite] rows match stored_ref=/tmp/tmux-501/ta-a0afa5f9c7f6%0 live_ref= equal=false cwd_stored=/Volumes/nvme/Projects/讨论team-agent cwd_live= cwd_shown=/Volumes/nvme/Projects/讨论team-agent
+2026-08-19T23:07:38.655 [favorite] rows match stored_ref=/tmp/tmux-501/ta-b7cc1c640ccf%0 live_ref= equal=false cwd_stored=/Volumes/nvme/Projects/远程Agent安卓 cwd_live= cwd_shown=/Volumes/nvme/Projects/远程Agent安卓
+2026-08-19T23:07:38.656 [favorite] rows match stored_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 live_ref= equal=false cwd_stored=/Users/alauda/Documents/code/agent前沿探索/多agent协作 cwd_live= cwd_shown=/Users/alauda/Documents/code/agent前沿探索/多agent协作
+2026-08-19T23:07:38.656 [favorite] rows stored=3 live=0 online=0 offline=3
+2026-08-19T23:07:38.682 [favorite] enterFavorites favorite_workspaces=3 fetched_workspaces=0 cwds=/Users/alauda/Documents/code/agent前沿探索/多agent协作, /Volumes/nvme/Projects/远程Agent安卓, /Volumes/nvme/Projects/讨论team-agent queue=3
+2026-08-19T23:07:38.684 [favorite] favoriteFetch start cwd=/Users/alauda/Documents/code/agent前沿探索/多agent协作 favorite_workspaces=3 fetched_workspaces=0 queue_left=2
+2026-08-19T23:07:38.783 [favorite] favoriteFetch done cwd=/Users/alauda/Documents/code/agent前沿探索/多agent协作 favorite_workspaces=3 fetched_workspaces=1 queue_left=2
+2026-08-19T23:07:38.797 [favorite] favoriteFetch start cwd=/Volumes/nvme/Projects/远程Agent安卓 favorite_workspaces=3 fetched_workspaces=1 queue_left=1
+2026-08-19T23:07:38.802 [level2] workspace mismatch frame=/Users/alauda/Documents/code/agent前沿探索/多agent协作 subscribed=<none> seq=625 cached=6
+2026-08-19T23:07:38.884 [favorite] favoriteFetch done cwd=/Volumes/nvme/Projects/远程Agent安卓 favorite_workspaces=3 fetched_workspaces=2 queue_left=1
+2026-08-19T23:07:38.886 [favorite] favoriteFetch start cwd=/Volumes/nvme/Projects/讨论team-agent favorite_workspaces=3 fetched_workspaces=2 queue_left=0
+2026-08-19T23:07:38.890 [level2] workspace mismatch frame=/Volumes/nvme/Projects/远程Agent安卓 subscribed=<none> seq=626 cached=5
+2026-08-19T23:07:38.974 [favorite] rows match stored_ref=/tmp/tmux-501/ta-a0afa5f9c7f6%0 live_ref= equal=false cwd_stored=/Volumes/nvme/Projects/讨论team-agent cwd_live= cwd_shown=/Volumes/nvme/Projects/讨论team-agent
+2026-08-19T23:07:38.990 [favorite] favoriteFetch done cwd=/Volumes/nvme/Projects/讨论team-agent favorite_workspaces=3 fetched_workspaces=3 queue_left=0
+2026-08-19T23:07:38.991 [favorite] rows match stored_ref=/tmp/tmux-501/ta-b7cc1c640ccf%0 live_ref=/tmp/tmux-501/ta-b7cc1c640ccf%0 equal=true cwd_stored=/Volumes/nvme/Projects/远程Agent安卓 cwd_live=/Volumes/nvme/Projects/远程Agent安卓 cwd_shown=/Volumes/nvme/Projects/远程Agent安卓
+2026-08-19T23:07:38.992 [favorite] rows match stored_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 live_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 equal=true cwd_stored=/Users/alauda/Documents/code/agent前沿探索/多agent协作 cwd_live=/Users/alauda/Documents/code/agent前沿探索/多agent协作 cwd_shown=/Users/alauda/Documents/code/agent前沿探索/多agent协作
+2026-08-19T23:07:38.992 [level2] workspace mismatch frame=/Volumes/nvme/Projects/讨论team-agent subscribed=<none> seq=627 cached=2
+2026-08-19T23:07:38.992 [favorite] rows stored=3 live=11 online=2 offline=1
+2026-08-19T23:07:39.150 [favorite] rows match stored_ref=/tmp/tmux-501/ta-a0afa5f9c7f6%0 live_ref=/tmp/tmux-501/ta-a0afa5f9c7f6%0 equal=true cwd_stored=/Volumes/nvme/Projects/讨论team-agent cwd_live=/Volumes/nvme/Projects/讨论team-agent cwd_shown=/Volumes/nvme/Projects/讨论team-agent
+2026-08-19T23:07:39.151 [favorite] rows match stored_ref=/tmp/tmux-501/ta-b7cc1c640ccf%0 live_ref=/tmp/tmux-501/ta-b7cc1c640ccf%0 equal=true cwd_stored=/Volumes/nvme/Projects/远程Agent安卓 cwd_live=/Volumes/nvme/Projects/远程Agent安卓 cwd_shown=/Volumes/nvme/Projects/远程Agent安卓
+2026-08-19T23:07:39.187 [favorite] rows match stored_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 live_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 equal=true cwd_stored=/Users/alauda/Documents/code/agent前沿探索/多agent协作 cwd_live=/Users/alauda/Documents/code/agent前沿探索/多agent协作 cwd_shown=/Users/alauda/Documents/code/agent前沿探索/多agent协作
+2026-08-19T23:07:39.188 [favorite] rows stored=3 live=13 online=3 offline=0
+2026-08-19T23:08:25.032 [view-menu] viewMenuSource current_ref=/tmp/tmux-501/ta-b7cc1c640ccf%0 current_ws=/Volumes/nvme/Projects/远程Agent安卓 current_socket=/tmp/tmux-501/ta-b7cc1c640ccf overlay_ws=/Volumes/nvme/Projects/远程Agent安卓 overlay_socket=/tmp/tmux-501/ta-b7cc1c640ccf last_published_ws= sessions=5 source_match=true singleton_mismatch=true
+2026-08-19T23:08:25.340 [viewport] source=windowVisibility visibility=0 width=0 height=0
+2026-08-19T23:08:25.560 [viewport] source=onViewportSizeChanged oldW=0 oldH=0 newW=1128 newH=2075 viewportSeeded=false emulatorRows=40 emulatorCols=120
+2026-08-19T23:08:25.562 [reflow] resize sent rows=49 cols=51 reason=user ok=true bookkept_rows=49 bookkept_cols=51
+2026-08-19T23:08:25.567 [grid] viewport_width_px=1128 cell_width_nominal=22 cell_width_measured=22 reported_cols=51 canvas_capacity_cols=51 overflow_px=0 half_cell_px=11.0
+2026-08-19T23:08:25.568 [viewport] source=onViewportSizeChanged result resized=true outgrewGuard=false candidateRows=49 candidateCols=51 emulatorRows=49 emulatorCols=51
+2026-08-19T23:08:25.582 [term-left-edge] source=onDraw contentLeft=42 col0Origin=42 cellW=22 viewW=1212 verdict=OK
+2026-08-19T23:08:25.625 [reflow] frame cols=51 render cols=51 bookkept_rows=49 emulator_rows=49
+2026-08-19T23:08:25.973 [term-left-edge] source=onDraw contentLeft=42 col0Origin=42 cellW=22 viewW=1212 verdict=OK
+2026-08-19T23:08:26.188 [term-left-edge] source=onDraw contentLeft=42 col0Origin=42 cellW=22 viewW=1212 verdict=OK
+2026-08-19T23:08:26.412 [favorite] leaveFavorites favorite_workspaces=3 fetched_workspaces=3 inflight=<none>
+2026-08-19T23:08:34.636 [lifecycle] ON_STOP
+2026-08-19T23:08:34.694 [viewport] source=windowVisibility visibility=8 width=1212 height=2075
+2026-08-19T23:09:37.962 [lifecycle] ON_START
+2026-08-19T23:09:38.292 [viewport] source=windowVisibility visibility=0 width=1212 height=2075
+2026-08-19T23:09:38.293 [viewport] source=onRealViewportChanged oldW=1128 oldH=2075 newW=1128 newH=2075 viewportSeeded=true emulatorRows=49 emulatorCols=51
+2026-08-19T23:09:38.320 [reflow] source=resume view_width_px=1128 cell_width_px=22 derived_cols=51 last_sent_cols=51
+2026-08-19T23:09:38.322 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=49 candidateCols=51 emulatorRows=49 emulatorCols=51
+2026-08-19T23:09:38.578 [term-left-edge] source=onDraw contentLeft=42 col0Origin=42 cellW=22 viewW=1212 verdict=OK
+2026-08-19T23:09:39.262 [term-left-edge] source=onDraw contentLeft=42 col0Origin=42 cellW=22 viewW=1212 verdict=OK
+2026-08-19T23:09:57.263 [refresh] applyListing seq=246 workspaces=7 refreshing_prev=false refreshing_next=false
+2026-08-19T23:09:57.314 [favorite] rows match stored_ref=/tmp/tmux-501/ta-a0afa5f9c7f6%0 live_ref=/tmp/tmux-501/ta-a0afa5f9c7f6%0 equal=true cwd_stored=/Volumes/nvme/Projects/讨论team-agent cwd_live=/Volumes/nvme/Projects/讨论team-agent cwd_shown=/Volumes/nvme/Projects/讨论team-agent
+2026-08-19T23:09:57.317 [favorite] rows match stored_ref=/tmp/tmux-501/ta-b7cc1c640ccf%0 live_ref=/tmp/tmux-501/ta-b7cc1c640ccf%0 equal=true cwd_stored=/Volumes/nvme/Projects/远程Agent安卓 cwd_live=/Volumes/nvme/Projects/远程Agent安卓 cwd_shown=/Volumes/nvme/Projects/远程Agent安卓
+2026-08-19T23:09:57.318 [favorite] rows match stored_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 live_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 equal=true cwd_stored=/Users/alauda/Documents/code/agent前沿探索/多agent协作 cwd_live=/Users/alauda/Documents/code/agent前沿探索/多agent协作 cwd_shown=/Users/alauda/Documents/code/agent前沿探索/多agent协作
+2026-08-19T23:09:57.319 [favorite] rows stored=3 live=13 online=3 offline=0
+2026-08-19T23:09:57.332 [favorite] enterFavorites favorite_workspaces=3 fetched_workspaces=0 cwds=/Users/alauda/Documents/code/agent前沿探索/多agent协作, /Volumes/nvme/Projects/远程Agent安卓, /Volumes/nvme/Projects/讨论team-agent queue=3
+2026-08-19T23:09:57.332 [favorite] favoriteFetch start cwd=/Users/alauda/Documents/code/agent前沿探索/多agent协作 favorite_workspaces=3 fetched_workspaces=0 queue_left=2
+2026-08-19T23:09:57.406 [favorite] favoriteFetch done cwd=/Users/alauda/Documents/code/agent前沿探索/多agent协作 favorite_workspaces=3 fetched_workspaces=1 queue_left=2
+2026-08-19T23:09:57.407 [favorite] favoriteFetch start cwd=/Volumes/nvme/Projects/远程Agent安卓 favorite_workspaces=3 fetched_workspaces=1 queue_left=1
+2026-08-19T23:09:57.408 [level2] workspace mismatch frame=/Users/alauda/Documents/code/agent前沿探索/多agent协作 subscribed=<none> seq=636 cached=6
+2026-08-19T23:09:57.465 [favorite] rows match stored_ref=/tmp/tmux-501/ta-a0afa5f9c7f6%0 live_ref=/tmp/tmux-501/ta-a0afa5f9c7f6%0 equal=true cwd_stored=/Volumes/nvme/Projects/讨论team-agent cwd_live=/Volumes/nvme/Projects/讨论team-agent cwd_shown=/Volumes/nvme/Projects/讨论team-agent
+2026-08-19T23:09:57.466 [favorite] rows match stored_ref=/tmp/tmux-501/ta-b7cc1c640ccf%0 live_ref=/tmp/tmux-501/ta-b7cc1c640ccf%0 equal=true cwd_stored=/Volumes/nvme/Projects/远程Agent安卓 cwd_live=/Volumes/nvme/Projects/远程Agent安卓 cwd_shown=/Volumes/nvme/Projects/远程Agent安卓
+2026-08-19T23:09:57.467 [favorite] rows match stored_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 live_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 equal=true cwd_stored=/Users/alauda/Documents/code/agent前沿探索/多agent协作 cwd_live=/Users/alauda/Documents/code/agent前沿探索/多agent协作 cwd_shown=/Users/alauda/Documents/code/agent前沿探索/多agent协作
+2026-08-19T23:09:57.468 [favorite] rows stored=3 live=13 online=3 offline=0
+2026-08-19T23:09:57.526 [favorite] favoriteFetch done cwd=/Volumes/nvme/Projects/远程Agent安卓 favorite_workspaces=3 fetched_workspaces=2 queue_left=1
+2026-08-19T23:09:57.527 [favorite] favoriteFetch start cwd=/Volumes/nvme/Projects/讨论team-agent favorite_workspaces=3 fetched_workspaces=2 queue_left=0
+2026-08-19T23:09:57.571 [level2] workspace mismatch frame=/Volumes/nvme/Projects/远程Agent安卓 subscribed=<none> seq=637 cached=5
+2026-08-19T23:09:57.582 [favorite] rows match stored_ref=/tmp/tmux-501/ta-a0afa5f9c7f6%0 live_ref=/tmp/tmux-501/ta-a0afa5f9c7f6%0 equal=true cwd_stored=/Volumes/nvme/Projects/讨论team-agent cwd_live=/Volumes/nvme/Projects/讨论team-agent cwd_shown=/Volumes/nvme/Projects/讨论team-agent
+2026-08-19T23:09:57.584 [favorite] rows match stored_ref=/tmp/tmux-501/ta-b7cc1c640ccf%0 live_ref=/tmp/tmux-501/ta-b7cc1c640ccf%0 equal=true cwd_stored=/Volumes/nvme/Projects/远程Agent安卓 cwd_live=/Volumes/nvme/Projects/远程Agent安卓 cwd_shown=/Volumes/nvme/Projects/远程Agent安卓
+2026-08-19T23:09:57.584 [favorite] rows match stored_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 live_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 equal=true cwd_stored=/Users/alauda/Documents/code/agent前沿探索/多agent协作 cwd_live=/Users/alauda/Documents/code/agent前沿探索/多agent协作 cwd_shown=/Users/alauda/Documents/code/agent前沿探索/多agent协作
+2026-08-19T23:09:57.584 [favorite] rows stored=3 live=13 online=3 offline=0
+2026-08-19T23:09:57.649 [favorite] favoriteFetch done cwd=/Volumes/nvme/Projects/讨论team-agent favorite_workspaces=3 fetched_workspaces=3 queue_left=0
+2026-08-19T23:09:57.654 [level2] workspace mismatch frame=/Volumes/nvme/Projects/讨论team-agent subscribed=<none> seq=638 cached=2
+2026-08-19T23:09:57.662 [favorite] rows match stored_ref=/tmp/tmux-501/ta-a0afa5f9c7f6%0 live_ref=/tmp/tmux-501/ta-a0afa5f9c7f6%0 equal=true cwd_stored=/Volumes/nvme/Projects/讨论team-agent cwd_live=/Volumes/nvme/Projects/讨论team-agent cwd_shown=/Volumes/nvme/Projects/讨论team-agent
+2026-08-19T23:09:57.663 [favorite] rows match stored_ref=/tmp/tmux-501/ta-b7cc1c640ccf%0 live_ref=/tmp/tmux-501/ta-b7cc1c640ccf%0 equal=true cwd_stored=/Volumes/nvme/Projects/远程Agent安卓 cwd_live=/Volumes/nvme/Projects/远程Agent安卓 cwd_shown=/Volumes/nvme/Projects/远程Agent安卓
+2026-08-19T23:09:57.673 [favorite] rows match stored_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 live_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 equal=true cwd_stored=/Users/alauda/Documents/code/agent前沿探索/多agent协作 cwd_live=/Users/alauda/Documents/code/agent前沿探索/多agent协作 cwd_shown=/Users/alauda/Documents/code/agent前沿探索/多agent协作
+2026-08-19T23:09:57.673 [favorite] rows stored=3 live=13 online=3 offline=0
+2026-08-19T23:09:57.757 [viewport] source=windowVisibility visibility=8 width=1212 height=2075
+2026-08-19T23:10:03.887 [favorite] leaveFavorites favorite_workspaces=3 fetched_workspaces=3 inflight=<none>

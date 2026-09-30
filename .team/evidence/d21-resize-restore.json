@@ -1,0 +1,11 @@
+{
+  "task_id": "d21-resize-restore",
+  "status": "abandoned_superseded",
+  "worker": "w-dev-resize-restore",
+  "dispatched_at": "2026-08-12T15:40:00+08:00",
+  "at": "2026-08-13",
+  "status_reason": "2026-08-13 账目审计发现：本任务自 08-12 派单起只有 intent 没有 evidence，看门狗（.team/watchdog.sh:10-13）因此永久将其算作在途任务。本记录关闭该虚假在途态。",
+  "交付核实": "grep 产品代码：SessionViewModel.kt:317 有 manager.unsubscribe(ref)，但无「subscribe 前记录原尺寸、unsubscribe 后恢复」的实现。判定：未交付。",
+  "后继": "主机 pane 几何这条线由 fix-host-pane-geometry 接手（status=pass_code_verified，服务端侧，未部署）。D-21 的客户端侧恢复逻辑仍缺失。",
+  "缺陷现状": "未修，已按用户 2026-08-13「上面那些问题全部搁置」封存。"
+}

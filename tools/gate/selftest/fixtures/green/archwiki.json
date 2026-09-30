@@ -1,0 +1,9 @@
+{
+  "name": "archwiki",
+  "ok": true,
+  "skipped": true,
+  "skip_reason": "selftest fixture: 缺席跳过路径，绿路场景验证不静默当 pass",
+  "cases": 0,
+  "failures": [],
+  "duration_ms": 1
+}

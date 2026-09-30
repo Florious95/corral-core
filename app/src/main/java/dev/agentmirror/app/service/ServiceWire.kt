@@ -237,11 +237,25 @@ object ServiceWire {
 
     /**
      * Forward one real Activity background-to-foreground edge to the persistent connection.
-     * The manager owns state/in-flight coalescing; a missing manager is a safe no-op during
-     * early process startup before the persistent connection has been assembled.
+     * The manager owns state/in-flight coalescing; a missing manager is a safe no-op here
+     * (MainActivity rebuilds it from the stored pairing before calling this).
+     *
+     * Some published core-conn builds treat RECONNECTING as a resume no-op and keep waiting
+     * on the backoff (up to 30s), so the same edge also crosses it (see [reconnectNow]). That is
+     * idempotent: once resume has dialed, the manager is CONNECTING and the second call no-ops.
      */
     fun onForegroundResume() {
-        manager?.onForegroundResume()
+        val m = manager ?: return
+        m.onForegroundResume()
+        m.onNetworkAvailable()
+    }
+
+    /**
+     * Cut a pending reconnect backoff short (session entry while disconnected): a RECONNECTING
+     * manager waiting on its timer dials now; any other state — including READY — is untouched.
+     */
+    fun reconnectNow() {
+        manager?.onNetworkAvailable()
     }
 
     /**

@@ -1,0 +1,17 @@
+commit 82865233cf2629d2099640a48e947ac3d554c0d3
+Author:     Florious95 <281215401+Florious95@users.noreply.github.com>
+AuthorDate: Sun Aug 16 04:30:55 2026 +0800
+Commit:     Florious95 <281215401+Florious95@users.noreply.github.com>
+CommitDate: Sun Aug 16 04:30:55 2026 +0800
+
+    服务端：二级菜单实时流，pane 标题原样透传
+    
+    契约 060。数据源 tmux list-panes -a，推给客户端的每行带原样 pane 标题字符串 +
+    结构字段 session_name/window_index/window_name。标题一个字符都不解析。
+    
+    四个具名测试（leader 自跑，不采信席位自报）：
+      TestLevel2TitleVerbatim          标题逐字节原样透传，含 ◐/✳ 前缀
+      TestLevel2IdentityStructural     身份只来自结构字段，改标题不影响身份
+      TestLevel2StopsWhenNoSubscriber  无订阅者时零 tmux 调用（工程红线①空闲 CPU 趋近 0）
+      TestLevel2NoTmuxAttach           命令集合里永不出现 attach（不参与尺寸谈判）
+    go test ./... 全套通过。

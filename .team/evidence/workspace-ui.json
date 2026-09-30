@@ -1,0 +1,1 @@
+{"task_id":"workspace-ui","status":"pass","acceptance_results":[{"cmd":"bash -lc cd app && ./gradlew -q :app:testDebugUnitTest --tests *Workspace*","exit":0}],"result_id":"res_eb0dcbd3e4a0","notes":"两级导航+五值徽章 15 测；delta 空工作区剪除/会话迁居/权威值纠正等边界沉淀入基底；路由已挂载，会话页占位待 session-ui 替换。"}

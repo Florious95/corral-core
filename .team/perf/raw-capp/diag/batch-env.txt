@@ -1,0 +1,5 @@
+started_at=2026-08-22 16:00:01
+uptime=16:00  up 1 day, 20:20, 14 users, load averages: 9.57 34.80 71.94
+apk_a=aecdbd461deece5daec8f81c70af8e54
+apk_b=3ebc9c55703c780c842a2f410b85034e
+port=9325 gpu=host

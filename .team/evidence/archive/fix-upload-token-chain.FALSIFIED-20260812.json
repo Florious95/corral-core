@@ -1,0 +1,41 @@
+{
+  "task_id": "fix-upload-token-chain",
+  "status": "pass",
+  "worker": "w-fix-upload2",
+  "date": "2026-08-12",
+  "summary": "图片上传 401（D-22）token 链路全链取证+验收。fix-upload-bearer 已在工作树实现完整链路（Bearer 头 + 全程 token 参数下传），本席逐环排查验证：ServiceWire.currentConfig()?.token → SessionRoute.createSessionViewModel → SessionViewModel.uploadToken → HttpUrlConnectionUploader.upload(base, token, attachment) → Authorization: Bearer。结论：运行时 token 不可能为 null——ConnectionConfig.token 为非空 String（ConnectionManager.kt:40），两个生产构造点都传 PairingConfig.token（配对校验非空）；createSessionViewModel 在 config 未注入时经 manager() 抛 IllegalStateException → getOrNull() ?: return null → 会话页显示 ConnectionNotReady，根本不会构造出可上传的 VM。故 token 为 null 的上传路径在现工作树不存在（leader 假设的『token 可能为 null』对应修复前的缺口，已由本链路闭合）。",
+  "root_cause_chain": [
+    "1. 修复前缺口：HttpUrlConnectionUploader.upload(baseUrl, attachment) 不接收 token，POST /upload 无 Authorization 头 → 服务端 upload.go（fix-upload-auth 已要求 Bearer，缺头一律 401）→ 全部 401。",
+    "2. fix-upload-bearer 修复：AttachmentUploader.upload 增加 token 参数；ServiceWire 暴露 internal currentConfig()（token 单一事实源，与 setConfig 同源）；SessionRoute.createSessionViewModel 以 ServiceWire.currentConfig()?.token 下传；SessionViewModel 增 uploadToken 构造参数并在 uploadAttachment 传给 uploader；uploader 非空/非空白才上送 Authorization: Bearer。",
+    "3. 逐环空指针论证：ConnectionConfig(url: String, token: String) 为非空字段 → config.token 永不为 null；ServiceWire.setConfig 仅接受 ConnectionConfig 实例（PersistentConnection.kt:99 传 PairingConfig.token，配对时 QrPayloadParser/手填校验 token 非空）；currentConfig() 为 null 仅当 config 从未注入，而此时 ServiceWire.manager() 抛 IllegalStateException → createSessionViewModel 返回 null → 会话页 ConnectionNotReady，无上传入口。",
+    "4. token 只上行请求头、不回显、不落日志（协议 §9）：uploader 内 token 仅 setRequestProperty；Failure 文案固定不含 token；PairingConfig/QrPayload toString 均 redacted。"
+  ],
+  "chain_links_verified": [
+    "ServiceWire.currentConfig() -> ConnectionConfig? ：internal，与 @Volatile config 同源，setConfig 注入（ServiceWire.kt:146）",
+    "SessionRoute.createSessionViewModel -> SessionViewModel(uploadToken = ServiceWire.currentConfig()?.token)（SessionRoute.kt:136）",
+    "SessionViewModel.uploadAttachment -> uploader.upload(base, uploadToken, attachment)（SessionViewModel.kt:295）",
+    "HttpUrlConnectionUploader.upload(base, token, attachment) -> !token.isNullOrBlank() 时 conn.setRequestProperty(\"Authorization\", \"Bearer $token\")（HttpUrlConnectionUploader.kt:69-71）",
+    "服务端 upload.go serveUpload -> uploadBearerToken + tokenValidator.ValidateToken，缺/错头 401（fix-upload-auth 已验收入库）"
+  ],
+  "tests": {
+    "acceptance_unit": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest -> BUILD SUCCESSFUL，372 用例 0 失败 0 错误（session 包 45 + service 包 49 全绿：HttpUrlConnectionUploaderTest 12、SessionViewModelTest 25、SessionUploadBaseWiringTest 2、AttachmentButtonTest 1、AttachmentNameTest 4、KeyBarFitTest 1；service 各测试类全绿）",
+    "acceptance_archwiki": "python3 tools/archwiki/build_wiki.py --check -> 结果：通过（exit 0），19 包 31 条依赖边，T1-1/T1-2/T3-1..4 全 PASS",
+    "bearer_header_anchor": "HttpUrlConnectionUploaderTest.upload_sendsBearerAuthorizationHeader 断言 Authorization == 'Bearer tok'；upload_nullOrBlankToken_omitsAuthorizationHeader 断言 null/空白不上送头（交服务端明确拒绝）",
+    "token_flow_anchors": "SessionViewModelTest.attachmentPathInsertedAtCursor 断言 uploader.lastToken == 'vm-test-token'；SessionUploadBaseWiringTest 断言 vm.uploadToken == 'tok-bearer'（ServiceWire.setConfig 注入后下传）"
+  },
+  "write_scope_check": {
+    "in_scope": [
+      "app/app/src/main/java/dev/agentmirror/app/service/ServiceWire.kt（currentConfig() internal 取配置，token 单一事实源）",
+      "app/app/src/main/java/dev/agentmirror/app/session/HttpUrlConnectionUploader.kt（Bearer 头）",
+      "app/app/src/main/java/dev/agentmirror/app/session/SessionModels.kt（AttachmentUploader.upload 增 token 参数）",
+      "app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt（createSessionViewModel 下传 token）",
+      "app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt（uploadToken 构造参数 + upload 下传）",
+      "app/app/src/test/java/dev/agentmirror/app/session/HttpUrlConnectionUploaderTest.kt（Bearer 头断言）",
+      "app/app/src/test/java/dev/agentmirror/app/session/SessionUploadBaseWiringTest.kt（token 接线断言）",
+      "app/app/src/test/java/dev/agentmirror/app/session/SessionViewModelTest.kt（token 流到 uploader 断言）"
+    ],
+    "note": "工作树另含他席在途改动（SessionScreen.kt / TermViewPresenter.kt 等的 fix-ime-resize / fix-terminal-resize-cluster），本席未触碰，未纳入本证据；禁 commit/push 已遵守。"
+  },
+  "note": "本席未新增生产代码——工作树已含完整 fix-upload-bearer 链路（客户端侧此前未立证据，w-fix-upload-bearer 已退役），本席职责为逐环取证验证 + 跑验收门禁 + 立证据。验证结论：链路无 null-token 路径，Bearer 头上送有测试锚点，验收两项全绿。残余风险：若用户在某会话在屏时重配（设置→重新配对），旧 VM 持有旧 token，但 setConfig 变更会 releaseManager 断开旧连接，会话镜像本身失效，上传失败可见（非静默），属既有 baseUrl 同构的捕获即快照语义，超出本条 write_scope 不处置。",
+  "leader_note": "交件即退役。"
+}

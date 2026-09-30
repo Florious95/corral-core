@@ -59,7 +59,7 @@ val brandPrimary: Color = Color(0xFF1B2A4A)
 val brandBackground: Color = Color(0xFF0D1626)
 
 // ---- 深色套（主人格）：近黑深蓝底 + 去饱和浅蓝主色，表面用蓝灰阶拉开容器层次 ----
-private val DarkColorScheme = darkColorScheme(
+internal val rootDarkColorScheme = darkColorScheme(
     primary = Color(0xFF9DBDFF), // 去饱和浅蓝：深底上可读且不刺眼
     onPrimary = Color(0xFF002F67),
     primaryContainer = Color(0xFF1E4487),
@@ -96,7 +96,7 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 // ---- 浅色套：白底 + 压深品牌蓝（可读性优先），容器用极浅蓝灰阶 ----
-private val LightColorScheme = lightColorScheme(
+internal val rootLightColorScheme = lightColorScheme(
     primary = Color(0xFF2F5DA8), // 品牌蓝压深：白底上达 AA 对比
     onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFD8E2FF),
@@ -135,7 +135,7 @@ private val LightColorScheme = lightColorScheme(
 // ---- 字阶 token（018 §一.3 信息层级：字号/字重分级的唯一来源） ----
 // 相对 M3 默认整体收紧标题字重（SemiBold）：本产品页面信息密度高（路径/会话名/徽章），
 // 主层级靠字重而非超大字号，避免手机窄屏上大标题挤压内容区。
-private val AppTypography = Typography(
+internal val rootTypography = Typography(
     titleLarge = TextStyle(
         fontWeight = FontWeight.SemiBold,
         fontSize = 20.sp,
@@ -195,7 +195,7 @@ private val AppTypography = Typography(
 val MonoFontFamily: FontFamily = FontFamily.Monospace
 
 // ---- 圆角 token（018 §一.1）：卡片 14、输入/行内组件 10、小组件 6 ----
-private val AppShapes = Shapes(
+internal val rootShapes = Shapes(
     extraSmall = RoundedCornerShape(6.dp),
     small = RoundedCornerShape(10.dp),
     medium = RoundedCornerShape(14.dp),
@@ -242,11 +242,12 @@ fun AgentMirrorTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    // 色板 / 字阶 / 圆角来自当前界面风格；液态玻璃恒等委托到上面三份 root* 值。
+    val suite = ThemeRegistry.resolve(LocalThemeSuite.current.id, ThemeContext(isDark = darkTheme))
     MaterialTheme(
-        colorScheme = colorScheme,
-        typography = AppTypography,
-        shapes = AppShapes,
+        colorScheme = suite.colors.rootMaterialScheme,
+        typography = suite.typography.rootMaterial,
+        shapes = suite.geometry.rootMaterialShapes,
         content = content,
     )
 }

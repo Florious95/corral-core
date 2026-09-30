@@ -1,0 +1,6 @@
+{
+  "task_id": "d21-resize-restore",
+  "seat": "w-dev-resize-restore",
+  "intent": "D-21 退出会话恢复终端原始尺寸：subscribe 前记录原尺寸，unsubscribe 后恢复",
+  "dispatched_at": "2026-08-12T15:40:00+08:00"
+}

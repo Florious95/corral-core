@@ -1,0 +1,7 @@
+app/app/src/main/java/dev/agentmirror/app/workspace/Level2LiveStreamScreen.kt
+app/app/src/main/java/dev/agentmirror/app/workspace/Level2ViewModel.kt
+app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2LiveStreamRenderTest.kt
+app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2NavigationIdentityTest.kt
+app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2StreamLifecycleTest.kt
+server/internal/api/level2.go
+server/internal/api/level2_test.go

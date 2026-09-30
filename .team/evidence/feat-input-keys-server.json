@@ -1,0 +1,18 @@
+{
+  "task_id": "feat-input-keys-server",
+  "status": "pass",
+  "worker": "w-input-keys",
+  "date": "2026-08-09",
+  "summary": "R-1 特殊键服务端全链（017 裁定实装）。契约先行：docs/protocol.md input 帧增可选 keys 字段——闭集 esc/ctrl_c/tab/up/down/left/right，text 与 keys 一帧至多其一（两者都有判协议错误），keys 注入不附加回车（快捷键条语义=按一下那个键）；前向兼容增量不 bump 版本，旧客户端不发 keys 行为完全不变。protocol 包：Key 闭集枚举+Input.Keys 模型+校验+黄金夹具 input_keys.json（字节冻结供 Kotlin 共享消费）。bridge 包：SendKeys 命名键注入（esc→Escape/ctrl_c→C-c/tab→Tab/up→Up…，单次 send-keys 无 Enter，ErrInvalidKey 前置守卫），与 Inject 同款决定性 ack（003 发送必达）。ws_handler handleInput 接 keys 分支（末步施工，input_ack 语义不变）。R-2 服务端零新码，protocol.md 标注 ?2004 括号粘贴退化风险。",
+  "tests": {
+    "acceptance": "bash -lc 'cd server && go test ./internal/protocol/... ./internal/bridge/... ./internal/api/...' -> exit 0（leader 复跑实证）",
+    "fixture_freeze": "既有夹具字节零改动（git diff testdata/ 仅新增 input_keys.json，leader 核实）；golden_test 覆盖新夹具",
+    "bridge_argv": "bridge_test 假 tmux 断言命名键 argv 精确形状（无 -l、无 Enter 追加）；api_tmux_test 集成断言 keys 分支"
+  },
+  "write_scope_check": {
+    "in_scope": ["docs/protocol.md", "server/internal/protocol/{keys,frames,validate}.go + testdata/input_keys.json + golden_test/json_test", "server/internal/bridge/{bridge,tmux,doc}.go + bridge_test", "server/internal/api/{ws_handler.go,api_tmux_test.go}"],
+    "deviation": "无越权；ws_handler 按互斥约束末步施工，未与 test-aggregate-status 席位撞файл"
+  },
+  "note": "契约要点冻结：text/keys 互斥、keys 不附加回车、闭集七键、不 bump 版本。App 侧消费任务 feat-input-keys-app 依赖自此满足（fix-app-nav 亦已落库）。",
+  "leader_note": "leader 复跑验收 exit 0；夹具冻结/文档契约/互斥语义三项核实。席位未写证据文件（账面≠实际惯犯形态），leader 代写留痕。交件即退役。"
+}

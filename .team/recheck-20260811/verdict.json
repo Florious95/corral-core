@@ -1,0 +1,331 @@
+{
+  "recheck_id": "recheck-settle-20260811",
+  "rechecked_at": "2026-08-11T00:50:00+08:00",
+  "rechecker": "w-recheck-settle",
+  "summary": "6 案结账复跑完成：5 案 pass，1 案 red（perf-thresholds-enforce）。positive control 全绿：gradle UP-TO-DATE 陷阱触发并被 --rerun-tasks 绕过（345 app + 67 terminal 全真跑、XML 全 fresh、5 个新红测文件计数非零），go 全程 -count=1 禁缓存，e2e 隔离套件零残留且生产 :9900 未触碰。",
+  "positive_control": {
+    "app_tests_run": 345,
+    "terminal_tests_run": 67,
+    "go_packages_run": [
+      "internal/api",
+      "internal/pairing"
+    ],
+    "gradle_up_to_date_trap": {
+      "triggered": true,
+      "evidence": "第一次 -q 无参运行 rc=0 但全部 51 个测试 XML mtime=23:43 早于本次启动 00:07:55 ⇒ UP-TO-DATE 未真跑；--rerun-tasks 强制真执行后 42 app + 9 terminal XML 全部 fresh（00:08:20），345+67 用例 0 失败 0 skip",
+      "resolved_by": "--rerun-tasks"
+    },
+    "new_red_test_files": {
+      "PairingUxTest": {"tests": 2, "failures": 0, "fresh": true},
+      "CameraPermissionCardTest": {"tests": 2, "failures": 0, "fresh": true},
+      "AttachmentButtonTest": {"tests": 1, "failures": 0, "fresh": true},
+      "AttachmentNameTest": {"tests": 4, "failures": 0, "fresh": true},
+      "TermGestureDirectionTest": {"tests": 1, "failures": 0, "fresh": true}
+    },
+    "go_focused_tests": {
+      "TestDiscoveryRecoveryReachesConnectedClientFromStartFailure": "=== RUN + --- PASS (0.05s), -count=1",
+      "TestUploadAuthentication": "missing/wrong/valid three subtests all --- PASS",
+      "TestUploadDirectoryLimit": "--- PASS",
+      "TestUploadTooLarge": "--- PASS"
+    },
+    "e2e_isolation": "isolated high port 62792, isolated TMUX_TMPDIR, production daemon pid 3393 / :9900 untouched, zero-residue verified",
+    "fresh_hard_gated_baseline": "e2e/artifacts/fix-upload-auth/baseline.json mode=hard_gated hard_numeric_thresholds=14 all pass"
+  },
+  "cases": [
+    {
+      "id": "fix-recovery-baseline",
+      "status": "pass",
+      "tests": [
+        {
+          "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/api/...\"'",
+          "rc": 0,
+          "stdout_tail": "ok github.com/agentmirror/agentmirror/internal/api 5.180s"
+        },
+        {
+          "argv": "bash -lc 'cd server && go test ./internal/api/...'",
+          "rc": 0,
+          "stdout_tail": "ok github.com/agentmirror/agentmirror/internal/api 5.180s"
+        }
+      ],
+      "positive_control": {
+        "focused_test": "TestDiscoveryRecoveryReachesConnectedClientFromStartFailure === RUN + --- PASS (0.05s), -count=1 -v",
+        "skip_removed": true,
+        "source": "discovery_failure_test.go has no t.Skip/Skipf/SkipNow",
+        "full_pkg_runs": "api 66 === RUN lines"
+      },
+      "goal_checks": [
+        {
+          "claim": "TestDiscoveryRecoveryReachesConnectedClientFromStartFailure 的 t.Skip 已解除且单跑 PASS",
+          "verdict": "met",
+          "evidence": "focused -run -v: === RUN / --- PASS (0.05s); source free of t.Skip"
+        },
+        {
+          "claim": "首个成功扫描不再被当基线、recovery 推 delta（空 seq-1 listing 作 diff 基线）",
+          "verdict": "met",
+          "evidence": "server.go publishListing: prev==nil && prevSeq==0 才建基线；prev==nil 时对空 seq-1 做 diff，seq 推进并 fanout delta"
+        },
+        {
+          "claim": "空 listing 不再静默滞留（红线5 失败可见）",
+          "verdict": "met",
+          "evidence": "recovery 经 delta 通告；connected-client 断言通过"
+        }
+      ],
+      "gaps": [],
+      "suggested_commit_files": [
+        "server/internal/api/server.go",
+        "server/internal/api/discovery_failure_test.go"
+      ]
+    },
+    {
+      "id": "fix-dogfood-pairing-ux",
+      "status": "pass",
+      "tests": [
+        {
+          "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'",
+          "rc": 0,
+          "stdout_tail": "quiet; forced --rerun-tasks: 345 tests 0 failures, PairingUxTest 2 tests fresh green"
+        },
+        {
+          "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/pairing/...\"'",
+          "rc": 0,
+          "stdout_tail": "ok github.com/agentmirror/agentmirror/internal/pairing 0.692s (26 RUN lines)"
+        }
+      ],
+      "positive_control": {
+        "app_xml": "42 files fresh, 345 tests 0 fail",
+        "PairingUxTest": "manualToken_isAbsentFromVisibleTextNodes + workspaceSettings_reachesSingleProfileRepair present, passed, fresh"
+      },
+      "goal_checks": [
+        {
+          "claim": "D-07 token 不出现在任何可见文本节点（有断言）",
+          "verdict": "met",
+          "evidence": "PairingUxTest.manualToken_isAbsentFromVisibleTextNodes: manualToken='visible-secret-sentinel'，断言 Text/EditableText 不含它的节点数=0"
+        },
+        {
+          "claim": "D-14 设置页重配入口从主导航真的可达",
+          "verdict": "met",
+          "evidence": "WorkspaceScreen TopBar '设置' -> onOpenSettings -> SettingsScreen '重新配对' -> showPairing=true；PairingUxTest.workspaceSettings_reachesSingleProfileRepair 点击链断言 nav.showPairing"
+        },
+        {
+          "claim": "谎称'设置里有重配按钮'的注释已改真",
+          "verdict": "met",
+          "evidence": "源码无残留该谎注（仅 docs/next-round-plan 历史描述）；AgentMirrorApp 注释现为 '设置页：单档模型只提供重配' / '顶栏设置钮进入真实设置页，再选择重新配对'"
+        },
+        {
+          "claim": "D-11 token 吊销与轮换说明补齐",
+          "verdict": "met",
+          "evidence": "server/README.md '配对 token 吊销与轮换' + docs/protocol.md §9.1：自动 token 文件 0600、删文件重启全量吊销、显式值优先级与轮换"
+        }
+      ],
+      "gaps": [],
+      "suggested_commit_files": [
+        "app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt",
+        "app/app/src/main/java/dev/agentmirror/app/MainNavState.kt",
+        "app/app/src/main/java/dev/agentmirror/app/SettingsScreen.kt",
+        "app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt",
+        "app/app/src/test/java/dev/agentmirror/app/PairingUxTest.kt",
+        "server/README.md",
+        "docs/protocol.md"
+      ]
+    },
+    {
+      "id": "fix-dogfood-upload-media",
+      "status": "pass",
+      "tests": [
+        {
+          "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'",
+          "rc": 0,
+          "stdout_tail": "quiet; forced --rerun-tasks: 345 tests 0 failures; AttachmentNameTest 4, AttachmentButtonTest 1, CameraPermissionCardTest 2 all fresh green"
+        }
+      ],
+      "positive_control": {
+        "AttachmentNameTest": "tests=4 fresh, covers missing-extension/Chinese/duplicate/fallback",
+        "AttachmentButtonTest": "tests=1 fresh, plusMenu_exposesReachableCameraAction",
+        "CameraPermissionCardTest": "tests=2 fresh, permanentlyDenied shows reason+settings, secondDenial classified permanent"
+      },
+      "goal_checks": [
+        {
+          "claim": "D-03 文件名取真实 displayName 并推导扩展名",
+          "verdict": "met",
+          "evidence": "SessionScreen.queryDisplayName 用 ContentResolver 查真实 displayName（非 lastPathSegment 数字 ID）；attachmentFileName 保留 displayName、缺扩展名用 MIME 补；单测覆盖无扩展名/中文名/重名/缺失回退"
+        },
+        {
+          "claim": "D-02 拍照直传入口存在",
+          "verdict": "met",
+          "evidence": "附件菜单 '拍照'/'相册' 分流，拍照经 TakePicture 预建 MediaStore camera-<ts>.jpg 入上传链；AttachmentButtonTest 断言点击可达"
+        },
+        {
+          "claim": "D-01 权限二次拒绝后可见原因与去设置引导",
+          "verdict": "met",
+          "evidence": "NoPermissionCard 区分 Requestable/PermanentlyDenied（shouldShowRequestPermissionRationale）；永久拒绝文案 '相机权限已被永久拒绝，请到系统设置中开启…' + ACTION_APPLICATION_DETAILS_SETTINGS；单测断言文案与动作"
+        }
+      ],
+      "gaps": [],
+      "suggested_commit_files": [
+        "app/app/src/main/java/dev/agentmirror/app/session/SessionScreen.kt",
+        "app/app/src/main/java/dev/agentmirror/app/pairing/PairingScreen.kt",
+        "app/app/src/test/java/dev/agentmirror/app/session/AttachmentNameTest.kt",
+        "app/app/src/test/java/dev/agentmirror/app/session/AttachmentButtonTest.kt",
+        "app/app/src/test/java/dev/agentmirror/app/pairing/CameraPermissionCardTest.kt"
+      ]
+    },
+    {
+      "id": "fix-dogfood-term-ux",
+      "status": "pass",
+      "tests": [
+        {
+          "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'",
+          "rc": 0,
+          "stdout_tail": "quiet; forced --rerun-tasks: 345 tests 0 failures; TermGestureDirectionTest 1 + WorkspaceViewModelTest 15 fresh"
+        },
+        {
+          "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :terminal:test\"'",
+          "rc": 0,
+          "stdout_tail": "quiet; forced --rerun-tasks: 67 tests 0 failures; CharWidthTest 6 + WideCharTest 10 fresh"
+        }
+      ],
+      "positive_control": {
+        "TermGestureDirectionTest": "fingerDragDownScrollsIntoHistory present, passed, fresh",
+        "WorkspaceViewModelTest": "connectingWithNoWorkspaces_isLoadingInsteadOfEmpty present, passed",
+        "CharWidthTest": "emojiIsDoubleWidth present, passed",
+        "WideCharTest": "emojiOccupiesTwoCells present, passed"
+      },
+      "goal_checks": [
+        {
+          "claim": "D-04 滚动方向断言",
+          "verdict": "met",
+          "evidence": "TermSurfaceView.kt:100 注释说明 GestureDetector distanceY 符号并翻转 deltaLines=-dy/lineHeightPx；TermGestureDirectionTest 用真实 MotionEvent（下拖 20f->70f）断言 !isFollowingBottom"
+        },
+        {
+          "claim": "D-08 加载态状态机断言",
+          "verdict": "met",
+          "evidence": "WorkspaceUiState.isLoading=CONNECTING&&workspaces.isEmpty；WorkspaceScreen 分支 isLoading->LoadingContent、isEmpty->EmptyGuideContent；单测断言 isLoading"
+        },
+        {
+          "claim": "D-09 emoji 宽度网格断言",
+          "verdict": "met",
+          "evidence": "CharWidth 将 U+26A0/2705/274C 按双列；WideCharTest.emojiOccupiesTwoCells feed '✅ ❌ ' 断言主格+续格宽 2/0 后才是空格"
+        }
+      ],
+      "gaps": [],
+      "suggested_commit_files": [
+        "app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt",
+        "app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceViewModel.kt",
+        "app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt",
+        "app/app/src/test/kotlin/dev/agentmirror/app/termview/TermGestureDirectionTest.kt",
+        "app/app/src/test/kotlin/dev/agentmirror/app/workspace/WorkspaceViewModelTest.kt",
+        "app/terminal/src/main/kotlin/dev/agentmirror/terminal/CharWidth.kt",
+        "app/terminal/src/test/kotlin/dev/agentmirror/terminal/CharWidthTest.kt",
+        "app/terminal/src/test/kotlin/dev/agentmirror/terminal/WideCharTest.kt"
+      ]
+    },
+    {
+      "id": "fix-upload-auth",
+      "status": "pass",
+      "tests": [
+        {
+          "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/api/... ./internal/pairing/...\"'",
+          "rc": 0,
+          "stdout_tail": "ok internal/api 5.180s; ok internal/pairing 0.692s; focused TestUploadAuthentication(3 subtests)+TestUploadTooLarge+TestUploadDirectoryLimit all PASS"
+        },
+        {
+          "argv": "bash -lc 'env -u TEAM_AGENT_* bash e2e/api-user-scenarios.sh'",
+          "rc": 0,
+          "stdout_tail": "api-user-scenarios: PASS; baseline: e2e/artifacts/fix-upload-auth/baseline.json; report: .../REPORT.md"
+        }
+      ],
+      "positive_control": {
+        "go_focused": "TestUploadAuthentication missing/wrong/valid 三分支全 PASS，响应不回显凭据",
+        "e2e_baseline": "fix-upload-auth/baseline.json status=pass hard_numeric_thresholds=14 0 fail，required_numeric_measurements pass",
+        "e2e_cleanup": "8 项零残留全 true，out_of_scope_tmux_targets=0，daemon.log 只含 token_source=explicit 无 token 值",
+        "zero_auth_bug_confirmed": "git show HEAD:upload.go 的 serveUpload 无任何 token 校验 → 真零鉴权，已修"
+      },
+      "goal_checks": [
+        {
+          "claim": "docs/protocol.md 先有该端点鉴权契约再实现",
+          "verdict": "met",
+          "evidence": "§8 现含 'Authorization: Bearer <pairing-token>…与 WS 握手相同 TokenValidator…401 + code: unauthorized + 非空 reason + 不回显 token'；upload.go 实现与之一致（Bearer 解析 + ValidateToken + WWW-Authenticate）。同一未提交变更集内 doc/代码时序无法单独证明，但契约与实现自洽且复用现有 WS token 未发明新头"
+        },
+        {
+          "claim": "未授权三分支断言齐全",
+          "verdict": "met",
+          "evidence": "api_test.go TestUploadAuthentication 表驱动 missing 401/0、wrong 401/0、valid 200/1；e2e scenarios upload_authentication 同三分支全 pass"
+        },
+        {
+          "claim": "token 不落日志",
+          "verdict": "met",
+          "evidence": "daemon.log 无 token 值；upload.go 日志行无 token；uploadBearerToken 只返回固定 token-free reason；e2e 脚本末尾扫描全部产物确认 token 未泄露"
+        },
+        {
+          "claim": "D-13 上传目录上限/超限拒绝 + README 说明",
+          "verdict": "met",
+          "evidence": "options.go 1 GiB 上限；server.go uploadMu 串行化配额检查；upload.go 超限 507 storage_limit_exceeded；TestUploadDirectoryLimit 断言拒绝且目录未变；server/README.md 说明"
+        }
+      ],
+      "gaps": [],
+      "suggested_commit_files": [
+        "server/internal/api/upload.go",
+        "server/internal/api/server.go",
+        "server/internal/api/options.go",
+        "server/internal/api/api_test.go",
+        "docs/protocol.md",
+        "server/README.md",
+        "e2e/api-user-scenarios.sh",
+        "e2e/artifacts/fix-upload-auth/"
+      ]
+    },
+    {
+      "id": "perf-thresholds-enforce",
+      "status": "red",
+      "tests": [
+        {
+          "argv": "bash -lc 'env -u TEAM_AGENT_* bash e2e/api-user-scenarios.sh'",
+          "rc": 0,
+          "stdout_tail": "api-user-scenarios: PASS; baseline: e2e/artifacts/fix-upload-auth/baseline.json"
+        },
+        {
+          "argv": "bash -lc 'python3 -c \"import json;d=json.load(open(\\\"e2e/artifacts/test-api-user-scenarios-perf/baseline.json\\\"));assert d[\\\"performance\\\"][\\\"hard_numeric_thresholds\\\"],\\\"门限未落盘\\\"\"'",
+          "rc": 1,
+          "stdout_tail": "Traceback: AssertionError: 门限未落盘"
+        }
+      ],
+      "positive_control": {
+        "fresh_hard_gated_baseline": "fix-upload-auth/baseline.json hard_numeric_thresholds=14 all pass（5 时延 + 三态 CPU/派生/后代 + 3 RSS）",
+        "threshold_gate_path": "脚本 1733-1962：add_threshold 记录 failures；末尾 python 对每个 fail gate 打印 'PERFORMANCE THRESHOLD FAIL: metric: measured=X unit, threshold COMP limit unit' 并 exit 1，set -euo pipefail 传播",
+        "null_metrics_resolved": "large_output 30.6MB/s、upload p50 1.884/p95 3.005 均非空（committed baseline 已非空）"
+      },
+      "goal_checks": [
+        {
+          "claim": "五条时延门限与静默经济三态门限真写进脚本",
+          "verdict": "met",
+          "evidence": "脚本 1747-1768 逐条 add_threshold：pair<=5/subscribe<=400/output<=150/scrollback<=150/reconnect<=400 ms；三态 CPU/spawns/descendants + 每态 RSS<=20480 KiB"
+        },
+        {
+          "claim": "门限落进 baseline.json.performance.hard_numeric_thresholds",
+          "verdict": "met",
+          "evidence": "fresh fix-upload-auth/baseline.json 落盘 14 条全 pass；但 acceptance #2 读 test-api-user-scenarios-perf/baseline.json 恒为 [] ⇒ 实现正确但落点错，acceptance 红"
+        },
+        {
+          "claim": "large_output 与 upload 两项基线不再为 null",
+          "verdict": "met",
+          "evidence": "committed 基线已非空（28.1MB/s、p50 2.64/p95 3.43）；fresh 硬门限基线 30.6MB/s、p50 1.884/p95 3.005"
+        },
+        {
+          "claim": "超门限真的 exit 非 0 并打印实测 vs 门限",
+          "verdict": "met",
+          "evidence": "末尾 python gate 对 fail 逐条打印 measured vs threshold 并 SystemExit(1)；本轮全过 exit 0，但失败路径存在且无条件"
+        }
+      ],
+      "gaps": [
+        "acceptance #2 路径错配：脚本 ART=e2e/artifacts/fix-upload-auth，硬门限基线落 fix-upload-auth/baseline.json；acceptance #2 硬编码读 test-api-user-scenarios-perf/baseline.json（无脚本写入）⇒ 即使重跑套件该 acceptance 也确定 rc=1。窄修三选一：(a) acceptance #2 改指 fix-upload-auth/baseline.json；(b) 脚本同时把硬门限基线写/拷到 test-api-user-scenarios-perf/；(c) ART 恢复 test-api-user-scenarios-perf 由 fix-upload-auth 读那里。实现本身正确，仅落点错。",
+        "跨案耦合：同一 e2e/api-user-scenarios.sh 被 fix-upload-auth 与 perf-thresholds-enforce 共用，一方把 ART 重指即破坏另一方的 acceptance。leader 收口前需调和两案 artifact 目录契约。"
+      ],
+      "suggested_commit_files": [
+        "e2e/api-user-scenarios.sh",
+        "e2e/artifacts/test-api-user-scenarios-perf/baseline.json",
+        "e2e/artifacts/fix-upload-auth/baseline.json",
+        "e2e/artifacts/fix-upload-auth/REPORT.md"
+      ]
+    }
+  ]
+}

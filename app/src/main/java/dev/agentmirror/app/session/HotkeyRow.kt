@@ -17,6 +17,7 @@ package dev.agentmirror.app.session
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,7 +46,9 @@ import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.kyant.shapes.RoundedRectangle
 import dev.agentmirror.app.ui.components.glassControl
 import dev.agentmirror.app.ui.components.rememberPressProgress
+import dev.agentmirror.app.ui.components.ruledSurface
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 import dev.agentmirror.app.ui.theme.Radii
 import kotlin.math.roundToInt
 
@@ -135,6 +139,11 @@ private fun SourceHotkeyButtons(onKeyToken: (String) -> Unit, modifier: Modifier
 @Composable
 private fun ArrowClusterTrack() {
     val p = LocalAppPalette.current
+    // 直角风格没有簇轨道，只保留占位（测量不变）。
+    if (!LocalThemeSuite.current.surfaces.isGlass) {
+        Box(Modifier)
+        return
+    }
     Box(
         Modifier.glassControl(
             backdrop = emptyBackdrop(),
@@ -146,6 +155,10 @@ private fun ArrowClusterTrack() {
 
 @Composable
 private fun HotKey(key: KeySpec, onClick: () -> Unit) {
+    if (!LocalThemeSuite.current.surfaces.isGlass) {
+        RuledHotKey(key, onClick)
+        return
+    }
     val p = LocalAppPalette.current
     val source = sessionDockSourceTokens()
     val error = MaterialTheme.colorScheme.error
@@ -184,6 +197,48 @@ private fun HotKey(key: KeySpec, onClick: () -> Unit) {
                 fontWeight = FontWeight.Normal,
             ),
             color = fg,
+            maxLines = 1,
+        )
+    }
+}
+
+/** 直角键帽：不透明底 + 1dp 发丝边（^C 为猩红边），几何与 testTag 盒与液态键帽完全一致。 */
+@Composable
+private fun RuledHotKey(key: KeySpec, onClick: () -> Unit) {
+    val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val danger = key.kind == KeyKind.Interrupt
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag("hotkey-${key.token}")
+            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .then(if (key.kind == KeyKind.Arrow) Modifier.padding(vertical = ArrowClusterInset) else Modifier)
+                .ruledSurface(
+                    fill = when {
+                        pressed && danger -> p.keycapDangerPressed
+                        pressed -> p.keycapPressed
+                        else -> p.keycapBackground
+                    },
+                    stroke = if (danger) p.keycapDangerBorder else p.keycapBorder,
+                    strokeWidth = kit.geometry.hairline,
+                ),
+        )
+        Text(
+            key.label,
+            style = TextStyle(
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+            ),
+            color = if (danger) p.keycapDangerText else p.keycapText,
             maxLines = 1,
         )
     }

@@ -1,0 +1,1 @@
+{"task_id":"fix-viewport-restore-d38-probe","dispatched_to":"w-d38-probe","base":".team/nodes/fix-viewport-restore-d38/CLAUDE.md","at":"2026-08-14","note":"回炉流程步骤2/3：审查席从回退的 diff 反推根因产出探针，并在回退后 HEAD 上验证命中"}

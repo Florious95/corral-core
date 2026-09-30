@@ -1,0 +1,32 @@
+{
+  "task_id": "fix-keybar-d37",
+  "status": "pass",
+  "worker": "w-d36d37-dev",
+  "date": "2026-08-12",
+  "summary": "D-37 特殊键条不支持连按（Esc Esc / Esc Ctrl-C）。根因（research-keybar-rapid.md）：SessionViewModel 用单一 InputStatus.Sending 闸合并草稿+键，sendKey 在途时第二键被直接 return 吞掉、根本不发帧。服务端单 readLoop 串行 + WS 保序保证连发帧按序注入 tmux（零服务端改动）。修复按 MVP 三步：①conn 层 ConnectionManager.sendInput/sendInputKeys 返回类型 Boolean → Long?（null=不可发送，非 null=req_id，ack 精确路由的前提）；②VM 层 sendKey 去掉 Sending 闸改 fire-and-forget（req_id 记入 pendingKeys，按 req_id 查表路由键回执，ok 短暂 Sent / 失败 Failed；草稿在途时不覆盖其状态），sendDraft 保留 Sending 闸并记 pendingDraftReqId，pendingSendIsKey 标志退役；③UI 层 SessionScreen KeyBar enabled 改按 connectionState==READY（不再因发送在途置灰）。",
+  "root_cause_chain": [
+    "1. SessionViewModel.sendKey（289）`if (inputStatus is InputStatus.Sending) return` 发送闸——第一键置 Sending，连按第二键被吞掉不发帧",
+    "2. conn 层 sendInputKeys 返回 Boolean 不返回 req_id，VM 无法把 ack 路由到具体那次发送——只能用「在途最多一个」规避歧义，键条连按被闸卡死"
+  ],
+  "red_tests": [
+    "SessionViewModelTest.kt（测试席落盘 2 条）：rapidDoubleEscEmitsTwoKeyFramesAndNotStuckInSending（连按两 Esc → 两 keys 帧都发、req_id 独立、不被 Sending 卡死）、rapidDoubleEscBothAcksRoutedByReqId（两键 ack 乱序按 req_id 独立路由、草稿保留）——修前红、修后绿",
+    "test/cases/d37_rapid_keys.test.js（协议层绿测）：连发两 Esc 背靠背不等 ack → 两 input_ack 都 ok:true、req_id 独立——锁服务端对连按的保证"
+  ],
+  "tests": {
+    "acceptance": "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest' -> exit 0（31 SessionViewModel + 26 ConnManager 全绿，含 2 条 D-37 红测变绿）",
+    "go_test": "cd server && env -u TEAM_AGENT_* go test ./... -> 全部 ok（D-37 服务端零改动）",
+    "e2e_d37": "cd test && env -u TEAM_AGENT_* node runner.js --tag=d37 -> 1 passed",
+    "full_e2e": "cd test && env -u TEAM_AGENT_* node runner.js -> 14 passed（零回归）",
+    "archwiki": "python3 tools/archwiki/build_wiki.py --check --strict-t3 -> exit 0"
+  },
+  "write_scope_check": {
+    "in_scope": [
+      "app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt（sendInput/sendInputKeys 返回 Long?）",
+      "app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt（sendKey 去闸 + pendingKeys/pendingDraftReqId 按 req_id 路由）",
+      "app/app/src/main/java/dev/agentmirror/app/session/SessionScreen.kt（KeyBar enabled 改按 READY）",
+      "app/app/src/test/java/dev/agentmirror/app/conn/ConnManagerTest.kt（11 处 Boolean 断言改 null 断言）"
+    ],
+    "deviation": "无越权；ConnManagerTest 断言随返回类型迁移属连带"
+  },
+  "note": "草稿发送语义（ok 清框 + 清附件标记）依赖回执顺序，故草稿保留 Sending 闸（与草稿不并发）；键是瞬时动作无重发价值，失败可见即可，用户重按即重发。键回执不动草稿与附件标记（用户在打字）。"
+}

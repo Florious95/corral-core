@@ -106,8 +106,10 @@ import dev.agentmirror.app.ui.components.SessionSwitchSheet
 import dev.agentmirror.app.ui.components.flatGlass
 import dev.agentmirror.app.ui.components.flatGlassTokens
 import dev.agentmirror.app.ui.theme.AppTheme
-import dev.agentmirror.app.ui.theme.DarkPalette
+import dev.agentmirror.app.ui.components.ruledSurface
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
+import dev.agentmirror.app.ui.theme.isDark
 import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
 import dev.agentmirror.app.ui.theme.TermPalette
@@ -335,7 +337,7 @@ fun SessionScreen(
     }
 
     AppTheme {
-        val darkTheme = LocalAppPalette.current === DarkPalette
+        val darkTheme = LocalAppPalette.current.isDark
         val themeToken = TermPalette.token(darkTheme)
 
         SessionDockTheme(darkTheme) {
@@ -398,8 +400,9 @@ fun SessionScreen(
                                         .testTag("session-terminal-placeholder"),
                                     contentAlignment = Alignment.Center,
                                 ) {
+                                    // 未 READY 时说清在等连接（连接中/重连中），READY 后才是等首帧。
                                     Text(
-                                        text = "正在加载终端…",
+                                        text = viewModel.connectionBanner ?: "正在加载终端…",
                                         color = LocalAppPalette.current.metaText,
                                         fontFamily = MonoFontFamily,
                                         fontSize = 12.sp,
@@ -633,6 +636,7 @@ internal fun AttachmentGlassMenu(
 
     val glass = flatGlassTokens()
     val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
     val shape = RoundedCornerShape(16.dp)
     BackHandler(enabled = expanded) { onDismissRequest() }
     Box(modifier.fillMaxSize().zIndex(20f)) {
@@ -663,12 +667,18 @@ internal fun AttachmentGlassMenu(
             Column(
                 modifier = Modifier
                     .width(150.dp)
-                    .flatGlass(
-                        shape = shape,
-                        fill = glass.fill,
-                        hairline = glass.hairline,
-                        topGlint = glass.topGlint,
-                        bottomShade = glass.bottomShade,
+                    .then(
+                        if (kit.surfaces.isGlass) {
+                            Modifier.flatGlass(
+                                shape = shape,
+                                fill = glass.fill,
+                                hairline = glass.hairline,
+                                topGlint = glass.topGlint,
+                                bottomShade = glass.bottomShade,
+                            )
+                        } else {
+                            Modifier.ruledSurface(fill = p.sheetBackground, stroke = kit.colors.headerRule, strokeWidth = kit.geometry.hairline)
+                        },
                     )
                     .padding(vertical = 4.dp)
                     .testTag("session-attach-menu"),

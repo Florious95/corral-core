@@ -1,0 +1,30 @@
+租约抢占：pid=70610 stole from pid=69869 reason=holder pid 69869 不存在（判定已死） at=1787138521
+
+[ledger-run 2026-08-19T11:22:01Z] 常驻开工 resident-start | 账本=.team/ledgers/ux2-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-19T11:22:01Z] 开工 start | ledger_id=ledger.ux2.v1 revision=4 账本=.team/ledgers/ux2-v1.json 墙钟上限=14400s 派单死线=90s
+[ledger-run 2026-08-19T11:22:01Z] 轮次 round | 第 1 轮开始：前沿 ["t.title"]（墙钟已跑 0s / 上限 14400s）
+[ledger-run 2026-08-19T11:22:01Z] 派单 dispatch | task=t.title 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/ux2-v1-title 席位=ux2-v1-title attempt=att-t.title-seq1-t1787138521511 delivery=del-t.title-seq1-t1787138521511
+[ledger-run 2026-08-19T11:22:01Z] 投递回执 send-ok | task=t.title case_id=ledger_ux2_v1__t.title__r4 message_id=msg_258f4ec7d440 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T11:22:01Z] 派单落地 dispatch-landed | task=t.title 席位 ux2-v1-title 的收件箱已多出这条派单
+[ledger-run 2026-08-19T11:22:01Z] 等待 wait | task=t.title 在等的 key（case_id）=ledger_ux2_v1__t.title__r4 team=grok-l2 预算=2400s
+[ledger-run 2026-08-19T11:43:45Z] 已唤醒 wait-signaled | task=t.title 等到结果了
+[ledger-run 2026-08-19T11:43:45Z] 判据 acceptance | task=t.title 在跑 required=["A-tt-test", "A-tt-suite", "A-tt-ui", "A-tt-shot", "A-tt-doc"]
+[ledger-run 2026-08-19T11:46:24Z] 判据通过留档 acceptance-success | task=t.title 成功 attempt 落进 attempts[] writeback_revision=5 passed=["A-tt-test", "A-tt-suite", "A-tt-ui", "A-tt-shot", "A-tt-doc"]
+[ledger-run 2026-08-19T11:46:24Z] 原子写回 writeback-atomic | task=t.title state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=5 hash=f19351ee8962486e）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T11:46:24Z] 写回 writeback | task=t.title state=succeeded revision=4 → 5
+[ledger-run 2026-08-19T11:46:24Z] 轮次 round | 第 2 轮开始：前沿 ["t.clip"]（墙钟已跑 1463s / 上限 14400s）
+[ledger-run 2026-08-19T11:46:24Z] 派单 dispatch | task=t.clip 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/ux2-v1-clip 席位=ux2-v1-clip attempt=att-t.clip-seq2-t1787139984439 delivery=del-t.clip-seq2-t1787139984439
+[ledger-run 2026-08-19T11:46:24Z] 投递回执 send-ok | task=t.clip case_id=ledger_ux2_v1__t.clip__r5 message_id=msg_76faeec4a6f8 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T11:46:24Z] 派单落地 dispatch-landed | task=t.clip 席位 ux2-v1-clip 的收件箱已多出这条派单
+[ledger-run 2026-08-19T11:46:24Z] 等待 wait | task=t.clip 在等的 key（case_id）=ledger_ux2_v1__t.clip__r5 team=grok-l2 预算=2400s
+[ledger-run 2026-08-19T12:12:02Z] 已唤醒 wait-signaled | task=t.clip 等到结果了
+[ledger-run 2026-08-19T12:12:02Z] 判据 acceptance | task=t.clip 在跑 required=["A-cl-test", "A-cl-suite", "A-cl-ui", "A-cl-shot", "A-cl-doc"]
+[ledger-run 2026-08-19T12:14:58Z] 判据通过留档 acceptance-success | task=t.clip 成功 attempt 落进 attempts[] writeback_revision=6 passed=["A-cl-test", "A-cl-suite", "A-cl-ui", "A-cl-shot", "A-cl-doc"]
+[ledger-run 2026-08-19T12:14:58Z] 原子写回 writeback-atomic | task=t.clip state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=6 hash=6a0903aee48b5b93）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T12:14:58Z] 写回 writeback | task=t.clip state=succeeded revision=5 → 6
+[ledger-run 2026-08-19T12:14:58Z] 轮次 round | 第 3 轮开始：前沿 ["t.theme"]（墙钟已跑 3176s / 上限 14400s）
+[ledger-run 2026-08-19T12:14:58Z] 派单 dispatch | task=t.theme 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/ux2-v1-theme 席位=ux2-v1-theme attempt=att-t.theme-seq3-t1787141698109 delivery=del-t.theme-seq3-t1787141698109
+[ledger-run 2026-08-19T12:14:58Z] 投递回执 send-ok | task=t.theme case_id=ledger_ux2_v1__t.theme__r6 message_id=msg_79cbeeab0028 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T12:14:58Z] 派单落地 dispatch-landed | task=t.theme 席位 ux2-v1-theme 的收件箱已多出这条派单
+[ledger-run 2026-08-19T12:14:58Z] 等待 wait | task=t.theme 在等的 key（case_id）=ledger_ux2_v1__t.theme__r6 team=grok-l2 预算=2400s
+resident-exit signal=term reason=human_stop

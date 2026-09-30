@@ -1,0 +1,211 @@
+{
+  "verdict": "confirmed",
+  "case_id": "msg_8e758e5dfa08",
+  "worker": "w-doc-verify1",
+  "verification_date": "2026-08-11",
+  "summary": "改写清单 7 条全部属实（无一夸大、无一错判），改后新说法全部与实现相符（无把假话改成另一句假话）；漏网的不实注释未找到（四包导出符号逐条对照读，均属实）；零实现改动（151 行新增全为注释/标注，18 行删除全为注释）；契约四标签内容与代码相符；本复核席自做阳性对照确认判据真会红；四包单包硬判/包内测试/全仓库 check 全部复跑绿。",
+  "packages": [
+    {
+      "pkg": "internal/protocol",
+      "rewritten_checked": [
+        {
+          "symbol": "UnmarshalFrame",
+          "claim": "原注释提到的 raw 参数自首个 commit 起就不存在；函数签名始终是 (Typed, error)",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "git show 2bc984f:server/internal/protocol/json.go 第35-36行签名即 `UnmarshalFrame(data []byte) (Typed, error)`，无 raw 返回值；git log --follow 该文件仅一个 commit。新文『On failure it returns (nil, err); it never returns (nil, nil)』与实现一致：decodeEnvelope/decodePayload/decodeTyped 每条错误路径均 return nil, err，成功路径返回 Typed。"
+        },
+        {
+          "symbol": "DecodeBinary",
+          "claim": "decode 侧无 payload 大小上限检查，size 上限只在 encode 侧 validateBinaryPayload",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "binary.go:164-204 DecodeBinary 无任何 len(data) 上限判断；BinaryMaxPayloadLen 仅在 validateBinaryPayload binary.go:217 使用（encode 侧）。新文『Decode imposes no payload-size cap — the BinaryMaxPayloadLen limit is enforced on the encode side』与实现逐字吻合。"
+        },
+        {
+          "symbol": "EncodeBinary",
+          "claim": "kind 闭集由 EncodeBinary 自校验（validateBinaryPayload 显式调用 p.Kind.validKind()），非依赖 caller 构造约定",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "validateBinaryPayload binary.go:207-227 显式调 p.Kind.validKind()（208行）、p.Ref==''、len(Ref)>BinaryMaxRefLen、len(Data)>BinaryMaxPayloadLen、Scrollback ReqID/LineCount>=1。新文逐项对应，全部为真。"
+        },
+        {
+          "symbol": "ErrInvalidGeometry / ErrInvalidCount",
+          "claim": "两个 sentinel 全仓库无构造方，仅 ws_conn.go 用 errors.Is 匹配",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "grep 全仓库：ErrInvalidGeometry 构造仅 errors.go:45；ErrInvalidCount 构造仅 errors.go:50；消费侧仅 server/internal/api/ws_conn.go:307-308 errors.Is(err, ...) 匹配。二进制/JSON 路径的坏几何/坏计数全部走 ErrInvalidField。新文『reserved sentinel ... never constructed ... retained for ws_conn.go errors.Is matching』属实。"
+        }
+      ],
+      "missed_by_worker": [],
+      "contracts_spotchecked": [
+        {
+          "symbol": "MarshalFrame",
+          "tags_accurate": true,
+          "note": "@pre payload 实现 Typed 且 Validate() 返回 nil（json.go:20 先校验）；@post 信封含 v=Version/type=FrameType/payload JSON 编码（实现逐字对应）；@err Validate 失败原样返回 + json.Marshal 失败返回（两次 Marshal 均覆盖）；@inv 纯函数无副作用。四标签全属实，非凑数。"
+        },
+        {
+          "symbol": "UnmarshalFrame",
+          "tags_accurate": true,
+          "note": "@err 列 ErrBadPayload/ErrMissingVersion/ErrUnsupportedVersion/ErrUnknownType/各 payload 的 Validate 错误。实测 decodePayload 空 type 返回 ErrInvalidField（json.go:78），validate.go 各 Validate 也返回 ErrInvalidField——『各 payload 的 Validate 错误』短语覆盖此路径，非漏报真实错误分支，内容准确。"
+        },
+        {
+          "symbol": "DecodeBinary",
+          "tags_accurate": true,
+          "note": "@err 列 ErrTruncated/ErrBadMagic/ErrUnsupportedVersion/ErrUnknownKind/ErrInvalidRef/ErrInvalidField，与实现 binary.go:164-204 六条错误分支一一对应，无漏报无虚报。"
+        },
+        {
+          "symbol": "Input",
+          "tags_accurate": true,
+          "note": "@pre ReqID>=1/Ref 非空/Text 与 Keys 至多一个/Keys 闭集——validate.go:168-184 逐条实现；@post 不附带服务端状态变更（Input 是纯请求帧）属实；@inv 空 Text 空 Keys 合法裸 Enter 属实（Validate 放行）。"
+        }
+      ],
+      "impl_changed": false,
+      "acceptance": [
+        {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/protocol", "rc": 0},
+        {"argv": "env -u TEAM_AGENT_* go test -count=1 ./internal/protocol/...", "rc": 0},
+        {"argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0}
+      ],
+      "notes": "优先级二独立抽读补充：Envelope/Typed/Auth/AuthAck/List/Workspace/Session/Listing/ListDelta/Subscribe/Unsubscribe/InputAck/Scrollback/Resize/ErrorFrame/UploadResp/Key/AgentState/FrameType/Version/BinaryVersion/BinaryMagic/DefaultBinarySessionRefLen/全部错误 sentinel 注释与实现对照，均属实，无漏网。DefaultBinarySessionRefLen 定义后无消费点（死常量，但注释描述其语义准确，非不实描述）。"
+    },
+    {
+      "pkg": "internal/config",
+      "rewritten_checked": [
+        {
+          "symbol": "Config.QRListenAddr",
+          "claim": "QRListenAddr 从未驱动任何 HTTP 监听，全仓库唯一消费点是 main.go:104 启动日志行",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "grep 全仓库：QRListenAddr 仅出现于 config.go（字段声明 29 行、flag 声明 168 行、解析 191 行）+ main.go:104 日志 'qr_listen', cfg.QRListenAddr + README.md:53。全仓库仅一个 HTTP server（main.go:201 srv := &http.Server{Handler: apiServer.Handler()}）serving group.LAN（来自 ListenAddr），无任何 QR HTTP 页面服务。QR 实际由 printPairingGuide(main.go:277) -> pairing.PrintOnboarding 打印到 stdout。git 历史：6b55b3e 引入 QRListenAddr 时即带误导注释，git log -S QRListen + 逐 commit 扫 server/cmd、api、pairing 目录，从未存在 QR 相关 HTTP listen。新文『printed to stdout ... reaches no listener and only appears in the startup log line』属实。本批最有价值发现，D-14 同形态，核准。"
+        }
+      ],
+      "missed_by_worker": [],
+      "contracts_spotchecked": [
+        {
+          "symbol": "Load",
+          "tags_accurate": true,
+          "note": "@err -h/--help 返回 flag.ErrHelp —— 本席实测 Load([]string{\"-h\"}) 返回 flag.ErrHelp 且单测通过；未知 flag 返回 flag 包错误。@post flag>env>default 优先级 + 数值/时长解析与实现 resolve/resolveNonEmpty 逐字吻合。@pre none 属实（args 可空）。"
+        },
+        {
+          "symbol": "parsePositiveInt64",
+          "tags_accurate": true,
+          "note": "@post 返回值>=0、0 合法；@err 非数字或负数返回含 name 与原值的 error（config.go:89-95 逐字对应）。@inv none 纯函数属实。"
+        },
+        {
+          "symbol": "parsePositiveDuration",
+          "tags_accurate": true,
+          "note": "@err 非 time.ParseDuration 可解析格式或负数返回 error（config.go:107-115 对应）。@post 0 合法属实。"
+        }
+      ],
+      "impl_changed": false,
+      "acceptance": [
+        {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/config", "rc": 0},
+        {"argv": "env -u TEAM_AGENT_* bash -lc 'cd server && go test -count=1 ./internal/config/...'", "rc": 0},
+        {"argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0}
+      ],
+      "notes": "优先级二独立抽读补充：ListenAddr（main.go:139 驱动 LAN listener group，属实）、Token（server.go:95 staticToken 消费，属实）、Host（main.go:193 printPairingGuide hostOverride 消费，引用 task fix-qr-host-detect 与 main.go:190-191 注释一致）、UploadDir/MaxUploadBytes/MaxInputBytes/ListInterval（server.go:86-90 消费，属实）、TSAuthKey（env-only + QR ts_authkey，属实）、StateDir（单实例 pidfile，属实）。全部无漏网。"
+    },
+    {
+      "pkg": "internal/agentstate",
+      "rewritten_checked": [
+        {
+          "symbol": "Sample.LastOutputAge",
+          "claim": "无任何规则表消费 LastOutputAge（把未接线能力写成现状）",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "grep 全仓库：LastOutputAge 生产侧仅 state_wiring.go:305 填充（且 capturePaneOutput 返回 age=0，state_wiring.go:344 自认『no rule table consumes it today』）；rules.go 零引用 age；消费侧仅 detect 传递（sample.go:115）。新文『reserved for future time-assisted rules — no rule table consumes it today』属实。"
+        },
+        {
+          "symbol": "Confidence",
+          "claim": "全仓库 ws-api（internal/api）对 Confidence 零引用（虚构已存在的消费方）",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "grep server/internal/api/ 全目录：Confidence 零命中；state_wiring.go:307 仅取 decided.State（protocol.AgentState 字符串），丢弃 Confidence。Confidence 仅 agentstate 包内规则引擎（rules.go:149/152、adapters.go 各规则）使用。原注释『the consumer (ws-api push logic)』描述一个不存在的消费方。新文『a future push layer ... no consumer reads it yet』属实。"
+        }
+      ],
+      "missed_by_worker": [],
+      "contracts_spotchecked": [
+        {
+          "symbol": "Identify",
+          "tags_accurate": true,
+          "note": "@err none 属实——签名 return AgentKind（无 error 返回），所有失败路径降级 AgentKindUnknown（identify.go:89-103）。@inv 单次 ps 且 ≤500ms 属实——identifyTimeout=500ms（identify.go:30），readProcTable 仅一次 exec（identify.go:151）。@post 识别失败恒 AgentKindUnknown 属实。"
+        },
+        {
+          "symbol": "Track",
+          "tags_accurate": true,
+          "note": "@post 仅当 prev=working 且当前判定 idle 时返回 done（track.go:32-34 逐字对应）；其余情况返回当前规则判定。@err none 属实——Track 永不返回 error。@inv 纯函数 (prev,sample) 完全决定结果、无隐藏内存——与 track.go:11-14 注释自洽。"
+        },
+        {
+          "symbol": "Registry.Detect / Registry.DetectForKind",
+          "tags_accurate": true,
+          "note": "@err none、未知命令/kind 降级 StateUnknown（sample.go:88-93、107-117 逐字对应）。@inv 无 I/O 纯函数属实（Detect 只查 map + 调 adapter，DetectForKind 只查 kind.Command()）。"
+        }
+      ],
+      "impl_changed": false,
+      "acceptance": [
+        {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/agentstate", "rc": 0},
+        {"argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/agentstate/...\"'", "rc": 0},
+        {"argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0}
+      ],
+      "notes": "优先级二独立抽读补充：Sample/State/Adapter/Registry/DefaultRegistry/AgentKind/IdentifyInput/Proc/kindFromCommand/kindFromTitle/classifyArgv/descendantsOf 全部注释与实现对照，均属实。@consumes internal/protocol 与 import 图一致（adapters.go/sample.go/rules.go/track.go 四文件真实 import protocol），T3-4 漂移已闭合。承办席将 RecentOutput『tail window 4KiB』列为 uncertain 处理恰当：capturePaneOutput 实为整屏 capture-pane -p -t -e 无 4KiB 截断，是设计语言非可证伪谎报，未贸然改写，本席认同。"
+    },
+    {
+      "pkg": "internal/discovery",
+      "rewritten_checked": [],
+      "missed_by_worker": [],
+      "contracts_spotchecked": [
+        {
+          "symbol": "Discover",
+          "tags_accurate": true,
+          "note": "@err ctx 取消/超时返回 ctx.Err()（scan.go:54-56/60-62/69-71 三处检查，属实）；@post 跳过不可达 socket 单点故障不中止（scan.go:63-66/72-78 logger.Debug+continue，属实）；@inv 无缓存每次重新扫描（Discover 直接调 DiscoverWithDirs 重新扫，无缓存字段，属实）。@pre ctx 非 nil 为真实前置条件（代码 call ctx.Err() 无 nil 守卫）。"
+        },
+        {
+          "symbol": "DiscoverWithDirs",
+          "tags_accurate": true,
+          "note": "@err 空 socketDirs 返回空 Model 且 error 为 nil——本席实测（测试通过）；目录读取失败仅记日志并跳过（scan.go:63-66，属实）。@pre socketDirs 可为空属实。"
+        },
+        {
+          "symbol": "DefaultSocketDirs",
+          "tags_accurate": true,
+          "note": "@post 去重（EvalSymlinks 解析后相同只列一次）——scan.go:104-116 seen map 去重属实；列表永不为空至少含平台默认目录（scan.go:102 恒 append /tmp 与 /private/tmp）。@err none 属实（无 error 返回）。@inv 不触发 tmux 纯本地路径计算（只 filepath.Join/EvalSymlinks，属实）。"
+        },
+        {
+          "symbol": "Model.Workspace",
+          "tags_accurate": true,
+          "note": "@post 返回 CWD 精确匹配的 Workspace；无匹配返回 nil（model.go:81-88 逐字对应）。@inv 不修改 Model、cwd 不变结果不变（只读循环比较，属实）。@err none 属实。"
+        }
+      ],
+      "impl_changed": false,
+      "acceptance": [
+        {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/discovery", "rc": 0},
+        {"argv": "env -u TEAM_AGENT_* bash -lc 'cd server && go test -count=1 ./internal/discovery/...'", "rc": 0},
+        {"argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0}
+      ],
+      "notes": "0 条改写经独立复核为尽责结论而非省事答案：本席逐符号读全部 8 个非测试导出符号（Discover/DiscoverWithDirs/DefaultSocketDirs/Pane/Workspace/Count/Model/Model.Workspace）+ buildModel，交叉验证跨包消费断言——Pane.Socket 被 api/session.go:23 sessionRef（p.Socket+sep+p.PaneID）与 session.go:66 bridge.NewPane(p.Socket,p.PaneID) 真实消费（bridge.go:34 签名 NewPane(socket, paneID string) 一致）；PanePID 被 state-wiring 采样真实使用。均属实。"
+    }
+  ],
+  "gaps": [
+    {
+      "type": "observation_not_in_this_batch_scope",
+      "pkg": "cmd/agentmirrord",
+      "what_is_wrong": "T3-4 漂移：cmd/agentmirrord import 了 internal/config（main.go:38）却未声明 @consumes internal/config。此为既有漂移（本批四包改动未触 cmd/ 目录，git diff 无 server/cmd/ 变更），归 cmd/agentmirrord 或后续包席位 write_scope，非本批四包缺陷。"
+    },
+    {
+      "type": "convention_asymmetry",
+      "pkg": "internal/protocol",
+      "what_is_wrong": "doc.go 新增 @produces internal/protocol 是全仓库唯一 @produces 声明，而内部/agentstate import protocol 并产出 AgentState 却未声明 @produces。@produces 不受 T3-4 校验（判据只验 @consumes），非假声明，但存在声明面不对称，建议后续统一约定（或协议包改为不声明 @produces 以保持一致）。"
+    },
+    {
+      "type": "minor_observation",
+      "pkg": "internal/agentstate",
+      "what_is_wrong": "Sample.RecentOutput 注释『tail window (e.g. the last 4KiB)』与生产采样方 capturePaneOutput（整屏 capture-pane 无 4KiB 截断）措辞不符。承办席已正确列为 uncertain 未改写——这是 bounded-input 设计语言而非可证伪谎报。本席认同其处理，仅记录备查，不判为漏网。"
+    }
+  ],
+  "red_lines": {
+    "zero_impl_change": "VERIFIED — git diff HEAD 四包全部变更：151 行新增全部为 // 注释或 @contract/@pre/@post/@err/@inv/@consumes 标注；18 行删除全部为旧注释行。无一行实现代码被改动。逐文件 hunk 检查（json.go/binary.go/errors.go/frames.go/doc.go/config.go/sample.go/identify.go/track.go/model.go/scan.go）确认所有新增均在注释块内。",
+    "write_scope": "VERIFIED — 全部 12 个改动文件严格限于 server/internal/{protocol,config,agentstate,discovery}/ 各自目录。",
+    "positive_control_redone": "VERIFIED — 本席自做：删除 discovery/model.go Model.Workspace 的 @err 标签 → 单包硬判 T3-3 FAIL 1 条精确指向 model.go:75 缺 @err，exit 1；原样恢复后 exit 0，git diff 与破坏前逐字节一致。判据真扫本包，非假绿。",
+    "no_residue": "VERIFIED — 临时测试文件已删（/tmp/verify_load_test.go、/tmp/verify_disc_test.go、/tmp/model.go.bak），未建 .team/verify-doc1 残留目录，工作区仅剩四包 12 文件 + 本证据文件。",
+    "no_commit": "VERIFIED — 未执行 git commit/push，仅用 git show/log/diff/grep。"
+  }
+}

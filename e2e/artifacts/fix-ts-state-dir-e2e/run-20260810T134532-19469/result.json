@@ -1,0 +1,36 @@
+{
+  "status": "fail",
+  "failure_reason": "daemon_tailnet_ip_missing",
+  "workspace_visible": "no",
+  "isolated_session_visible": "no",
+  "headscale_node_count": 0,
+  "paired_url_class": "unknown",
+  "socks5_loopback_proof": "unknown",
+  "state_dir_proof": "yes",
+  "pairing_injection": {
+    "method": "adb_private_store_stdin",
+    "secret_transport": "stdin",
+    "secret_in_injector_argv": "no",
+    "auth_bypass": "no",
+    "security_rationale": "temporary app-private store only; daemon token auth and real tsnet join remain mandatory"
+  },
+  "home_override_used": "no",
+  "camera_path_used": "no",
+  "foreground_mouse_or_window_targeting_used": "no",
+  "argv": {
+    "daemon": {
+      "ts_authkey_flag_present": "unknown",
+      "authkey_value_present": "unknown",
+      "authkey_shape_present": "unknown",
+      "pair_token_value_present": "unknown"
+    },
+    "app": {
+      "authkey_value_present": "unknown",
+      "authkey_shape_present": "unknown",
+      "pair_token_value_present": "unknown"
+    }
+  },
+  "ui_secret_value_present": "unknown",
+  "artifact_secret_value_present": "no",
+  "cleanup_status": "yes"
+}

@@ -1,0 +1,30 @@
+commit 53ac62866eb75e641484f5644d539f932f328644
+Author: Florious95 <281215401+Florious95@users.noreply.github.com>
+Date:   Sun Aug 16 04:30:55 2026 +0800
+
+    App：二级菜单实时流，标题原样画、点一行进会话
+    
+    契约 060。Level2ViewModel + Level2LiveStreamScreen 消费 Level2Frame，标题原样渲染
+    （含 ◐/✳ 前缀，无任何字符串操作），跳转身份只用结构字段，离开菜单即退订。
+    
+    三个具名测试（leader 自跑）：
+      Level2LiveStreamRenderTest    标题原样渲染
+      Level2NavigationIdentityTest  跳转身份来自结构字段而非标题解析
+      Level2StreamLifecycleTest     进订阅、离退订
+    :app:testDebugUnitTest 全套通过。
+
+ app/.kotlin/errors/errors-1786823782827.log        | 258 +++++++++++++++++++++
+ app/.kotlin/errors/errors-1786823809463.log        | 154 ++++++++++++
+ app/.kotlin/errors/errors-1786823809916.log        | 182 +++++++++++++++
+ .../java/dev/agentmirror/app/AgentMirrorApp.kt     |   2 +
+ .../dev/agentmirror/app/conn/ConnectionManager.kt  |  24 ++
+ .../main/java/dev/agentmirror/app/conn/Frame.kt    |   3 +
+ .../main/java/dev/agentmirror/app/conn/Frames.kt   |  61 +++++
+ .../app/workspace/Level2LiveStreamScreen.kt        | 107 +++++++++
+ .../agentmirror/app/workspace/Level2ViewModel.kt   |  96 ++++++++
+ .../agentmirror/app/workspace/WorkspaceScreen.kt   |  28 ++-
+ .../app/workspace/Level2LiveStreamRenderTest.kt    |  78 +++++++
+ .../app/workspace/Level2NavigationIdentityTest.kt  |  76 ++++++
+ .../app/workspace/Level2StreamLifecycleTest.kt     |  99 ++++++++
+ .../app/workspace/WorkspaceRefreshTest.kt          |   1 +
+ 14 files changed, 1167 insertions(+), 2 deletions(-)

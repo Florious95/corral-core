@@ -1,0 +1,28 @@
+e: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/pr2.proto/app/app/src/test/kotlin/dev/agentmirror/app/workspace/ProviderLaunchArgvTest.kt:13:22 Unresolved reference 'ProviderLaunch'.
+e: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/pr2.proto/app/app/src/test/kotlin/dev/agentmirror/app/workspace/ProviderLaunchArgvTest.kt:18:64 Unresolved reference 'buildArgv'.
+e: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/pr2.proto/app/app/src/test/kotlin/dev/agentmirror/app/workspace/ProviderLaunchArgvTest.kt:19:44 Unresolved reference 'buildArgv'.
+e: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/pr2.proto/app/app/src/test/kotlin/dev/agentmirror/app/workspace/ProviderLaunchArgvTest.kt:24:22 Unresolved reference 'ProviderLaunchDefaults'.
+e: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/pr2.proto/app/app/src/test/kotlin/dev/agentmirror/app/workspace/ProviderLaunchArgvTest.kt:25:36 Unresolved reference 'buildArgv'.
+e: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/pr2.proto/app/app/src/test/kotlin/dev/agentmirror/app/workspace/ProviderLaunchArgvTest.kt:26:36 Unresolved reference 'buildArgv'.
+e: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/pr2.proto/app/app/src/test/kotlin/dev/agentmirror/app/workspace/ProviderLaunchArgvTest.kt:31:22 Unresolved reference 'ProviderLaunchDefaults'.
+e: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/pr2.proto/app/app/src/test/kotlin/dev/agentmirror/app/workspace/ProviderLaunchArgvTest.kt:32:58 Unresolved reference 'buildArgv'.
+e: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/pr2.proto/app/app/src/test/kotlin/dev/agentmirror/app/workspace/ProviderLaunchArgvTest.kt:37:22 Unresolved reference 'ProviderLaunch'.
+e: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/pr2.proto/app/app/src/test/kotlin/dev/agentmirror/app/workspace/ProviderLaunchArgvTest.kt:42:58 Unresolved reference 'buildArgv'.
+e: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/pr2.proto/app/app/src/test/kotlin/dev/agentmirror/app/workspace/ProviderLaunchArgvTest.kt:56:26 Unresolved reference 'ProviderLaunchDefaults'.
+e: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/pr2.proto/app/app/src/test/kotlin/dev/agentmirror/app/workspace/ProviderLaunchArgvTest.kt:57:36 Unresolved reference 'buildArgv'.
+e: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/pr2.proto/app/app/src/test/kotlin/dev/agentmirror/app/workspace/ProviderLaunchArgvTest.kt:58:61 Unresolved reference 'buildArgv'.
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugUnitTestKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 6s

@@ -1,0 +1,106 @@
+{
+  "schema": "agentmirror-evidence-v1",
+  "task_id": "gate-static-analysis",
+  "case_id": "msg_628cea419ed0",
+  "status": "red",
+  "generated_at": "2026-08-11T04:00:00Z",
+  "summary": "阶段三第一步：静态分析接入 + 隐含问题全量立账。① 接入 staticcheck（Go，BSD-3）进 server 面、Android Lint（AGP 自带）进 app 面，默认规则集不裁剪；② 在 tools/gate/README.md 立好 gate 进 acceptance 收口位约定（含标准 argv）；③ 全量跑 gate 三面 + archwiki --check + 新接工具，立账 38 条（staticcheck 9 + Android Lint 29），按建议归属包分组落 docs/stage3-issue-inventory.md。两工具阳性对照均证真在跑（staticcheck U1000、Android Lint UnusedResources，故意引入→真报→撤销自证）。gate 结论 red 全部可归因到暴露的存量问题，无棘轮下行、无工具崩溃、无 no-result。未加任何豁免。",
+
+  "tools_added": [
+    {
+      "name": "staticcheck",
+      "side": "server (Go)",
+      "version": "staticcheck 2026.1 (v0.7.0)",
+      "license": "BSD-3 (与 Apache-2.0 兼容，需求 008 全开源约束)",
+      "integration": "tools/gate/gate.py run_server_suite 追加 staticcheck ./...；二进制经 go env GOPATH 解析绝对路径（登录 PATH 未导出 GOPATH/bin）；每条 finding 记一条失败 staticcheck:<file>:<line> 供四归因 carry-over；工具缺失/崩溃记哨兵显式红（空清单不算健康）",
+      "ruleset": "默认规则集，未裁剪"
+    },
+    {
+      "name": "Android Lint",
+      "side": "app (AGP 自带)",
+      "version": "AGP 8.13.0 内置",
+      "license": "AGP/Android 自带（零新依赖）",
+      "integration": "tools/gate/gate.py run_app_suite 追加 ./gradlew -q :app:lintDebug；解析 app/app/build/reports/lint-results-debug.xml 每条 finding（含 warning）记失败 lint:<id>:<file>:<line>；报告缺失且 gradle 非 0 记哨兵显式红",
+      "ruleset": "默认规则集，未裁剪"
+    }
+  ],
+
+  "positive_controls": [
+    {
+      "tool": "staticcheck",
+      "introduced": "server/internal/api/zz_positive_control.go 增加未使用包级变量 var positiveControlUnused = 42",
+      "reported": "staticcheck ./internal/api/ 退出码 1，报 internal/api/zz_positive_control.go:4:5: var positiveControlUnused is unused",
+      "rule_id": "U1000",
+      "reverted": "删除该文件；重跑 staticcheck 该构造消失；git diff 确认 server/ 无任何残留改动",
+      "verdict": "确认工具真在跑（非配好未生效）"
+    },
+    {
+      "tool": "Android Lint",
+      "introduced": "app/app/src/main/res/values/strings.xml 增加未引用字符串 <string name=\"zz_positive_control_unused_string\">（插在 </resources> 前，XML 合法）",
+      "reported": ":app:lintDebug 报 app/app/src/main/res/values/strings.xml:20 Warning: The resource R.string.zz_positive_control_unused_string appears to be unused [UnusedResources]（文本 + XML 双报告均命中）",
+      "rule_id": "UnusedResources",
+      "reverted": "删除该字符串；git diff 确认 strings.xml 无残留改动",
+      "verdict": "确认工具真在跑"
+    }
+  ],
+
+  "issue_counts": {
+    "total": 38,
+    "by_tool": { "staticcheck": 9, "android_lint": 29 },
+    "by_severity": { "P1": 5, "P2": 7, "P3": 26 },
+    "by_package": {
+      "server/internal/api": 7,
+      "server/internal/agentstate": 1,
+      "server/cmd/agentmirrord": 1,
+      "app/app 运行时 (Android 源码/manifest/res)": 12,
+      "app/app 构建配置 (依赖版本)": 14,
+      "tools/tsnetbind": 3
+    },
+    "by_rule": {
+      "U1000": 6,
+      "SA4006": 1,
+      "S1011": 1,
+      "S1000": 1,
+      "PermissionImpliesUnsupportedChromeOsHardware": 1,
+      "InlinedApi": 1,
+      "Aligned16KB": 3,
+      "ApplySharedPref": 1,
+      "UnusedResources": 1,
+      "UseKtx": 4,
+      "ObsoleteSdkInt": 2,
+      "MonochromeLauncherIcon": 2,
+      "OldTargetApi": 1,
+      "GradleDependency": 7,
+      "NewerVersionAvailable": 5,
+      "AndroidGradlePluginVersion": 1
+    }
+  },
+
+  "tests": [
+    { "argv": "bash tools/gate/run.sh (全量门三面+新接工具)", "rc": 1 },
+    { "argv": "bash tools/gate/run.sh --self-test", "rc": 0 },
+    { "argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0 },
+    { "argv": "env -u TEAM_AGENT_* staticcheck ./...", "rc": 1 },
+    { "argv": "env -u TEAM_AGENT_* ./gradlew -q :app:lintDebug", "rc": 1 },
+    { "argv": "env -u TEAM_AGENT_* ./gradlew -q test", "rc": 0 },
+    { "argv": "test -s docs/stage3-issue-inventory.md", "rc": 0 }
+  ],
+
+  "changes": [
+    { "path": "tools/gate/gate.py", "change": "server 面追加 staticcheck（_staticcheck_findings 辅助函数）；app 面追加 Android Lint（解析 lint-results-debug.xml 每条 finding）；import os 补入" },
+    { "path": "tools/gate/README.md", "change": "三面行为表补 staticcheck/Lint；新增「静态分析」节、「gate 进 acceptance 收口位（约定）」节（标准 argv）、「豁免清单」节" },
+    { "path": "tools/gate/baseline.json", "change": "棘轮上行：server 276→315、app 547→757（测试增长自动上行，非下行）" },
+    { "path": "tools/gate/gate-report.json", "change": "本次门运行报告（结论 fail，failures 全部可归因）" },
+    { "path": "docs/stage3-issue-inventory.md", "change": "新建：38 条 issue 全量立账，按建议归属包分组，含阳性对照/空扫描自证/棘轮说明/非绿归因" }
+  ],
+
+  "exemptions": [],
+
+  "deviation": {
+    "gate_conclusion_red_expected": "本轮 gate 结论 fail 为预期：新接工具暴露存量问题（server 9 + app 29 条），每条非绿均已逐条归因进 docs/stage3-issue-inventory.md。工具接入本身经 --self-test（6/6）与两次全量复跑验证正确；脚本跑完、报告生成、无棘轮下行、无 no-result、无工具崩溃。",
+    "t3_report_regenerated": "python3 tools/archwiki/build_wiki.py --check 从仓库根运行时确定性重写 docs/wiki/t3-report.md（工具源码 1686-1687 行行为）；该文件不在本条 write_scope，已 git restore 恢复 HEAD。差异仅指数加性（文件基名索引 2143→2176），判据全绿。leader 验收复跑时会再次生成，非本条改动。",
+    "gradle_caches_churned": "运行 gradle 构建必然改写 app/.gradle/ 与 app/app/build/ 下缓存文件（仓库历史既跟踪了这些 build 产物，非本条引入）。产品实现代码零改动。",
+    "env_glob_note": "taskbook/README 常写 env -u TEAM_AGENT_* 简写，bash 下不展开（无文件命中时原样传给 env，实际不净化）。gate.py 内部已用显式清单净化（_SANITIZE 四变量），README 已注明标准 argv 用显式清单。",
+    "positive_control_collateral": "app 面套件运行期间曾因 cat >> 把阳性对照字符串追加到 </resources> 之后（XML 非法）触发一次 mergeDebugResources 失败，app 套件多记一条 gradle test (exit 1) 构建级失败；已撤销恢复 HEAD，复跑后该条消失。留档供排查，不计入总账。"
+  }
+}

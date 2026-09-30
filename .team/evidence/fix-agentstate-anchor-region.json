@@ -1,0 +1,38 @@
+{
+  "task_id": "fix-agentstate-anchor-region",
+  "status": "pass_unit_tests_pending_deploy",
+  "worker": "w-librarian",
+  "date": "2026-08-13",
+  "summary": "D-26 误检根因修复：锚点区域限定。全屏扫描把历史残留的 `esc to interrupt` 当 working（实测复现：残留行在更早 `❯` 之后、最后 `❯` 之前 → 判 working conf=2）。修复：规则匹配限定在「最后一个 `❯` 提示符之后」的区域（锚点方案），历史残留天然被排除。五条红测全绿 + go test ./... 全绿。",
+  "root_cause_chain": [
+    "1. capture-pane 抓整屏，rule.match 用 strings.Contains 匹配整屏文本",
+    "2. claude-working-action-bar 的 `esc to interrupt` 在整屏任意位置命中——包括滚出底部、留在更早 `❯` 提示符之前的历史残留行",
+    "3. 残留文本造成「持续显示工作中」（不是闪一下），正是用户报的现象形状",
+    "4. 锚点方案：只匹配最后一个 `❯` 提示符之后 → 历史残留（在更早 `❯` 之前）被排除"
+  ],
+  "fix": {
+    "file": "server/internal/agentstate/rules.go",
+    "change": "新增 anchorRegion()（取最后一个 `❯` 提示符之后的行）+ anchorFallbackBottomLines=8 兜底；evaluateRules 在 rule.match 前用锚点区替代整屏",
+    "fallback_note": "anchorFallbackBottomLines=8 只在无 `❯` 锚点时生效（全屏 TUI/刚清屏），主路径不依赖它。**不要调这个数来改主路径行为**——行数是版式的函数，锚点是语义的函数；主路径行为由锚点决定，不是行数。",
+    "not_modified": ["capture-pane", "RecentOutput 语义"]
+  },
+  "tests": [
+    {"name": "残留 esc to interrupt → idle", "rc": 0, "note": "红转绿：更早 ❯ 之后、最后 ❯ 之前的历史残留不再判 working（修前 red conf=2）"},
+    {"name": "真实 working → working", "rc": 0, "note": "守卫一：esc to interrupt 在最后 ❯ 之后仍判 working，防反向误判成永远空闲"},
+    {"name": "真实完成态 → idle", "rc": 0, "note": "守卫二：✻ 前缀无 esc to interrupt 判 idle，同字形实锤靠位置分辨"},
+    {"name": "真实权限框 → blocked", "rc": 0, "note": "守卫三：权限框走兜底路径仍判 blocked conf=3"},
+    {"name": "无锚点兜底 → 不崩", "rc": 0, "note": "守卫四：无 ❯ 锚点走 lastNonEmptyLines(8) 不 panic；行为记录（无锚点+屏上残留仍可能判 working，是兜底的次优边界）"},
+    {"argv": "cd server && go test ./...", "rc": 0, "note": "9 包全绿"}
+  ],
+  "coverage_boundary": {
+    "covered": "全屏扫描导致历史残留误判为 working（根因实测复现 → 修复后 idle）",
+    "not_proven": "未证明是用户报的那次误检（用户报时跑的是旧二进制，无法回溯；只能说『这条缺陷存在且已修』，不能说『用户报的那条已修』——需用户实测确认）",
+    "not_covered": [
+      "内容对比判据（Ctrl+B w 动态效果，排队中，见 herdr-agent-state-study.md §9.6）",
+      "blocked 产品展示（待用户裁定）",
+      "完成态取消（用户已裁定『服务端取消完成』但未施工）"
+    ]
+  },
+  "evidence_of_record": "docs/herdr-agent-state-study.md §9 + §10（真实语料 + 五条红测设计）；anchor_red_test.go",
+  "deploy": "PENDING——生产 daemon 用户正在用（pid 92111 监听 :9900），重编重启会断用户连接。重编时机由 leader 与用户协调，代码已就位但未上线。"
+}

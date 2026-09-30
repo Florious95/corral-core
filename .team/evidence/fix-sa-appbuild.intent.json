@@ -1,0 +1,1 @@
+{"task_id": "fix-sa-appbuild", "dispatched_to": "w-sa-appbuild", "base": ".team/nodes/fix-sa-appbuild/CLAUDE.md", "case_id": "msg_3abaa205ecd0", "at": "2026-08-11 12:10:00", "note": "阶段三修复批派单；intent 随派单同批写入"}

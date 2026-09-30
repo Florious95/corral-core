@@ -1,0 +1,7 @@
+# host 侧 SOCKS5 路由预演（2026-08-09 23:3x，一次性探针 /tmp/socksprobe，不入库）
+# 第三节点(socks-probe, 100.64.0.2)入本地 headscale → tsnet Loopback SOCKS5(tsnet+cred)
+# → 拨 daemon tailnet 地址 ws 端点。前两拨 wireguard 数据面未热身失败，~8s 后通。
+UP-OK ip: [100.64.0.2 fd7a:115c:a1e0::2]
+attempt 0 fail: socks connect ... general SOCKS server failure
+attempt 1 fail: socks connect ... general SOCKS server failure
+DIAL-OK status: 426   # ws 端点对普通 HTTP GET 的正确应答（协议 §1），路由语义验证通过

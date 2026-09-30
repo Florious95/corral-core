@@ -23,6 +23,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +61,7 @@ import com.kyant.shapes.RoundedRectangle
 import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 import dev.agentmirror.app.ui.theme.Motion
 import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.ui.theme.TypeSizes
@@ -85,6 +88,8 @@ fun SessionActionBottomSheet(
 ) {
     GlassModalLayer(onDismiss = onDismiss) {
         val p = LocalAppPalette.current
+        val kit = LocalThemeSuite.current
+        val sheetPadding = kit.geometry.sheetOuterPadding
         val panelBackdrop = rememberLayerBackdrop()
         val requestDismiss = ::dismiss
         Column(
@@ -95,15 +100,10 @@ fun SessionActionBottomSheet(
                     exit = slideOutVertically(tween(Motion.sheetSlideOut)) { it },
                 )
                 .navigationBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 12.dp)
+                .padding(horizontal = sheetPadding, vertical = sheetPadding)
                 .fillMaxWidth()
                 .pointerInput(Unit) {} // 面板内空白处的点击不落到遮罩
-                .glassPanel(
-                    backdrop = LocalGlassBackdrop.current,
-                    shape = PanelShape,
-                    surface = p.glassSurface.glassReadable(),
-                    exportedBackdrop = panelBackdrop,
-                )
+                .modalPanel(PanelShape, panelBackdrop)
                 .padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 18.dp)
                 .testTag("session-action-bottom-sheet"),
         ) {
@@ -113,7 +113,7 @@ fun SessionActionBottomSheet(
                     .align(Alignment.CenterHorizontally)
                     .width(Dims.sheetGrabberWidth)
                     .height(Dims.sheetGrabberHeight)
-                    .clip(CircleShape)
+                    .clip(kit.geometry.shape(CircleShape))
                     .background(p.sheetGrabber),
             )
             Spacer(Modifier.height(14.dp))
@@ -238,6 +238,8 @@ fun WorkspaceActionBottomSheet(
 ) {
     GlassModalLayer(onDismiss = onDismiss) {
         val p = LocalAppPalette.current
+        val kit = LocalThemeSuite.current
+        val sheetPadding = kit.geometry.sheetOuterPadding
         val panelBackdrop = rememberLayerBackdrop()
         val requestDismiss = ::dismiss
         Column(
@@ -248,15 +250,10 @@ fun WorkspaceActionBottomSheet(
                     exit = slideOutVertically(tween(Motion.sheetSlideOut)) { it },
                 )
                 .navigationBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 12.dp)
+                .padding(horizontal = sheetPadding, vertical = sheetPadding)
                 .fillMaxWidth()
                 .pointerInput(Unit) {}
-                .glassPanel(
-                    backdrop = LocalGlassBackdrop.current,
-                    shape = PanelShape,
-                    surface = p.glassSurface.glassReadable(),
-                    exportedBackdrop = panelBackdrop,
-                )
+                .modalPanel(PanelShape, panelBackdrop)
                 .padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 18.dp)
                 .testTag("workspace-action-bottom-sheet"),
         ) {
@@ -265,7 +262,7 @@ fun WorkspaceActionBottomSheet(
                     .align(Alignment.CenterHorizontally)
                     .width(Dims.sheetGrabberWidth)
                     .height(Dims.sheetGrabberHeight)
-                    .clip(CircleShape)
+                    .clip(kit.geometry.shape(CircleShape))
                     .background(p.sheetGrabber),
             )
             Spacer(Modifier.height(14.dp))
@@ -342,21 +339,34 @@ private fun GlassActionRow(
     content: @Composable () -> Unit,
 ) {
     val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
     val interaction = remember { MutableInteractionSource() }
     val press = rememberPressProgress(interaction)
+    val pressed by interaction.collectIsPressedAsState()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         modifier = modifier
             .fillMaxWidth()
-            .glassControl(
-                backdrop = LocalGlassBackdrop.current,
-                shape = ActionShape,
-                surface = if (danger) Color.Unspecified else p.glassSurface.copy(alpha = 0.35f),
-                tint = if (danger) DangerColor else Color.Unspecified,
-                tintAlpha = 0.14f,
-                glow = if (danger) DangerColor else Color.Unspecified,
-                pressProgress = press,
+            .then(
+                if (kit.surfaces.isGlass) {
+                    Modifier.glassControl(
+                        backdrop = LocalGlassBackdrop.current,
+                        shape = ActionShape,
+                        surface = if (danger) Color.Unspecified else p.glassSurface.copy(alpha = 0.35f),
+                        tint = if (danger) DangerColor else Color.Unspecified,
+                        tintAlpha = 0.14f,
+                        glow = if (danger) DangerColor else Color.Unspecified,
+                        pressProgress = press,
+                    )
+                } else {
+                    // 直角动作行：不透明底 + 发丝边，按压换浅底；危险项只靠红字红图标区分。
+                    Modifier.ruledSurface(
+                        fill = if (pressed) p.rowPressed else p.sheetSurface,
+                        stroke = kit.colors.separator,
+                        strokeWidth = kit.geometry.hairline,
+                    )
+                },
             )
             .clickable(
                 interactionSource = interaction,
@@ -369,8 +379,8 @@ private fun GlassActionRow(
         Box(
             modifier = Modifier
                 .size(38.dp)
-                .clip(CircleShape)
-                .background(iconWell),
+                .clip(kit.geometry.shape(CircleShape))
+                .background(if (kit.surfaces.isGlass) iconWell else Color.Transparent),
             contentAlignment = Alignment.Center,
         ) {
             icon()

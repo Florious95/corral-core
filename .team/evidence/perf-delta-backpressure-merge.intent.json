@@ -1,0 +1,1 @@
+{"task_id":"perf-delta-backpressure-merge","dispatched_to":["w-c1-probe","w-c1-test","w-c1-dev"],"brief":"docs/c1-brief.md","gate1":"证明 sendCh 会满，不过则 halt","at":"2026-08-13"}

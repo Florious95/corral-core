@@ -1,0 +1,48 @@
+{
+  "case_id": "perf-thresholds-enforce",
+  "status": "pass",
+  "summary": "窄修完成：e2e/api-user-scenarios.sh 的 ART 落盘路径错配已修复，性能基线写回规范位置 e2e/artifacts/test-api-user-scenarios-perf/baseline.json；两条 acceptance 均 rc=0；阳性对照（14 条硬门限×四字段 + large_output/upload 非 null）与必然红对照（临时门限 0.001ms → exit 1 且打印实测 vs 门限）均验证通过。",
+  "tests": [
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash e2e/api-user-scenarios.sh'",
+      "rc": 0,
+      "note": "acceptance #1（最终脚本状态重跑）rc=0，PASS"
+    },
+    {
+      "argv": "bash -lc 'python3 -c \"import json;d=json.load(open(\\\"e2e/artifacts/test-api-user-scenarios-perf/baseline.json\\\"));assert d[\\\"performance\\\"][\\\"hard_numeric_thresholds\\\"],\\\"门限未落盘\\\"\"'",
+      "rc": 0,
+      "note": "acceptance #2 rc=0，hard_numeric_thresholds 非空"
+    },
+    {
+      "argv": "python3 -c \"import json,math;d=json.load(open('e2e/artifacts/test-api-user-scenarios-perf/baseline.json'));h=d['performance']['hard_numeric_thresholds'];assert len(h)==14 and all({'metric','actual','threshold','comparator'}<=set(g) for g in h);assert d['performance']['metrics']['large_output'].get('throughput_bytes_per_second') is not None;assert d['performance']['metrics']['upload']['latency'].get('p50') is not None and d['performance']['metrics']['upload']['latency'].get('p95') is not None\"",
+      "rc": 0,
+      "note": "阳性对照：14 条 hard_numeric_thresholds 每条含 metric/actual/threshold/comparator 四字段；large_output throughput≈30.2MB/s，upload p50=1.874ms/p95=3.217ms 均非 null"
+    },
+    {
+      "argv": "bash /tmp/w-perf-art-red.sh  (隔离副本：pair_to_first_listing.p95 门限临时调至 0.001ms + RESOURCE_SECONDS=20 + PERF_ART 指向 /tmp scratch)",
+      "rc": 1,
+      "note": "必然红对照：stderr 打印 'PERFORMANCE THRESHOLD FAIL: pair_to_first_listing.p95: measured=1.01705 ms, threshold <= 0.001 ms'；baseline status=fail。验证后原脚本门限未动（只改了 /tmp 隔离副本），实测门限照旧"
+    },
+    {
+      "argv": "API_SCENARIO_CASE_ART=/tmp/w-perf-art-red-case bash /tmp/w-perf-art-red.sh",
+      "rc": 1,
+      "note": "第二条差口（案件工件目录 override）验证：重指 API_SCENARIO_CASE_ART 时，案件专属工件（logs/scenarios/resources/REPORT）进 case 目录，规范基线仍写 PERF_ART 下的 baseline.json——两案产物各归各位"
+    }
+  ],
+  "changes": [
+    "e2e/api-user-scenarios.sh：拆分规范基线落点（PERF_ART=e2e/artifacts/test-api-user-scenarios-perf，常量）与本次运行案件工件目录（ART，可用 API_SCENARIO_CASE_ART 重指）；BASELINE_JSON 恒写 PERF_ART/baseline.json；suite 标签恢复 test-api-user-scenarios-perf；summary echo 修正",
+    "e2e/artifacts/test-api-user-scenarios-perf/baseline.json：由空 hard_numeric_thresholds=[] 重新生成为 14 条硬门限（全部四字段、status=pass），large_output 与 upload 均非 null"
+  ],
+  "deviation": [],
+  "red_control": {
+    "threshold_tweaked": "pair_to_first_listing.p95 <= 0.001ms（原 5ms，只在 /tmp 隔离副本上改，原脚本未动）",
+    "observed_exit": 1,
+    "observed_output": "PERFORMANCE THRESHOLD FAIL: pair_to_first_listing.p95: measured=1.01705 ms, threshold <= 0.001 ms",
+    "baseline_status": "fail"
+  },
+  "zero_residue": {
+    "am_api_scenarios_tmp_dirs": "none",
+    "owned_procs": "none (生产 daemon pid 3393 :9900 未触碰)",
+    "fix_upload_auth_evidence": "untouched (git status 无改动)"
+  }
+}

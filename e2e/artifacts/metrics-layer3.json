@@ -1,0 +1,20 @@
+{
+  "first_frame": {
+    "count": 0,
+    "min_ms": 0,
+    "max_ms": 0,
+    "avg_ms": 0,
+    "p50_ms": 0,
+    "p90_ms": 0,
+    "samples": [],
+    "scenario": null
+  },
+  "aging": {
+    "restart_rounds_ok": 20,
+    "restart_rounds_fail": 0,
+    "reconnect_rounds_ok": 20,
+    "reconnect_rounds_fail": 0
+  },
+  "layer1_pass": false,
+  "layer3_pass": true
+}

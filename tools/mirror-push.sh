@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# 把本地单仓镜像推到 GitHub 上的三个仓库（云端备份，防信息丢失）。
+#
+# 为什么需要这个脚本：
+#   本地是单仓，远端是拆开的三仓，两边历史结构不同 —— 不能直接 git push。
+#   每次都要重新过滤一遍再强推，手工做必然会忘、会做错、会漏掉排除项。
+#
+# 排除项及其理由（改之前先读）：
+#   .team/ 除 evidence 外全部  编排与席位配置/运行时，用户 2026-08-14 裁定「不用上传」。
+#                    ⚠️ .team/evidence/ 是例外，必须上传 —— CLAUDE.md 原文：
+#                    「任务状态的唯一权威是 taskbook.yaml + .team/evidence/」。
+#                    taskbook 说「做了什么」，evidence 说「凭什么算做完」（根因/判据/实测数字/谁验的）。
+#                    只传前者 = 备份了结论没备份依据。2026-08-14 首次推送漏了这个，用户当场发现。
+#                    .team/runtime 单独 1.6 GB / 69189 文件，.team/logs 里 daemon 明文打配对 token —— 这两个永不上传。
+#   agents/          席位角色文件
+#   e2e/artifacts/   99 MB 的截图录屏，一次性证据不是代码
+#   */build/ .gradle 构建产物；历史里曾有 178 MB 的 gradle jar，超过 GitHub 单文件 100 MB 硬限
+#   *.env            席位 API key。三个 .env 从基线 commit 就在历史里，
+#                    d6f450e16「仓库卫生」只停止跟踪、没抹掉历史 —— 这里是唯一把它们挡在远端外面的地方
+#   agentmirrord*    编译出来的 Go 二进制，29 MB × 多个版本
+#
+# 用法：bash tools/mirror-push.sh
+set -euo pipefail
+
+SRC="$(cd "$(dirname "$0")/.." && pwd)"
+FR="$(python3 -c 'import git_filter_repo;print(git_filter_repo.__file__)')"
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+GH=git@github.com:Florious95
+# 推到哪条远端分支。PR 流程用非 main 分支当 base，故参数化；缺省仍是 main。
+MIRROR_BRANCH="${MIRROR_BRANCH:-main}"
+ME='Florious95 <281215401+Florious95@users.noreply.github.com>'
+
+# 署名归位（用户 2026-08-14 裁定「Contributor 应该是我」）。
+# 本地 249 个 commit 的 author 是 alauda@MacBook-Pro.local —— 本机主机名邮箱，
+# GitHub 关联不到任何账号，于是贡献者显示成一个陌生人而不是仓库主人。
+# 这里改的只是【推上去的那一份】；本地 sha 一律不动 ——
+# taskbook / .team/evidence / HANDOFF 全靠 sha 互相引用，重写本地历史会把这条链整体打断。
+cat > "$WORK/mailmap" <<MAILMAP
+$ME Alauda <alauda@MacBook-Pro.local>
+$ME Alauda <codebaton@team-agent.net>
+MAILMAP
+
+# 同时摘掉 Co-Authored-By: Claude —— 210 个 commit 带着它，
+# 不摘的话 Claude 会以共同作者身份出现在贡献者列表里。
+STRIP_COAUTHOR='commit.message = b"\n".join(
+    l for l in commit.message.split(b"\n") if not l.startswith(b"Co-Authored-By: Claude")
+).rstrip() + b"\n"'
+
+# 凭据兜底闸：过滤完还能找到 .env / 密钥文件就中止，绝不推上去。
+# 这条不是冗余 —— 过滤规则是人写的，人会写错，而推上去的历史撤不回来。
+guard() {
+  local leaked
+  leaked=$(git log --all --diff-filter=A --name-only --pretty=format: \
+           | grep -E '\.env$|tailscale_keys|\.credentials' | sort -u || true)
+  if [ -n "$leaked" ]; then
+    echo "中止：过滤后历史里仍有凭据文件：" >&2
+    echo "$leaked" >&2
+    exit 1
+  fi
+}
+
+
+# 祖先闸：filter-repo 是确定性映射，所以远端同名分支必须是本次过滤结果的祖先。
+# 不是 ⇒ 过滤规则变过（或远端被别处改过），这一推会静默重写远端历史 —— 中止。
+ancestor_gate() {
+  local remote_head
+  # 重基线：排除规则变更等导致历史必须整体重写时，显式 MIRROR_REBASELINE=1 才放行。
+  # 缺省不放行 —— 否则这道闸等于没立。
+  if [ "${MIRROR_REBASELINE:-0}" = "1" ]; then
+    echo "   ⚠️ MIRROR_REBASELINE=1：跳过祖先闸，本次将整体重写远端 $MIRROR_BRANCH"
+    return 0
+  fi
+  remote_head=$(git ls-remote origin "refs/heads/$MIRROR_BRANCH" 2>/dev/null | cut -f1)
+  [ -z "$remote_head" ] && { echo "   远端 $MIRROR_BRANCH 不存在，按新建分支推送"; return 0; }
+  if git cat-file -e "$remote_head^{commit}" 2>/dev/null && \
+     git merge-base --is-ancestor "$remote_head" HEAD; then
+    echo "   祖先闸通过：远端 $MIRROR_BRANCH @ ${remote_head:0:9} 是本次结果的祖先"
+  else
+    echo "中止：远端 $MIRROR_BRANCH @ ${remote_head:0:9} 不是过滤结果的祖先，推上去会重写远端历史" >&2
+    exit 1
+  fi
+}
+
+echo "==> corral-core（当前 App + 需求维基 + 任务书 + 文档）"
+git clone --no-hardlinks --quiet "$SRC" "$WORK/core"
+cd "$WORK/core"
+# 排除策略（用户 2026-08-20 裁定「远端就是云备份 + 规范，不用特别注重细节，
+# 文档也没必要忽略」）：默认全收，只挡三类 —— 凭据 / 巨物 / 构建产物。
+#   凭据：*.env（席位 API key，从基线 commit 就在历史里）、.team/logs/（daemon 明文打配对 token）
+#   巨物：.team/runtime/ 1.6GB·69189 文件、e2e/artifacts/ 126MB 截图录屏、e2e/bin/
+#   构建产物：*/build/ */.gradle/ *.apk agentmirrord*（历史里有 178MB 的 gradle jar，超 GitHub 单文件 100MB 硬限）
+# 席位角色文件（agents/、.team/grok/）与席位产物（.team/nodes/ 35MB）现在【上传】——
+# 它们是"凭什么这么干"的记录，和 .team/evidence/ 同一性质。
+TEAM_EXCLUDE=(
+  --path .team/runtime/ --path .team/logs/ --path .team/__pycache__/
+  --path .team/leader-inbox.log --path .team/watchdog.log
+)
+
+python3 "$FR" --force --invert-paths \
+  "${TEAM_EXCLUDE[@]}" \
+  --path e2e/artifacts/ --path e2e/bin/ --path server/ \
+  --path-glob '*/build/*' --path-glob '*/.gradle/*' \
+  --path-glob '*.env' --path-glob '*.apk' --path-glob 'agentmirrord*' \
+  --mailmap "$WORK/mailmap" --commit-callback "$STRIP_COAUTHOR" >/dev/null
+guard
+git remote add origin "$GH/corral-core.git"
+git branch -M "$MIRROR_BRANCH"
+ancestor_gate
+git push --force -u origin "$MIRROR_BRANCH"
+
+echo "==> corral-serve（服务端 daemon）"
+git clone --no-hardlinks --quiet "$SRC" "$WORK/serve"
+cd "$WORK/serve"
+python3 "$FR" --force --subdirectory-filter server >/dev/null
+python3 "$FR" --force --invert-paths --path-glob 'agentmirrord*' --path-glob '*.env' \
+  --mailmap "$WORK/mailmap" --commit-callback "$STRIP_COAUTHOR" >/dev/null
+guard
+cp "$SRC/LICENSE" ./LICENSE
+git add LICENSE
+# 时间钉死：用当前时间会让这个 commit 的 sha 每跑一次就变，
+# 于是远端 main 永远不是过滤结果的祖先 —— 这条镜像线会【每次都重写远端历史】。
+# 2026-08-20 祖先闸上线第一次就抓到了它。
+GIT_AUTHOR_DATE='2026-08-14T16:35:00+00:00' GIT_COMMITTER_DATE='2026-08-14T16:35:00+00:00' \
+git -c user.name=Florious95 -c user.email=281215401+Florious95@users.noreply.github.com \
+    commit -q -m "补入 Apache-2.0 LICENSE（拆仓时随服务端一起带上）" || true
+git remote add origin "$GH/corral-serve.git"
+git branch -M "$MIRROR_BRANCH"
+ancestor_gate
+git push --force -u origin "$MIRROR_BRANCH"
+
+# corral-app 是下一代 UI 的独立仓库，不由本单仓派生，故不在此镜像。
+echo "==> 完成。corral-app 独立维护，本脚本不动它。"

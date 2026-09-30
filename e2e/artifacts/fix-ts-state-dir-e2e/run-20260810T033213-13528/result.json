@@ -1,0 +1,16 @@
+{
+  "status": "fail",
+  "failure_reason": "app_files_dir_not_ready",
+  "workspace_visible": "no",
+  "isolated_session_visible": "no",
+  "headscale_node_count": 0,
+  "paired_url_class": "unknown",
+  "socks5_loopback_proof": "unknown",
+  "state_dir_proof": "yes",
+  "argv": {
+    "ts_authkey_flag_present": "no",
+    "authkey_value_present": "no"
+  },
+  "artifact_secret_value_present": "no",
+  "cleanup_status": "yes"
+}

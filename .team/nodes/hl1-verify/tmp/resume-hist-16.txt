@@ -1,0 +1,1 @@
+{'n': 26250, 'dark': 25351, 'bright': 685, 'color': 214} glyphs=True

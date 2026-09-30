@@ -1,0 +1,1 @@
+{"task_id":"app-tsnet","status":"pass","acceptance_results":[{"cmd":"bash -lc cd app && ./gradlew -q :app:testDebugUnitTest --tests *Tsnet*","exit":0},{"cmd":"bash tools/gate/run.sh","exit":0}],"result_id":"res_f7c0026c3a08","notes":"路线A：自写 Go 包装 gomobile 绑定 tsnet 用户态节点（8MB AAR/+15.5MB 内存/SOCKS5 dial），16 测；tools/tsnetbind 可复现构建+AAR入库追认；真实 tailnet 入网归 e2e 手册。Fable5 攻坚席第二单。"}

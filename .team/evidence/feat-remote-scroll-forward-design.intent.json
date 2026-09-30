@@ -1,0 +1,6 @@
+{"task_id":"feat-remote-scroll-forward","agent":"w-scroll-design","dispatched_at":"2026-08-14T03:22:19Z","round":7,
+ "intent":"原方案被实测证伪（copy-mode 结果进不了 pipe-pane 推流），重开契约设计，产出可行通道选项",
+ "trigger":"用户 2026-08-14 真机第 3 次报失败：上滑失败",
+ "leader_hypothesis":"Subscribe=pipe-pane 只镜像 pane 程序输出；copy-mode 滚动是 tmux 换视角，程序零输出 ⇒ 客户端收 0 字节。契约证据：stream.go Subscribe @inv none — 纯镜像，只读 pane 输出流",
+ "hypothesis_status":"读代码得出，未跑过，由 w-scroll-probe 证否",
+ "hard_constraint":"禁止触碰生产 daemon pid 81134 与用户真实 tmux（用户此刻正在真机实测）"}

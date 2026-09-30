@@ -143,4 +143,19 @@ class LandTermTest {
         compose.waitForIdle()
         compose.onNodeWithTag("session-terminal-placeholder").assertDoesNotExist()
     }
+
+    @Test
+    fun sessionTerminalPlaceholderSaysReconnectingWhileDisconnected() {
+        val h = OverlayTestHarness()
+        h.transport.peerClose(1006, "dropped")
+        compose.setContent {
+            AppTheme(appearance = Appearance.Light) {
+                SessionScreen(viewModel = h.vm, name = "sess-a", onBack = {})
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("session-terminal-placeholder").assertIsDisplayed()
+        compose.onNodeWithText("连接断开，正在重连…").assertIsDisplayed()
+        compose.onNodeWithText("正在加载终端…").assertDoesNotExist()
+    }
 }

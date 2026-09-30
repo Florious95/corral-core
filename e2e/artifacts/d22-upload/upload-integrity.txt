@@ -1,0 +1,4 @@
+source=e2e/artifacts/d22-upload/01-session-before-upload-current.png
+received=e2e/artifacts/d22-upload/received-upload.png
+sha256=2106e27bafac07bc2585383b3578021f8938119e50836e8a3aa7d22736e97ec6
+result=identical

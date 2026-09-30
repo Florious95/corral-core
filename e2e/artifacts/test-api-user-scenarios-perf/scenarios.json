@@ -1,0 +1,284 @@
+{
+  "status": "pass",
+  "percentile_method": "linear interpolation on sorted samples at (n-1)*p",
+  "scenarios": [
+    {
+      "id": "pairing_rejection_reason",
+      "status": "pass",
+      "assertions": [
+        "invalid token rejected",
+        "reason is non-empty",
+        "credential not echoed"
+      ]
+    },
+    {
+      "id": "pair_and_two_level_listing",
+      "status": "pass",
+      "assertions": [
+        "dial+auth+auth_ack succeeds",
+        "workspace/cwd first level present",
+        "session/ref second level present",
+        "state and aggregate fields are valid"
+      ]
+    },
+    {
+      "id": "state_field_transition",
+      "status": "pass",
+      "assertions": [
+        "initial state idle",
+        "API input changes visible pane state",
+        "list_delta carries blocked",
+        "workspace aggregate follows blocked"
+      ]
+    },
+    {
+      "id": "subscribe_snapshot_and_incremental_stream",
+      "status": "pass",
+      "assertions": [
+        "ten non-empty snapshot replies",
+        "matching session ref",
+        "subscription remains live for deltas"
+      ]
+    },
+    {
+      "id": "input_ack_and_output_round_trip",
+      "status": "pass",
+      "assertions": [
+        "twenty req_id-correlated input_ack replies",
+        "twenty hidden execution markers returned in delta",
+        "p50/p95 recorded"
+      ]
+    },
+    {
+      "id": "special_keys",
+      "status": "pass",
+      "assertions": [
+        "seven independent one-key input frames accepted",
+        "each distinct req_id has a successful input_ack",
+        "terminal effects are not claimed"
+      ]
+    },
+    {
+      "id": "multiline_paste",
+      "status": "pass",
+      "assertions": [
+        "one input frame carries embedded newline",
+        "one input_ack received",
+        "both executed-output markers returned"
+      ]
+    },
+    {
+      "id": "resize",
+      "status": "pass",
+      "assertions": [
+        "post-resize snapshot is the fact receipt",
+        "fresh listing reports 100x40"
+      ]
+    },
+    {
+      "id": "large_output_throughput",
+      "status": "pass",
+      "assertions": [
+        "one MiB exact payload received",
+        "begin/end markers exclude tty echo",
+        "zero lost bytes",
+        "throughput recorded"
+      ]
+    },
+    {
+      "id": "scrollback_pagination",
+      "status": "pass",
+      "assertions": [
+        "ten distinct contiguous req_id-correlated pages",
+        "range headers prove no gaps or overlaps",
+        "each page has 100 lines and a non-empty payload"
+      ]
+    },
+    {
+      "id": "upload_authentication",
+      "status": "pass",
+      "assertions": [
+        "missing bearer token rejected with 401 and reason",
+        "wrong bearer token rejected with 401 and reason",
+        "valid pairing token accepted",
+        "credentials not echoed"
+      ]
+    },
+    {
+      "id": "image_upload_and_path_injection",
+      "status": "pass",
+      "assertions": [
+        "five one-MiB multipart uploads return 200",
+        "paths stay inside isolated upload dir",
+        "on-disk size exact",
+        "returned path injected and visible via WS"
+      ]
+    },
+    {
+      "id": "disconnect_reconnect_resubscribe",
+      "status": "pass",
+      "assertions": [
+        "ten new WS auth handshakes",
+        "same ref resubscribed",
+        "current visible marker replayed in every snapshot"
+      ]
+    },
+    {
+      "id": "failure_reason",
+      "status": "pass",
+      "assertions": [
+        "unknown ref returns session_not_found",
+        "human-readable reason is non-empty"
+      ]
+    }
+  ],
+  "metrics": {
+    "pair_to_first_listing": {
+      "unit": "ms",
+      "count": 10,
+      "samples": [
+        0.779,
+        0.962,
+        0.853,
+        0.842,
+        0.546,
+        0.556,
+        0.585,
+        0.603,
+        0.583,
+        0.598
+      ],
+      "min": 0.546,
+      "p50": 0.6005,
+      "p95": 0.9129499999999999,
+      "max": 0.962
+    },
+    "subscribe_first_frame": {
+      "unit": "ms",
+      "count": 10,
+      "samples": [
+        124.109,
+        127.373,
+        130.419,
+        135.479,
+        128.6,
+        126.709,
+        128.388,
+        134.466,
+        132.099,
+        136.255
+      ],
+      "min": 124.109,
+      "p50": 129.5095,
+      "p95": 135.9058,
+      "max": 136.255
+    },
+    "output_end_to_end": {
+      "unit": "ms",
+      "count": 20,
+      "samples": [
+        41.058,
+        54.218,
+        39.725,
+        42.755,
+        41.213,
+        45.111,
+        43.169,
+        43.128,
+        43.159,
+        41.441,
+        40.904,
+        39.97,
+        40.358,
+        42.728,
+        36.109,
+        40.16,
+        49.696,
+        39.64,
+        42.062,
+        38.814
+      ],
+      "min": 36.109,
+      "p50": 41.327,
+      "p95": 49.92209999999999,
+      "max": 54.218
+    },
+    "large_output": {
+      "expected_bytes": 1048576,
+      "received_bytes": 1048576,
+      "loss_bytes": 0,
+      "input_to_end_ms": 79.006,
+      "stream_elapsed_ms": 34.766,
+      "throughput_bytes_per_second": 30160853.41693962
+    },
+    "scrollback_page": {
+      "unit": "ms",
+      "count": 10,
+      "samples": [
+        36.294,
+        35.122,
+        37.797,
+        37.685,
+        36.374,
+        39.349,
+        35.86,
+        36.022,
+        37.363,
+        38.975
+      ],
+      "min": 35.122,
+      "p50": 36.8685,
+      "p95": 39.1807,
+      "max": 39.349
+    },
+    "upload": {
+      "file_bytes": 1048576,
+      "latency": {
+        "unit": "ms",
+        "count": 5,
+        "samples": [
+          3.51,
+          2.046,
+          1.527,
+          1.479,
+          1.874
+        ],
+        "min": 1.479,
+        "p50": 1.874,
+        "p95": 3.2171999999999996,
+        "max": 3.51
+      },
+      "multipart_bytes": [
+        1048823,
+        1048823,
+        1048823,
+        1048823,
+        1048823
+      ]
+    },
+    "reconnect_recovery": {
+      "unit": "ms",
+      "count": 10,
+      "samples": [
+        120.252,
+        116.045,
+        117.273,
+        126.53,
+        117.01,
+        108.666,
+        113.826,
+        121.104,
+        115.135,
+        113.1
+      ],
+      "min": 108.666,
+      "p50": 116.5275,
+      "p95": 124.0883,
+      "max": 126.53
+    }
+  },
+  "observed_states": [
+    "idle",
+    "blocked"
+  ]
+}

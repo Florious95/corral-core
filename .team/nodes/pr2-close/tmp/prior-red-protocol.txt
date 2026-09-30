@@ -1,0 +1,6 @@
+=== RUN   TestCloseSessionRoundTrip
+    close_session_test.go:15: UnmarshalFrame(close_session): protocol: unknown frame type: "close_session"
+--- FAIL: TestCloseSessionRoundTrip (0.00s)
+FAIL
+FAIL	github.com/agentmirror/agentmirror/internal/protocol	0.533s
+FAIL

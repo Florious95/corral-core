@@ -1,0 +1,3 @@
+time=2026-08-10T19:47:58.321+08:00 level=INFO msg="single-instance guard acquired" pidfile=TASK_TMP/daemon-state/agentmirrord.pid
+time=2026-08-10T19:47:58.322+08:00 level=INFO msg="tailnet 已启用" hostname=MacBook-Pro.local state_dir=TASK_TMP/daemon-state/tsnet
+time=2026-08-10T19:48:01.443+08:00 level=INFO msg="tailnet 已入网" ip=100.64.0.1

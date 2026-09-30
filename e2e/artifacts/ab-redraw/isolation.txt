@@ -1,0 +1,1 @@
+session=ab-redraw pane=%0 command=claude.exe size=100x34

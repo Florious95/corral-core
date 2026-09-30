@@ -1,0 +1,58 @@
+{
+  "status": "red",
+  "tests": [
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "env -u TEAM_AGENT_* bash -lc \"cd server && go test ./cmd/agentmirrord/... ./internal/config/... ./internal/tsnetd/...\""
+      ],
+      "rc": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "env -u TEAM_AGENT_* bash e2e/feat-ts-wire-headscale.sh"
+      ],
+      "rc": 1,
+      "artifact": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T173005-22201/result.json"
+    }
+  ],
+  "changes": [
+    "验证 cmd 已把解析后的 stateDir/tsnet 传入 tsnetd.Options.Dir，且 Go 定向门禁通过。",
+    "E2E 使用临时 Android 用户的 app-private SharedPreferences stdin 注入，仅替换 QR 载体与 PairingViewModel 预探针；真实 Keystore 迁移、gomobile tsnet、daemon token 认证和 SOCKS5 工作区链均不绕过。",
+    "E2E 增加 pre-injection 进程退出、Keystore 迁移和 App tsnet state 的 presence-only 诊断，并保持 authkey 不进 argv、日志、截图或证据。",
+    "E2E 使用 emulator host alias 10.0.2.2 访问任务自建 headscale；该路径与 127.0.0.1 + adb reverse 的失败形状一致。"
+  ],
+  "deviation": [
+    "第二条验收仍为红：App native tsnet 未完成自建 headscale 注册；依裁定不得扩权修改 App、tools/tsnetbind 或 app/libs。",
+    "另案提案：立项定位 App/gomobile tsnet 自建控制面注册停在 NeedsLogin/StartLoginInteractive 的缺陷。"
+  ],
+  "notes": {
+    "go_gate": "rc=0",
+    "authoritative_e2e_run": {
+      "run_id": "run-20260810T173005-22201",
+      "state_dir_proof": "yes",
+      "keystore_migration": "yes",
+      "app_tsnet_state_proof": "yes",
+      "daemon_headscale_node_count": 1,
+      "app_registration": "App 60s 内未注册；App GoLog 仅见 NeedsLogin/StartLoginInteractive，未见 App 侧后续 AuthLoop/Up",
+      "cleanup": "yes",
+      "artifact_secret_value_present": "no"
+    },
+    "control_plane_paths": [
+      {
+        "path": "127.0.0.1 + adb reverse",
+        "run_id": "run-20260810T171333-30512",
+        "outcome": "同形：daemon 入网、App 未注册、总节点数 1"
+      },
+      {
+        "path": "10.0.2.2 emulator host alias",
+        "run_id": "run-20260810T173005-22201",
+        "outcome": "同形：daemon 入网、App 未注册、总节点数 1"
+      }
+    ],
+    "log_scope_correction": "daemon diagnostics 有 AuthLoop: state is Starting; done；缺失的是 App 侧后续 AuthLoop/Up，不是全局无 AuthLoop。"
+  }
+}

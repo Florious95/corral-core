@@ -1,0 +1,60 @@
+{
+  "task_id": "feat-ts-wire",
+  "status": "pass",
+  "note": "双验收全绿；最终自建 headscale + 隔离 daemon + 模拟器实链在安全预检阶段被阻断：cmd 未暴露 tsnet 状态目录，macOS 默认会写用户真实配置目录。该结论是隔离配置缺口导致未验证，不是产品功能失败。",
+  "acceptance_results": [
+    {"cmd": "bash -lc 'cd server && go test ./internal/tsnetd/... ./internal/pairing/...'", "exit": 0, "log_path": "e2e/artifacts/feat-ts-wire-verify3/go-acceptance.log"},
+    {"cmd": "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'", "exit": 0, "tests": 322, "failures": 0, "errors": 0, "log_path": "e2e/artifacts/feat-ts-wire-verify3/android-acceptance.log"}
+  ],
+  "independent_checks": [
+    {"cmd": "bash -lc 'cd server && go test -v ./internal/config -run ^TestTSAuthKeyResolution$'", "exit": 0, "result": "TS_AUTHKEY 环境变量解析通过；本席未生成 authkey、未启动 daemon，因此没有 authkey 明文进入 argv", "log_path": "e2e/artifacts/feat-ts-wire-verify3/authkey-env-resolution.log"},
+    {"check": "authkey artifact scan", "result": "本席全部新增日志均无 tskey key-shape", "log_path": "e2e/artifacts/feat-ts-wire-verify3/cleanup-proof.log"}
+  ],
+  "e2e": {
+    "status": "blocked",
+    "attempts": 0,
+    "reason": "安全隔离要求禁止改/重定向 HOME，且不得触碰用户真实 tsnet；server cmd 构造 tsnetd.Options 时未传 Dir，内部空 Dir 必然回落 os.UserConfigDir()。因此在启动 headscale/daemon/模拟器之前停止。",
+    "classification": "隔离配置缺口导致未验证，非产品功能失败",
+    "adjudicator_ruling": "msg_2cf77cc8a438",
+    "code_evidence": [
+      "server/cmd/agentmirrord/main.go:128-134",
+      "server/internal/tsnetd/tsnetd.go:45-49",
+      "server/internal/tsnetd/tsnetd.go:130-167",
+      "server/internal/config/config.go:61-74",
+      "server/internal/config/config.go:176-185"
+    ],
+    "evidence_log": "e2e/artifacts/feat-ts-wire-verify3/isolation-blocker-source.log",
+    "screenshots": []
+  },
+  "cleanup": {
+    "status": "pass",
+    "result": "本席未启动 headscale/daemon/容器且未改动模拟器；终审发现前席同域遗留孤儿 PID 19738 agentmirrord 与 PID 88840 headscale。按精确 PID+cwd 核验后以 SIGTERM 清理，两者均正常退出；永久删除 /private/tmp/tswire-e2e2（含 state/logs/headscale 数据及 key/preauthkey 文件）。复检相关 PID、TCP :33900/:58436/:38090/:38095、DERP UDP :38478、目录与 open files 全为零。用户生产 daemon PID 46081 仍在 /Users/alauda、监听 :9900，未触碰。",
+    "initial_conclusion_correction": "原零残留证明只检查了本席预留命名空间，范围过窄，现已撤回并由终审同域清场复检取代。",
+    "log_path": "e2e/artifacts/feat-ts-wire-verify3/cleanup-proof.log",
+    "followup_log_path": "e2e/artifacts/feat-ts-wire-verify3/cleanup-followup.log"
+  },
+  "deviations": [
+    {"kind": "write_scope_extension", "path": "server/internal/config/", "approved": "leader msg_b0ad995f48f8", "change": "纯加法：Config.TSAuthKey + -ts-authkey flag + TS_AUTHKEY env resolution + 单测"},
+    {"kind": "write_scope_extension", "path": "tools/tsnetbind/ + app/app/libs/", "approved": "leader msg_2458841040d0", "change": "Android 三雷修复（netlink/logpolicy/假Up）+ AAR 重建"}
+  ],
+  "aar": {
+    "rebuild_cmd": "cd tools/tsnetbind && bash build.sh  (ABIS 默认 android/arm64, gomobile bind -androidapi 26 -ldflags '-s -w')",
+    "size_bytes": 7995085,
+    "hot_build_seconds": 19
+  },
+  "landmines_cleared": [
+    "netlink RTM_GETLINK SELinux 禁令 → netmon.RegisterInterfaceGetter + Kotlin java.net.NetworkInterface 喂数（跨语言行文本契约，两端锁测）",
+    "logpolicy panic no-safe-place（Android 无 HOME/TMPDIR）→ TS_LOGS_DIR/TMPDIR/HOME 指进 app 私有状态目录",
+    "tsnetbind.Start 假 Up（srv.Start 即返回，key 无效也『成功』）→ 阻塞至 tsnet.Up 真入网，60s 超时显式失败"
+  ],
+  "notes_corrections": [
+    "docs/decisions/app-tsnet.md 的『已实测跑通』系 host mac 实测的失实表述：Android 真实起网在本案前从未通过（netlink 即死），leader 已裁定如实纠记于此"
+  ],
+  "followups": [
+    "fix-ts-dial-timing（P1，leader 已立案）：tailnet-only 地址首拨早于节点 Up 需手动重试，候选逐试应与 TS 起网做时序编排"
+  ],
+  "unverified": [
+    "自建 headscale + 隔离 daemon + 模拟器 App 经 SOCKS5 拨 100.64.0.1 配对实链：BLOCKED（cmd 未暴露 tsnet 状态目录，安全隔离下不可执行）——未验非功能失败",
+    "真实 Tailscale 官方控制面 + 用户真机 authkey 端到端连通：未验——未验非未实现"
+  ]
+}

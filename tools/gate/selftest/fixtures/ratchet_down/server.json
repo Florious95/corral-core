@@ -1,0 +1,8 @@
+{
+  "name": "server",
+  "ok": true,
+  "skipped": false,
+  "cases": 10,
+  "failures": [],
+  "duration_ms": 1200
+}

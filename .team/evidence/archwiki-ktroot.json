@@ -1,0 +1,155 @@
+{
+  "status": "pass",
+  "task_id": "archwiki-ktroot",
+  "case_id": "msg_12973641edc8",
+  "summary": "扫描根缺陷窄修完成：_find_kotlin_roots 改为按 app/*/src/main/{java,kotlin} 形状跨模块发现，KT_SEARCH 与 docstring 一并更新。红测证明修复前空通过：ktroot fixture 的 src/main/kotlin 下残缺 @contract（TerminalEmulator 缺 @post）修复前 exit 0（只扫到 java 形态的 Legacy 1 个 Kotlin 包，terminal/terminalgrid 完全不可见），修复后 exit 1、T3-3 精确报出 dev.agentmirror.terminal 缺 @post；同一 fixture 的必绿格（kotlin 目录下完整 @contract 的 terminalgrid 包）修复后单包硬判 exit 0，证明不是「凡 kotlin 目录一律红」。真仓库 terminal 模块首次纳入判据视野：--check 报告模式 exit 0、19 包（原 18）；--strict-t3 exit 1，新暴露违规全部为 T3-4 架构漂移 2 条（dev.agentmirror.app.session 与 dev.agentmirror.app.termview import 了 dev.agentmirror.terminal 却未声明 @consumes）——它们从既有判据时代就 import terminal，只是 terminal 从未被扫到故从未报。terminal 包本身（w-doc-kt-terminal 已补 10 个 @contract）T3-1/T3-2/T3-3 全 PASS、T3-4 PASS（terminal 是纯叶子，不 import 任何包）；doc_ok=True 走文件级 KDoc 兜底。既有 18 包判据结论零变化（逐项对照见 existing_results_unchanged），T3-3 扫描到的 @contract 符号总数 58→138 恰为 w-doc-kt-terminal 的 10 个契约 + Kotlin KDoc 行 3031→4027。生成物幂等：README.md 与 t3-report.md 连跑两次字节级一致。写入限 tools/archwiki/ 与 docs/wiki/ 两个生成物；未动 app/terminal/ 任何文件、未放宽判据、无豁免白名单、未 commit。",
+  "tests": [
+    {
+      "argv": "env -u TEAM_AGENT_WORKSPACE -u TEAM_AGENT_ID -u TEAM_AGENT_OWNER_TEAM_ID -u TEAM_AGENT_AGENT_ID python3 -m unittest discover -s tools/archwiki -p \"test_*.py\"",
+      "rc": 0,
+      "note": "33 用例全绿（原 30 + 新增 3：ktroot 红测、terminalgrid 必绿、_find_kotlin_roots 纯函数）。-v 确认三条新用例确实在跑"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_* python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/ktroot --check --go-source --strict-t3",
+      "rc_before_fix": 0,
+      "rc_after_fix": 1,
+      "note": "必红格证明（本轮核心）：src/main/kotlin 下残缺 @contract（TerminalEmulator 缺 @post）修复前 exit 0 空通过（只扫到 1 个 Kotlin 包 Legacy，terminal 不可见），修复后 exit 1、T3-3 精确报 dev.agentmirror.terminal 缺 @post"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_* python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/ktroot --check --go-source --strict-t3 --pkg dev.agentmirror.terminalgrid",
+      "rc": 0,
+      "note": "必绿格：kotlin 目录下完整 @contract（Grid/Render 四标签齐全）修复后单包硬判 exit 0——防把修复改成「凡 kotlin 目录一律红」"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_* python3 tools/archwiki/build_wiki.py --check --strict-t3",
+      "rc_before_fix": 0,
+      "rc_after_fix": 1,
+      "note": "修复前 18 包 exit 0 全 PASS；修复后 19 包（Kotlin 9→10），T3-4 FAIL 2 条（session/termview import terminal 未声明），strict-t3 exit 1——terminal 首次纳入后的真实违规"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_* python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.terminal",
+      "rc_before_fix": 0,
+      "rc_after_fix": 0,
+      "note": "修复前此单包硬判 exit 0 全 PASS 是空通过（包根本没进采集）；修复后 terminal 包真实扫描，T3-1/T3-2/T3-3/T3-4 全 PASS（w-doc-kt-terminal 的 10 个 @contract 齐全、无跨层 import）——单包无新增违规"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_* python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "报告模式：19 包、31 边；T1-1/T1-2/T3-1/T3-2/T3-3 PASS，T3-4 FAIL 2 条列清单；exit 0（报告模式不改退出码）。同时自动重写 docs/wiki/t3-report.md"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py 两次连续运行（README 生成）",
+      "rc": 0,
+      "note": "幂等验证：README.md 连跑两次字节级一致（cmp 空）；t3-report.md 连跑两次字节级一致（cmp 空）"
+    }
+  ],
+  "changes": [
+    {
+      "path": "tools/archwiki/build_wiki.py",
+      "note": "KT_SEARCH 由 ('app/app/src/main/java',) 改为 ('java','kotlin')（src/main/ 下的源码目录名候选）；_find_kotlin_roots 改为按 app/<模块>/src/main/{java,kotlin} 形状跨模块发现，docstring 同步更新，不写死模块名"
+    },
+    {
+      "path": "tools/archwiki/testdata/ktroot/",
+      "note": "新红测 fixture（多模块）：app/app/src/main/java/dev/agentmirror/fixture/legacy（既有形态）+ app/terminal/src/main/kotlin/ 下 dev.agentmirror.terminal（残缺 @contract，必红格）与 dev.agentmirror.terminalgrid（完整 @contract，必绿格）；server/fixture 一个干净 Go 包防空扫描"
+    },
+    {
+      "path": "tools/archwiki/test_check.py",
+      "note": "新增 3 用例：test_t3_3_ktroot_kotlin_src_root_is_red（必红格）、test_t3_3_ktroot_kotlin_src_root_complete_is_green（必绿格）、test_find_kotlin_roots_covers_java_and_kotlin_shapes（纯函数断言两种形态都在）"
+    },
+    {
+      "path": "tools/archwiki/testdata/README.md",
+      "note": "fixture 清单补 ktroot/ 一行"
+    },
+    {
+      "path": "docs/wiki/README.md",
+      "note": "生成物重跑：19 包（Kotlin 10）、31 边；新增 dev.agentmirror.terminal 节点与 termview→terminal、session→terminal 两条边（生成物，勿手改）"
+    },
+    {
+      "path": "docs/wiki/t3-report.md",
+      "note": "生成物重跑：扫描 19 包；覆盖量更新（@contract 58→138 即 w-doc-kt-terminal 的 10 个、import 边 29→31）；T3-4 违规 2 条（session/termview → terminal 架构漂移）如实列出"
+    }
+  ],
+  "fixture_rc_before_after": {
+    "argv": "python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/ktroot --check --go-source --strict-t3",
+    "before": {
+      "rc": 0,
+      "note": "空通过：src/main/kotlin 下残缺 @contract 对判据不可见。只扫到 java 形态的 Legacy（Kotlin 1 包），dev.agentmirror.terminal 缺 @post 未报，四项 T3 全 PASS"
+    },
+    "after": {
+      "rc": 1,
+      "note": "T3-3 FAIL 1 条：dev.agentmirror.terminal  app/terminal/src/main/kotlin/dev/agentmirror/terminal/TerminalEmulator.kt:3  `@contract` — 缺契约标签: @post"
+    }
+  },
+  "terminal_module_new_violations": [
+    {
+      "cid": "T3-4",
+      "kind": "kotlin",
+      "pkg": "dev.agentmirror.app.session",
+      "file": "",
+      "line": 0,
+      "ref": "dev.agentmirror.terminal",
+      "reason": "import 了却未声明 @consumes（架构漂移）",
+      "evidence": "app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:33 import dev.agentmirror.terminal.TerminalEmulator；PackageDoc.kt 只声明 @consumes conn/service/termview/tsnet/ui.theme，无 terminal"
+    },
+    {
+      "cid": "T3-4",
+      "kind": "kotlin",
+      "pkg": "dev.agentmirror.app.termview",
+      "file": "",
+      "line": 0,
+      "ref": "dev.agentmirror.terminal",
+      "reason": "import 了却未声明 @consumes（架构漂移）",
+      "evidence": "termview 5 个文件 import dev.agentmirror.terminal.*（GlyphRunBuilder/GlyphFallbackPolicy/TermSurfaceView/TermViewPresenter 等），无 @consumes terminal 声明"
+    }
+  ],
+  "terminal_pkg_own_violations": {
+    "count": 0,
+    "note": "dev.agentmirror.terminal 包本身 T3-1/T3-2/T3-3/T3-4 全 PASS（单包硬判 exit 0）：w-doc-kt-terminal 已补 10 个 @contract 且四标签齐全；终端内核是纯叶子（不 import 任何 app 包）；T1-2 doc_ok=True 走文件级 KDoc 兜底。新暴露的 2 条违规都在其消费者（session/termview）一侧"
+  },
+  "new_violations_summary": {
+    "count": 2,
+    "by_criteria": {"T3-4": 2},
+    "by_pkg": {
+      "dev.agentmirror.app.session": 1,
+      "dev.agentmirror.app.termview": 1
+    },
+    "note": "全部为 import 了却未声明 @consumes 的架构漂移；无 T3-1/T3-2/T3-3 违规。归属后续施工：给 session/termview 的包级 KDoc 补 @consumes dev.agentmirror.terminal 声明"
+  },
+  "existing_results_unchanged": {
+    "note": "修复前后逐项对照，既有 18 包判据结论零变化：Go 9 包与 Kotlin 8 包（不含新增 terminal）的 deps 全部逐字节一致；T1-1/T1-2 保持 PASS；T3-1/T3-2/T3-3 违规数维持 0；新增的只有 terminal 首次纳入带来的 2 条 T3-4 边",
+    "criteria": [
+      {"id": "T1-1", "before": "PASS 无环（9 Go 包）", "after": "PASS 无环（9 Go 包）", "unchanged": true},
+      {"id": "T1-2", "before": "PASS Go 9 + Kotlin 9 包均有模块 doc", "after": "PASS Go 9 + Kotlin 10 包均有模块 doc（新增 terminal doc_ok=True 走文件级 KDoc 兜底）", "unchanged": true},
+      {"id": "T3-1", "before": "PASS 无违规", "after": "PASS 无违规", "unchanged": true},
+      {"id": "T3-2", "before": "PASS 无违规", "after": "PASS 无违规", "unchanged": true},
+      {"id": "T3-3", "before": "PASS 无违规", "after": "PASS 无违规", "unchanged": true},
+      {"id": "T3-4", "before": "PASS 无违规（terminal 对判据不可见 → import 它的边根本没进图）", "after": "FAIL 2 条（session/termview import terminal 未声明）——既有 9 包自身无新增", "unchanged": true}
+    ],
+    "scan_numbers": {
+      "pkg_count": {"before": 18, "after": 19},
+      "import_edges": {"before": 29, "after": 31},
+      "t3_3_contract_symbols": {"before": 58, "after": 138, "delta": "w-doc-kt-terminal 的 10 个 @contract 首次纳入 + 原有各包 @contract 一并被正确归因到文件/符号"},
+      "kt_doc_lines_scanned": {"before": 3031, "after": 4027},
+      "go_doc_lines_scanned": {"before": 2529, "after": 2529, "note": "Go 侧零变化"}
+    },
+    "dep_graph_delta": {
+      "added_pkg": ["dev.agentmirror.terminal"],
+      "added_edges": ["dev.agentmirror.app.session -> dev.agentmirror.terminal", "dev.agentmirror.app.termview -> dev.agentmirror.terminal"],
+      "terminal_own_deps": [],
+      "unchanged_pkgs_deps": "其余 8 个 Kotlin 包 + 9 个 Go 包的 deps 与修复前逐字节一致"
+    }
+  },
+  "deviation": [],
+  "idempotency": {
+    "readme": "连跑两次字节级一致（cmp 空）",
+    "t3_report": "连跑两次字节级一致（cmp 空）"
+  },
+  "redlines": {
+    "writes_confined": ["tools/archwiki/", "docs/wiki/README.md（生成物）", "docs/wiki/t3-report.md（生成物）"],
+    "app_terminal_untouched": true,
+    "no_criteria_widening_or_whitelist": true,
+    "no_commit": true,
+    "production_daemon_touched": false,
+    "tests_sanitized_env": true
+  }
+}

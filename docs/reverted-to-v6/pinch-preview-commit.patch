@@ -1,0 +1,824 @@
+diff --git a/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt b/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt
+index 20e698d0b..d5ccbebd3 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt
+@@ -28,10 +28,13 @@ import android.view.GestureDetector
+ import android.view.MotionEvent
+ import android.view.ScaleGestureDetector
+ import android.view.View
++import androidx.core.view.ViewCompat
++import androidx.core.view.WindowInsetsCompat
+ import dev.agentmirror.terminal.Cell
+ import dev.agentmirror.terminal.CharWidth
+ import dev.agentmirror.terminal.TerminalColor
+ import dev.agentmirror.terminal.TerminalEmulator
++import kotlin.math.floor
+ import kotlin.math.max
+ import kotlin.math.roundToInt
+ 
+@@ -66,6 +69,75 @@ class TermSurfaceView @JvmOverloads constructor(
+ 
+     private var backToBottomLabel: String? = null
+ 
++    /**
++     * 当前 IME inset 高度（px）。D-38 真根因修复：View 层从 WindowInsets 直接查询 IME 可见性
++     * 与高度（presenter 不做任何 IME 推断），回前台时用「当前 View 高 + imeInset」作为**扣除
++     * IME 后的稳定窗口高**传给 [TermViewPresenter.onRealViewportChanged]——避免把 IME 挤压值
++     * 当真实视口 rebase（分屏/旋转传真实变化，IME 在屏传扣除后的全高）。
++     *
++     * adjustResize + edge-to-edge 下 View 高度已被 IME 挤过（height = 窗口高 - IME inset），
++     * 所以「height + imeInset」= 无 IME 时的稳定高，正是 presenter 该收到的真实视口。
++     */
++    private var imeInsetPx: Int = 0
++
++    /**
++     * 稳定视口基准（px）：IME 收起时观测到的 View 高度，D-38 主路径「候选 3」方案。
++     *
++     * 设计（leader 批准，w-base-v2 数据推翻「View 能看 insets」前提后定稿）：
++     *   **IME 状态从知道它的那一层（Compose）拿，不从被挤压的 View 拿**——键盘弹出时是 Compose
++     *   imePadding 把终端 Box 挤小，View 从未与键盘重叠、其 ime inset 恒 0（正确）。因此用
++     *   [imeVisible]（Compose 根已知的事实，与 imePadding 同源）作为事件源，而非 View 的 insets。
++     *
++     * 稳定高 = IME 收起（imeVisible==false）时观测到的 View 高度（观测事实）。写入条件（leader
++     * 硬约束，防通路时序）：**imeVisibleKnown && !imeVisible 才写**——布尔尚未到达（初始态未知）
++     * 或 IME 在屏（挤压）时都不写，避免把被挤压的高记成稳定高。
++     */
++    private var stableWidthPx: Int = 0
++    private var stableHeightPx: Int = 0
++
++    /**
++     * IME 可见性（Compose 侧事件源，候选 3）。由 SessionScreen 在重组时经
++     * [setImeVisible] 传入——Compose 根读 WindowInsets.isImeVisible（与 imePadding 同源，
++     * 已被证实工作），显式告诉本 View「这次布局变矮是否是 IME 造成的」。
++     */
++    private var imeVisible = false
++
++    /** 是否已收到过至少一次 [setImeVisible] 更新（初始态未知防护：布尔未到达时不写稳定高）。 */
++    private var imeVisibleKnown = false
++
++    /**
++     * Compose 侧传入 IME 可见性（候选 3 事件源，SessionScreen AndroidView.update 调用）。
++     *
++     * @contract
++     * @pre 任意线程/任意时序可调（Compose 重组在主线程）
++     * @post imeVisible 更新为入参；imeVisibleKnown 置位（此后稳定高写入条件可判定）
++     * @err none
++     * @inv 只改事件源状态，不动几何、不发 resize
++     */
++    fun setImeVisible(visible: Boolean) {
++        imeVisible = visible
++        imeVisibleKnown = true
++    }
++
++    /**
++     * 稳定高写入（IME 收起观测 + 重放）。候选 3 的唯一稳定高写入点。
++     *
++     * 条件（leader 硬约束）：`imeVisibleKnown && !imeVisible`——布尔已到达且 IME 收起时，
++     * 此刻 View 高 = 稳定高（观测事实），记录并重放给 presenter。初始态未知或 IME 在屏时
++     * **不写**（避免把挤压高当稳定高）。
++     *
++     * 注意：本方法在 [onViewportSizeChanged] 内被调（高度变化时刻），但**只在 imeVisibleKnown
++     * 且 IME 收起**时写——若布尔晚于高度变化到达，写入被推迟到下一次 [onViewportSizeChanged]
++     * 或 [onWindowVisibilityChanged]，不会被「布尔未到」的挤压高污染。
++     */
++    private fun recordStableHeightIfImeClosed() {
++        if (imeVisibleKnown && !imeVisible && width > 0 && height > 0) {
++            stableWidthPx = width
++            stableHeightPx = height
++            presenter?.onRealViewportChanged(width, height)
++        }
++    }
++
+     // ---- 绘制工具 ----
+     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+     private val fgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+@@ -111,6 +183,9 @@ class TermSurfaceView @JvmOverloads constructor(
+                 val factor = detector.scaleFactor
+                 val newW = max(MIN_CELL_PX, (it.cellWidth * factor).roundToInt())
+                 val newH = max(MIN_CELL_PX, (it.cellHeight * factor).roundToInt())
++                // fix-pinch-preview-commit（raw/041）：预览语义——只更新字号不 emit resize。
++                // 手势步不重排（服务端不扰动），松手时经 onTouchEvent 的 ACTION_UP 提交一次
++                // （不用 onScaleEnd：真机多指分阶段抬起会多触发）。
+                 it.onFontSizeChanged(newW, newH)
+             }
+             return true
+@@ -121,10 +196,9 @@ class TermSurfaceView @JvmOverloads constructor(
+         override fun doFrame(frameTimeNanos: Long) {
+             framePending = false
+             val p = presenter ?: return
++            // 整帧全窗口重绘（P0 回退：脏行渲染两次让 App 不显示，回到确定能用的状态）。
+             // 排空脏区缓冲（防无界增长）后整帧重绘。不再自续下一帧：帧循环是纯数据
+-            // 驱动的（presenter.onFrameRequested 唤醒），空闲即零帧（静默经济红线；
+-            // 旧版 showBackToBottom 自续 = 锁定历史时 60fps 空转，本案顺带拆除）。
+-            while (p.takeDamage().isNotEmpty()) Unit
++            // 驱动的（presenter.onFrameRequested 唤醒），空闲即零帧（静默经济红线）。
+             p.beginFrame()
+             invalidate()
+         }
+@@ -171,6 +245,72 @@ class TermSurfaceView @JvmOverloads constructor(
+     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+         super.onSizeChanged(w, h, oldw, oldh)
+         presenter?.onViewportSizeChanged(w, h)
++        // 候选 3：高度变化时刻尝试记录稳定高（仅在 imeVisibleKnown 且 IME 收起时写，
++        // 避免把挤压高当稳定高——布尔晚到也不污染，见 recordStableHeightIfImeClosed）。
++        recordStableHeightIfImeClosed()
++    }
++
++    /**
++     * 窗口可见性变化（回前台/切后台）——fix-viewport-restore-d38 的根因补齐。
++     *
++     * D-38（用户多次报告）：切后台再回前台，终端只占屏幕顶部约 1/4、下方大片空黑。
++     * 根因：**回前台时没有任何人把终端几何重新对齐到当前 View 尺寸**——View 高复原但
++     * [onSizeChanged] 未必回调（尺寸与离开前相同），presenter 的内核 rows 停在离开前
++     * （或首帧被 IME 挤压）的旧小几何上。v5 曾用本方法补这个位（当时 QA PASS），
++     * 该文件在回收导航时被列为禁区未捞回，缺口一直空着。
++     *
++     * 修复：VISIBLE 时显式调 [TermViewPresenter.onRealViewportChanged] 重放当前几何——
++     * 真实视口变化（回前台）重算 rows/cols、内核尺寸不一致则 emit 一次 resize，
++     * 把几何重新对齐到当前 View（区别于 [onSizeChanged] 的 IME/输入框挤压语义，
++     * 后者只推 visibleRows 不发 resize——两者入口正交，见 presenter 注释）。
++     *
++     * 非 VISIBLE（切后台/遮罩）时撤销待执行帧：后台期间不渲染，避免 Choreographer
++     * 在不可见窗口空转（静默经济红线；v5 同款），帧循环仍纯数据驱动、空闲零帧。
++     *
++     * @contract
++     * @pre visibility 为 Android 窗口可见性值；presenter/有效尺寸可未就绪
++     * @post VISIBLE 且尺寸正：presenter 重放当前几何、按需 emit 一次 resize 并请求整帧；
++     *       VISIBLE 但尺寸未就绪（0x0）：安全忽略（presenter 正尺寸才重算）；
++     *       非 VISIBLE：撤销待执行帧、framePending 复位
++     * @err none
++     * @inv 不可见期间 framePending=false；恢复只复用当前 width/height，不猜测历史尺寸
++     */
++    override fun onWindowVisibilityChanged(visibility: Int) {
++        super.onWindowVisibilityChanged(visibility)
++        if (visibility != VISIBLE) {
++            if (framePending) {
++                Choreographer.getInstance().removeFrameCallback(frameCallback)
++                framePending = false
++            }
++            return
++        }
++        if (width <= 0 || height <= 0) return
++        // D-38 主路径「候选 3」（leader 批准，事件源驱动）：
++        // - 宽度不变（回前台，IME 在屏或收起）：复用稳定高 [stableHeightPx]（IME 收起时由
++        //   [recordStableHeightIfImeClosed] 观测写入）。稳定高是观测事实，非「height + ime」加法，
++        //   不依赖 View 的 ime inset（w-base-v2 数据：键盘不覆盖 View，View inset 恒 0）；
++        // - 宽度变了（旋转/分屏/多窗口 = 真实几何变化）：稳定高过期，用当前 View 高重新确立；
++        // - 边界：宽度不变但稳定高从未写入（首次 IME 在屏、布尔未到达）→ 若 IME 在屏则挤压态
++        //   不重算（不发 resize，避免把挤压值当真实）；IME 收起则用当前高（= 稳定高，无害）。
++        if (stableHeightPx > 0 && width != stableWidthPx) {
++            // 已记录稳定高且宽度变 = 真实几何变化（旋转/分屏/多窗口，不管 imeVisible）：
++            // 稳定高过期，用当前 View 高重新确立（leader 边界：IME 在屏期间宽度变也必须重算）。
++            stableWidthPx = width
++            stableHeightPx = height
++            presenter?.onRealViewportChanged(width, height)
++        } else if (stableHeightPx > 0) {
++            // 已记录稳定高且宽度不变：复用（IME 在屏挤压/收起都传稳定高，不 rebase 挤压值）。
++            presenter?.onRealViewportChanged(width, stableHeightPx)
++        } else if (!imeVisibleKnown || imeVisible) {
++            // 无稳定高 + 初始态未知或 IME 在屏：不重算不 emit——View 高可能是 IME 挤压值也可能是
++            // 真实值，无从区分（leader 时序守卫：布尔未到不写稳定高、不把未确认高度当真实几何）。
++        } else {
++            // 无稳定高 + IME 收起：当前 View 高 = 稳定高（观测事实），记录并重放。
++            stableWidthPx = width
++            stableHeightPx = height
++            presenter?.onRealViewportChanged(width, height)
++        }
++        postFrame()
+     }
+ 
+     @SuppressLint("ClickableViewAccessibility")
+@@ -178,11 +318,18 @@ class TermSurfaceView @JvmOverloads constructor(
+         presenter ?: return super.onTouchEvent(event)
+         scaleDetector.onTouchEvent(event)
+         val handled = gestureDetector.onTouchEvent(event)
++        // fix-pinch-preview-commit 提交点（raw/041）：**只有 ACTION_UP（最后一指抬起）才提交**。
++        // 不用 onScaleEnd：真机上多指分阶段抬起会让 onScaleEnd 被多次触发 → 中途额外落地
++        // （w-base-v2 实测 4→2，中途 83x67）。ACTION_UP 语义 = 全部手指离开 = 手势真正结束，
++        // 唯一且可靠；ACTION_POINTER_UP（一指抬起但仍有他指）不提交。
++        if (event.actionMasked == MotionEvent.ACTION_UP) {
++            presenter?.onPinchCommit()
++        }
+         if (!handled) super.onTouchEvent(event)
+         return true
+     }
+ 
+-    /** 每帧：清屏、铺可见窗口全部行背景、按同色 run 合并画前景。 */
++    /** 每帧：清屏、铺可见窗口全部行背景、按同色 run 合并画前景（整帧全窗口重绘，P0 回退）。 */
+     override fun onDraw(canvas: Canvas) {
+         super.onDraw(canvas)
+         val p = presenter ?: return
+@@ -224,14 +371,34 @@ class TermSurfaceView @JvmOverloads constructor(
+         // 一列推进；主格矩形铺满 width 列（含续格列），续格只占位不重画。旧实现把主格
+         // 当 2 列推进、续格又推 1 列且只铺 1 列宽矩形——背景色块内每个 CJK 留 2 列
+         // 默认深底黑洞、后续格整体右漂（用户真机实拍黑块马赛克根因，fix-term-bg-cjk）。
++        // 右缘护栏（fix-cols-grid-convergence 修法 3）：当网格 cols 超过视口可容纳列数
++        // （A 回归/异常条件）时，末列宽字符主格矩形右缘会越过视口宽被 Canvas 裁半
++        // （用户「『它』的一半」）。此处把越界矩形收边进视口（宁可裁背景也不整字符出画布），
++        // 并上报可观测信号（约束三：护栏不许静默——测试断言 clipGuardEngageCount > 0）。
++        // 正常条件（cols 与画布同源）下任何矩形右缘 ≤ 视口宽，本护栏恒不 engage。
++        // 仅当 View 已真实布局（width>0）时启用护栏；width=0（测试直接 view.draw 未 layout）
++        // 退回原行为不裁剪，避免误伤既有整帧渲染测试（TermBgCjkAlignTest 等走 view.draw 无
++        // layout，clipRight=0 会把所有格裁掉——这正是它们 red 的原因）。
++        val clipRight = if (width > 0) width.toFloat() else Float.MAX_VALUE
+         var x = 0
+         for (cell in cells) {
+             if (cell.width == 0) {
+                 x += cellW
+                 continue
+             }
+-            bgPaint.color = colorFor(cell.style.bg, background = true)
+-            canvas.drawRect(x.toFloat(), rowY.toFloat(), (x + cellW * cell.width).toFloat(), (rowY + cellH).toFloat(), bgPaint)
++            val right = (x + cellW * cell.width).toFloat()
++            // 护栏三段式：完全在视口内照画；跨越右缘收边（engage 可观测）；完全在视口外
++            // （网格超宽到列起点已出画布）直接跳过不画——收边到负数宽度是 bug，绝不画负矩形。
++            if (x < clipRight) {
++                val clippedRight = if (right > clipRight) {
++                    presenter?.onClipGuardEngaged()
++                    clipRight
++                } else {
++                    right
++                }
++                bgPaint.color = colorFor(cell.style.bg, background = true)
++                canvas.drawRect(x.toFloat(), rowY.toFloat(), clippedRight, (rowY + cellH).toFloat(), bgPaint)
++            }
+             x += cellW
+         }
+         drawTextRuns(canvas, cells, rowY)
+@@ -349,7 +516,14 @@ class TermSurfaceView @JvmOverloads constructor(
+         // ascent 为负（基线上方高度）：基线偏移 = -ascent，保证首行字形完整落在 y∈[0,cellH)。
+         baselinePx = -metrics.ascent
+         val textW = fgPaint.measureText("W")
+-        cellW = max(1, textW.roundToInt())
++        // 修法 2（fix-cols-grid-convergence）：cellW 求法从 roundToInt() 改 floor——
++        // 宁可少一列不可多一列（对齐 web terminal.js:65）。round 会把实测 10.6px 取整到
++        // 11px，放大绘制步进更容易越界；floor 保证 cols*cellW ≤ 视口宽，最后一列整格可见。
++        cellW = max(1, floor(textW).toInt())
++        // 修法 1：把实测列推进宽回写 presenter，使上报 cols 与绘制推进同一栅格来源
++        // （根治「最右列被截」：cols 不再用名义 10px 算）。setMeasuredCellWidth 幂等——
++        // 同值直接 no-op，首次回写后收敛，至多一次 recomputeGeometry（约束一反馈环收敛）。
++        p.setMeasuredCellWidth(cellW)
+         lineHeightPx = p.cellHeight
+     }
+ 
+diff --git a/app/app/src/main/java/dev/agentmirror/app/termview/TermViewPresenter.kt b/app/app/src/main/java/dev/agentmirror/app/termview/TermViewPresenter.kt
+index 3e82a908f..6ceafde62 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/termview/TermViewPresenter.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/termview/TermViewPresenter.kt
+@@ -39,7 +39,6 @@ class TermViewPresenter(
+     private val emulator: TerminalEmulator,
+     private val onResizeRequest: (rows: Int, cols: Int) -> Unit,
+ ) {
+-
+     /** 视口顶行（逻辑行，0=最老历史）：null=跟随底部；非 null=锁定历史，冻结不变。 */
+     private var topLine: Int? = null
+ 
+@@ -64,6 +63,23 @@ class TermViewPresenter(
+     private var viewportWidthPx: Int = 0
+     private var viewportHeightPx: Int = 0
+ 
++    /**
++     * 稳定视口基准（扣除 IME inset 后的窗口像素尺寸），D-38 真根因判据的载体。
++     *
++     * 设计（leader 打回几何推断后定稿）：**presenter 不做任何关于 IME 的推断**——「回前台那一刻
++     * IME 在不在屏」是 View 层通过 WindowInsets 直接可知的事实，由 View 层扣除 IME inset 后把
++     * 稳定窗口高度传给 [onRealViewportChanged]。presenter 收到即视为真实视口，重算并更新本基准。
++     *
++     * 为什么不能几何推断：分屏/多窗口拖拽/系统栏变化都可能是「宽度不变 + 高度变小」，与 IME 挤压
++     * 同形。若 presenter 猜「小高度=IME」会把一次真实的几何变化当成 IME 忽略，制造更难查的假阴性
++     * （leader 打回理由）。raw/019 的直接翻译是「IME 从不相干 → 扣掉它」，而非「猜到它然后忽略」。
++     *
++     * 本基准由 View 层传的「扣除 IME 后高度」驱动；在首帧 seed（[onViewportSizeChanged]）与每次
++     * 真实视口变化（[onRealViewportChanged]）时更新。仅作「高度复原/增长」这类自愈判定的参照。
++     */
++    private var stableWidthPx: Int = 0
++    private var stableHeightPx: Int = 0
++
+     /**
+      * 首次真实视口是否已建立（raw/019：唯一合法的一次 resize 已上抛）。
+      *
+@@ -94,6 +110,34 @@ class TermViewPresenter(
+     /** 本帧内核快照缓存：beginFrame 抓一次，避免 lineCells 对屏幕行逐行深拷贝。 */
+     private var frameSnapshot: ScreenSnapshot? = null
+ 
++    /**
++     * 几何自愈纠正累计次数（D-38 真根因，可观测探针）。
++     *
++     * 自愈规则（leader 裁定）：当「无挤压时的像素 rows > 内核 rows」时，说明内核曾被错误
++     * emit 钉在旧小值上（回前台 IME 挤压 rebase 的竞态后果），补发一次 resize 纠正。
++     * 正常路径下本值**恒为 0**——挤压时像素 rows < 内核、复原时 == 内核，从不 > 内核；
++     * 若本值在正常路径也增长，说明主路径有问题（那才是真正要修的东西，leader 硬约束）。
++     */
++    var geometryCorrectionCount: Int = 0
++        private set
++
++    /**
++     * 历史最大上报 rows（自愈判据的必要成分）。
++     *
++     * 自愈只应在「内核曾被从更大值错误钉小」时触发。区分两个同形场景：
++     *   - 首帧被 IME 挤压 seed（内核=92，从未到过更大值）→ 复原 96>92 但 maxReportedRows==92，
++     *     不满足「历史更大」→ 不触发（正常路径，leader 收工条件：count 恒 0）；
++     *   - 竞态 rebase（内核从 96 被钉到 86）→ 复原 96>86 且 maxReportedRows==96 > 86 → 触发。
++     * 用「历史最大上报 rows」而非「当前内核」做参照，才不漏掉竞态、不误伤首帧挤压 seed。
++     */
++    private var maxReportedRows: Int = 0
++
++    /** 统一 emit 出口：更新历史最大上报 rows 后调用注入的 [onResizeRequest]。 */
++    private fun emitResize(rows: Int, cols: Int) {
++        if (rows > maxReportedRows) maxReportedRows = rows
++        onResizeRequest(rows, cols)
++    }
++
+     init {
+         // 接管内核脏区回调：把屏幕脏行换算为逻辑行区间后缓存，作"画面已变化"的数据驱动
+         // 唤醒信号（缺陷①：增量流到达的唯一唤醒点）。渲染层不据此局部重绘——View 帧回调
+@@ -135,6 +179,32 @@ class TermViewPresenter(
+             return top..bottom
+         }
+ 
++    /**
++     * 视口/历史内省快照（常驻只读，D-36 仪表化 + w-dev-cols 巡检层共用）。
++     *
++     * 全部是 getter 组合、零副作用：不产生 resize、不碰帧循环、不改任何状态、不暴露可变引用。
++     * 供外部（模拟器取证/w-dev-cols 巡检）直接读「本来就是数」的指标（maxTop/logicalCount/
++     * scrollbackSize/topLine），比从像素反推准确。任意线程可安全调用。
++     *
++     * @contract
++     * @pre none
++     * @post 返回当前视口状态的只读快照；不改变任何内部状态、不触发回调
++     * @err none
++     * @inv 调用前后 resize 次数/脏区/帧请求均不变（有测试锚住）
++     */
++    fun forensicsSnapshot(): ForensicsSnapshot {
++        val height = visibleRows
++        val maxTop = (logicalCount - height).coerceAtLeast(0)
++        return ForensicsSnapshot(
++            scrollbackSize = emulator.scrollback.size,
++            logicalCount = logicalCount,
++            visibleRows = height,
++            maxTop = maxTop,
++            topLine = topLine,
++            isFollowingBottom = topLine == null,
++        )
++    }
++
+     /**
+      * 手指拖动改视口（正 [deltaLines] = 向上滚看更早历史，负 = 向下滚）。
+      *
+@@ -153,10 +223,35 @@ class TermViewPresenter(
+         val current = topLine ?: maxTop
+         val next = (current - deltaLines).coerceIn(0, maxTop)
+         topLine = if (next >= maxTop) null else next
++        // D-36 鸡生蛋打破：本地 buffer 为空（打开会话初始态/ED3 清屏后）时 maxTop == 0，
++        // 上滑（deltaLines > 0）本无可滚空间、next 被钳到 0 且恒触底 → topLine 恒 null（跟随），
++        // 「滚到顶才拉历史」的补页条件（SessionViewModel.syncFromPresenter: atHistoryTop =
++        // locked && window.first == 0）永远走不到，上滑完全失效。空 buffer 上滑显式锁定到
++        // 逻辑行 0（可补页锚点），使上层补页条件命中、历史并入后 buffer 有内容可滚。
++        if (maxTop == 0 && deltaLines > 0) {
++            topLine = 0
++        }
+         // 视口移动即需重画（真机实证 swipe 无效与缺陷①同根：无人请求帧）。
+         onFrameRequested?.invoke()
+     }
+ 
++    /**
++     * 历史分页头插并入 [merged] 行后，已锁定历史区的视口随之平移：头插让所有旧逻辑行号
++     * +[merged]，冻结的 [topLine] 必须同步平移，否则视口跳到并入的旧页而非停在原内容处
++     * （D-36：连续滚动的锚定保持）。跟随态（topLine == null）贴底不动，无需平移。
++     *
++     * @contract
++     * @pre [merged] >= 0（本页实际并入缓冲的历史行数，非请求 count——容量满时并入数更少）
++     * @post 锁定态 topLine += merged（并入后仍指向同一内容行）；跟随态不变；随后必触发一次 [onFrameRequested]
++     * @err none
++     * @inv none
++     */
++    fun onHistoryPrepend(merged: Int) {
++        if (merged <= 0) return
++        topLine?.let { topLine = it + merged }
++        onFrameRequested?.invoke()
++    }
++
+     /**
+      * 回到底部：恢复跟随，视口钉回最新输出。
+      *
+@@ -173,6 +268,55 @@ class TermViewPresenter(
+ 
+     // ---- 捏合 → 行列数换算（005：让 CLI 自己重画）----
+ 
++    /**
++     * 真实视口变化（回前台/旋转/分屏/窗口尺寸变更）：重放当前像素几何。
++     *
++     * fix-viewport-restore-d38 判据：**两个入口语义正交**——
++     * [onViewportSizeChanged] 是布局挤压（IME/输入框），只推可见行、不重算；
++     * 本入口是真实视口变化，必须重算 rows/cols，内核尺寸不一致则 emit 一次 resize。
++     *
++     * 为什么「一律 emit」和「一律不 emit」都错、而必须给真实视口变化一个独立入口：
++     * - 一律 emit：IME 弹起/收起都会扰动服务端（用户原话「绝对难以接受」）；
++     * - 一律不 emit：回前台时没人负责把几何重新对齐到当前 View（D-38 根因）——View 高复原
++     *   但 [onSizeChanged] 未必回调，内核 rows 停在离开前/首帧被挤压的旧小几何上
++     *   （用户截图：终端只占顶部约 1/4、下方大片空黑）；emit 抑制进一步让本来能顺带纠正
++     *   的路径也不纠正，但根因是「回前台无对齐入口」，叠加因素不是病根；
++     * - 独立入口：View 层只有知道「这是回前台/窗口变更」的时点才调它（见 TermSurfaceView
++     *   onWindowVisibilityChanged），自然区分了「临时挤压」与「真实视口变化」两种语义。
++     *
++     * [visibleRowsOverride] 的清除与重算在此一举：后台期间收缩残留的挤压随像素高复原被清掉
++     * （updateVisibleRows 按当前像素重算），几何事件强制重算并（按需）emit 一次。
++     *
++     * @contract
++     * @pre 入参为当前 View 的真实像素尺寸（可为 0x0——布局尚未就绪时调用应安全忽略）
++     * @post viewportWidthPx/HeightPx 更新为入参；非正尺寸安全忽略（正尺寸才重算几何）；
++     *       visibleRows 按当前像素重算（挤压残留被清除）；内核尺寸不一致则 emit 一次 resize；
++     *       随后必触发一次 [onFrameRequested]（几何事件必重画）
++     * @err none
++     * @inv 仅当尺寸正且内核几何不一致才 emit；与 [onViewportSizeChanged] 的语义互斥
++     */
++    fun onRealViewportChanged(widthPx: Int, heightPx: Int) {
++        viewportWidthPx = widthPx
++        viewportHeightPx = heightPx
++        val rowsBefore = visibleRows
++        updateVisibleRows()
++
++        // 真实视口变化：presenter 不做 IME 推断——View 层传入的已是「扣除 IME inset 后的稳定
++        // 窗口高度」（TermSurfaceView 从 WindowInsets 拿 IME 可见性与高度），presenter 收到即视为
++        // 真实几何，重算并按需 emit（内核尺寸一致则跳过）。这样分屏/旋转/多窗口传真实变化正常
++        // 重算；回前台 IME 在屏时 View 层传扣除后的全高，不会 rebase 到挤压值。
++        if (widthPx > 0 && heightPx > 0) {
++            stableWidthPx = widthPx
++            stableHeightPx = heightPx
++            recomputeGeometry()
++        }
++        if (visibleRows != rowsBefore) {
++            onFrameRequested?.invoke()
++        }
++        // 几何事件本身即需重画（即使像素高未变——如回前台 View 高复原、onSizeChanged 未回调）。
++        onFrameRequested?.invoke()
++    }
++
+     /**
+      * 视图像素尺寸变化（IME/输入框挤压、复原、旋转重建后的首帧）。
+      *
+@@ -194,6 +338,9 @@ class TermViewPresenter(
+         // 0x0 预布局 / 非正尺寸不是真实视口：不落 seed（否则旋转重建后首帧被吞成非 resize）。
+         if (!viewportSeeded && widthPx > 0 && heightPx > 0) {
+             viewportSeeded = true
++            // 稳定基准 = 首帧 seed 的高度（IME 未开时的全高；若在屏则后续「真增长」分支自愈）。
++            stableWidthPx = widthPx
++            stableHeightPx = heightPx
+             recomputeGeometry()
+         }
+         // 首帧之后：挤压/复原只改可见行数（视口上推），不再 emit resize。
+@@ -204,35 +351,121 @@ class TermViewPresenter(
+         if (visibleRows != rowsBefore) {
+             onFrameRequested?.invoke()
+         }
++        // 几何自愈（D-38 真根因，leader 硬约束）：若当前像素能推出的全高 rows **大于**内核 rows，
++        // 且**历史最大上报 rows 也大于内核**——说明内核曾被从更大值错误 emit 钉小（回前台 IME
++        // 挤压 rebase 的竞态后果，错误状态黏住不消失），补发一次 resize 纠正。
++        // 「历史最大」条件是首帧挤压 seed 的护栏：seed 到 92（从未到过 96）时复原 96>92 但
++        // maxReportedRows==92 不满足「历史更大」→ 不触发。只有竞态 rebase（内核曾 96 被钉到 86）
++        // 才满足 96>86 且 maxReportedRows(96)>86 → 触发。正常路径下本分支恒不走（count 恒 0）。
++        if (viewportHeightPx > 0 && cellHeight > 0 &&
++            viewportHeightPx / cellHeight > emulator.rows &&
++            maxReportedRows > emulator.rows
++        ) {
++            geometryCorrectionCount++
++            val rows = viewportHeightPx / cellHeight
++            val cols = if (viewportWidthPx > 0 && cellWidth > 0) viewportWidthPx / cellWidth else emulator.cols
++            emitResize(rows, cols)
++        }
+     }
+ 
+     /**
+-     * 捏合改字号：重算行列数，与内核当前尺寸不一致则上抛 resize 请求。
++     * 捏合改字号（**预览语义**，fix-pinch-preview-commit / raw/041 裁定）。
++     *
++     * 捏合过程中每次 onScale 调本方法：只更新 [cellWidth]/[cellHeight] 与可见行数、
++     * 请求重画（本地预览生效），**绝不 emit resize**——服务端不被每次手势步扰动。
++     * 手势结束时 View 层调 [onPinchCommit] 才发那一次 resize。
++     *
++     * 守卫1：预览必须实时生效（字号变化可见），不能为了少发帧连预览都不做——
++     * 本方法更新字号 + 请求帧，预览即时。
+      *
+      * @contract
+      * @pre newCellWidth / newCellHeight 为正整数
+-     * @post cellWidth/cellHeight 更新为入参；行列数变化则经 [onResizeRequest] 上抛；
+-     *       随后必触发一次 [onFrameRequested]（栅格几何已变，即使行列数没变）
++     * @post cellWidth/cellHeight 更新为入参；**不 emit resize**；更新可见行数并请求重画
+      * @err none
+-     * @inv none
++     * @inv onResizeRequest 绝不在本方法内被调用（预览不重排）
+      */
+     fun onFontSizeChanged(newCellWidth: Int, newCellHeight: Int) {
+         cellWidth = newCellWidth
+         cellHeight = newCellHeight
+-        recomputeGeometry()
+         // 捏合改字格后可见行数随之变化（同一视口高 ÷ 新字格高），重排跟随新栅格。
+         updateVisibleRows()
+         // 栅格几何变了（即使行列数没变，格子像素尺寸也变了），必须重画。
+         onFrameRequested?.invoke()
+     }
+ 
++    /**
++     * 捏合手势结束：用最终字号发**一次** resize（fix-pinch-preview-commit / raw/041 裁定）。
++     *
++     * 一次完整捏合（多个 onScale 预览 + 手势结束）→ 本方法恰好被调一次 → [recomputeGeometry]
++     * 用**最终** cellWidth/cellHeight 算 rows/cols 并 emit 一次。守卫2：提交带最终行列数，
++     * 不是中间某步的。
++     *
++     * @contract
++     * @pre 至少一次 [onFontSizeChanged] 已调用（cellWidth/cellHeight 为最终预览值）
++     * @post 行列数与内核不一致则经 [onResizeRequest] 上抛一次（用最终字号）；随后请求重画
++     * @err none
++     * @inv 一次手势至多 emit 一次（幂等：内核已一致则 no-op）
++     */
++    fun onPinchCommit() {
++        recomputeGeometry()
++        onFrameRequested?.invoke()
++    }
++
++    /**
++     * 实测字形推进宽回写（fix-cols-grid-convergence 修法 1）：View 层每帧测量出的真实
++     * 列推进宽写回 [cellWidth]，使 [recomputeGeometry] 的 cols 与绘制推进**同一栅格来源**。
++     *
++     * 这是「最右列被截」的根治点：此前 cols 用名义 [DEFAULT_CELL_WIDTH]=10 算、绘制用
++     * 实测 cellW 算，两套栅格永不收敛，cols 偏大时末列画到视口外被 Canvas 裁。
++     *
++     * **只回写 cellWidth、绝不回写 cellHeight**（收敛性 + 不动 IME 成果的双重原因）：
++     * - cellW 是 cellHeight 的函数（measureCells 里 textSize = cellHeight*0.85 决定字形度量），
++     *   回写 cellW 不改变下一次测量的 cellW → 首次回写后即幂等收敛（**至多一次**
++     *   recomputeGeometry，可证明：同值直接 return）；回写 cellH 则会触发
++     *   cellH→textSize→cellH 的反馈环（真机字体度量随字号缩放，需证明收敛，违反约束一）。
++     * - rows = viewportHeight / cellHeight 用 cellHeight 算；动 cellHeight 会扰动
++     *   fix-ime-no-resize 锚定的首帧 rows（TermViewImeResizePresenterProbeTest
++     *   断言 firstViewportEmitsInitialResize = (96 to 108)，基于默认 cellHeight=20）。
++     *
++     * @contract
++     * @pre measuredCellW > 0（View 层已 guard）
++     * @post cellWidth 更新为入参；若与旧值不同则重算行列数并按需经 [onResizeRequest] 上抛
++     *       一次（cols = viewportWidth / 实测宽，与绘制同源）、随后必触发一次 [onFrameRequested]
++     *       （栅格几何变了）；同值调用为幂等 no-op（不触发任何 emit / 帧请求——反馈环收敛点）
++     * @err none
++     * @inv 同值二次调用不产生任何副作用；cellHeight 永不被本方法改动
++     */
++    fun setMeasuredCellWidth(measuredCellW: Int) {
++        if (measuredCellW <= 0) return
++        if (measuredCellW == cellWidth) return // 幂等：已收敛，绝不重复 emit（反馈环收敛点）
++        cellWidth = measuredCellW
++        recomputeGeometry()
++        onFrameRequested?.invoke()
++    }
++
++    /**
++     * 渲染层右缘护栏已 engage 的累计次数（fix-cols-grid-convergence 修法 3 的可观测信号）。
++     *
++     * 约束三（leader）：护栏不许变成静默遮羞布——必须可观测，正常条件从不 engage。
++     * View 层 drawLine 检测到宽字符背景矩形右缘越过视口宽时递增本值并收边（把矩形裁进
++     * 视口），测试断言本值 > 0 证明护栏在异常条件（网格超宽 = A 回归）确实兜住了，
++     * 而非悄悄裁掉无人知晓。正常条件（cols 与画布同源）下本值恒为 0。
++     */
++    var clipGuardEngageCount: Int = 0
++        private set
++
++    /** View 层护栏收边时上报（可观测，非静默）：递增 [clipGuardEngageCount]。 */
++    fun onClipGuardEngaged() {
++        clipGuardEngageCount++
++    }
++
+     /** 按视口像素与字格像素重算 rows/cols；内核尺寸已一致则跳过（避免重复 resize）。 */
+     private fun recomputeGeometry() {
+         if (viewportWidthPx <= 0 || viewportHeightPx <= 0 || cellWidth <= 0 || cellHeight <= 0) return
+         val rows = viewportHeightPx / cellHeight
+         val cols = viewportWidthPx / cellWidth
+         if (rows != emulator.rows || cols != emulator.cols) {
+-            onResizeRequest(rows, cols)
++            emitResize(rows, cols)
+         }
+     }
+ 
+@@ -337,3 +570,19 @@ class TermViewPresenter(
+         const val DEFAULT_CELL_HEIGHT = 20
+     }
+ }
++
++/**
++ * 视口/历史内省快照（[TermViewPresenter.forensicsSnapshot] 的返回，常驻只读）。
++ *
++ * 全部字段为不可变 Int/Boolean，不暴露任何可变引用。供模拟器取证（D-36）与巡检层
++ * （w-dev-cols）直接读取「本来就是数」的视口指标。构造后不可变，调用无副作用。
++ */
++data class ForensicsSnapshot(
++    val scrollbackSize: Int,
++    val logicalCount: Int,
++    val visibleRows: Int,
++    val maxTop: Int,
++    /** 视口顶行（逻辑行）；null = 跟随底部。 */
++    val topLine: Int?,
++    val isFollowingBottom: Boolean,
++)
+diff --git a/app/app/src/test/kotlin/dev/agentmirror/app/termview/TermPinchPreviewCommitTest.kt b/app/app/src/test/kotlin/dev/agentmirror/app/termview/TermPinchPreviewCommitTest.kt
+new file mode 100644
+index 000000000..7cf027284
+--- /dev/null
++++ b/app/app/src/test/kotlin/dev/agentmirror/app/termview/TermPinchPreviewCommitTest.kt
+@@ -0,0 +1,201 @@
++/*
++ * Copyright 2026 AgentMirror Project Authors
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package dev.agentmirror.app.termview
++
++import android.view.InputDevice
++import android.view.MotionEvent
++import android.view.ScaleGestureDetector
++import androidx.test.core.app.ApplicationProvider
++import dev.agentmirror.terminal.TerminalEmulator
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertTrue
++import org.junit.Test
++import org.junit.runner.RunWith
++import org.robolectric.RobolectricTestRunner
++import org.robolectric.annotation.Config
++
++/**
++ * P0 红测 · fix-pinch-preview-commit（raw/041 裁定：捏合时本地预览、松手时才发一次 resize）。
++ *
++ * 判据（leader 批准）：
++ * > 一次完整捏合手势（多个 onScale + 一个手势结束），`onResizeRequest` 必须恰好被调用 1 次，
++ * > 且发生在手势结束时。
++ *
++ * 守卫（leader 必做）：
++ * 1. 手势过程中**字号必须实时变化**（本地预览生效），不能为了少发帧连预览都不做。
++ * 2. 手势结束后那**一次** resize 必须带**最终**行列数，不是中间某步的。
++ * 3. 回归门 TermSurfacePinchGestureTest 保持绿（手势结束检测器复位）。
++ *
++ * ⚠️ 作用边界（leader 裁定，2026-08-13）：本测试是**结构测试**，不是行为证据。
++ * 它锚的是「提交点在 ACTION_UP 而不是别处」这一**结构**——Robolectric 的 ScaleGestureDetector
++ * 在旧代码（onScaleEnd 提交）下对同一分阶段抬起序列也是 1 次，真机才是 2 次（w-base-v2 实测）。
++ * **一个在旧代码上就通过的测试，在新代码上通过，什么也没证明。** 修复有效与否只能由
++ * 真机/模拟器实测判定（排 w-base-v2 队列）。
++ */
++@RunWith(RobolectricTestRunner::class)
++@Config(sdk = [35])
++class TermPinchPreviewCommitTest {
++
++    private class Harness(
++        val emulator: TerminalEmulator,
++        val presenter: TermViewPresenter,
++        val resizeCalls: MutableList<Pair<Int, Int>>,
++        val view: TermSurfaceView,
++    )
++
++    private fun harness(): Harness {
++        val resizeCalls = mutableListOf<Pair<Int, Int>>()
++        val emulator = TerminalEmulator(cols = 80, rows = 24)
++        val presenter = TermViewPresenter(emulator) { rows, cols ->
++            resizeCalls += rows to cols
++            emulator.resize(cols, rows)
++        }
++        val view = TermSurfaceView(ApplicationProvider.getApplicationContext()).apply {
++            this.presenter = presenter
++            layout(0, 0, 1080, 1920)
++        }
++        return Harness(emulator, presenter, resizeCalls, view)
++    }
++
++    private fun scaleDetector(view: TermSurfaceView): ScaleGestureDetector {
++        val field = TermSurfaceView::class.java.declaredFields.single {
++            ScaleGestureDetector::class.java.isAssignableFrom(it.type)
++        }
++        field.isAccessible = true
++        return field.get(view) as ScaleGestureDetector
++    }
++
++    /** 一次完整捏合手势：DOWN → POINTER_DOWN → 多个 MOVE（onScale）→ POINTER_UP → UP。 */
++    private fun pinch(downTime: Long): List<MotionEvent> = listOf(
++
++        event(downTime, downTime, MotionEvent.ACTION_DOWN, 540f - 40f to 960f),
++        event(
++            downTime, downTime + 10, MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),
++            540f - 40f to 960f, 540f + 40f to 960f,
++        ),
++        // 5 个 MOVE（放大），每个都触发 onScale。
++        event(downTime, downTime + 20, MotionEvent.ACTION_MOVE, 540f - 60f to 960f, 540f + 60f to 960f),
++        event(downTime, downTime + 30, MotionEvent.ACTION_MOVE, 540f - 90f to 960f, 540f + 90f to 960f),
++        event(downTime, downTime + 40, MotionEvent.ACTION_MOVE, 540f - 120f to 960f, 540f + 120f to 960f),
++        event(downTime, downTime + 50, MotionEvent.ACTION_MOVE, 540f - 150f to 960f, 540f + 150f to 960f),
++        event(downTime, downTime + 60, MotionEvent.ACTION_MOVE, 540f - 180f to 960f, 540f + 180f to 960f),
++        event(
++            downTime, downTime + 70, MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),
++            540f - 180f to 960f, 540f + 180f to 960f,
++        ),
++        event(downTime, downTime + 80, MotionEvent.ACTION_UP, 540f - 180f to 960f),
++    )
++
++    /**
++     * 核心判据：一次完整捏合 → onResizeRequest 恰好 1 次（且发生在手势结束时）。
++     * 当前实现每个 MOVE emit → 预期红，红的实际数字 = resizeCalls.size（≥2）。
++     */
++    @Test
++    fun pinchGestureEmitsResizeExactlyOnceAtEnd() {
++        val h = harness()
++        val detector = scaleDetector(h.view)
++        h.resizeCalls.clear() // 排除 layout 触发的首帧 seed（96,108）
++        val events = pinch(downTime = 1000L)
++
++        try {
++            for (e in events) h.view.onTouchEvent(e)
++            println("[RED-N] 完整捏合 resize 次数 = ${h.resizeCalls.size}, 序列 = ${h.resizeCalls}")
++
++            // 判据：恰好 1 次（松手时）。
++            assertEquals(
++                "一次完整捏合必须恰好发 1 次 resize（raw/041 裁定：预览不重排、松手才生效）——" +
++                    "当前每次 onScale 都发，实际发了 ${h.resizeCalls.size} 次",
++                1, h.resizeCalls.size,
++            )
++        } finally {
++            events.forEach(MotionEvent::recycle)
++        }
++    }
++
++    /** 守卫1：手势过程中字号必须实时变化（本地预览生效，不能为了少发帧连预览都不做）。 */
++    @Test
++    fun pinchPreviewChangesFontSizeLive() {
++        val h = harness()
++        val detector = scaleDetector(h.view)
++        val initialW = h.presenter.cellWidth
++        val initialH = h.presenter.cellHeight
++        val events = pinch(downTime = 2000L)
++
++        try {
++            // 只喂前几个 MOVE（未结束手势），字号应已变化（预览生效）。
++            for (e in events.take(5)) h.view.onTouchEvent(e)
++            assertTrue(
++                "手势过程中字号必须实时变化（本地预览生效）：$initialW x $initialH -> " +
++                    "${h.presenter.cellWidth} x ${h.presenter.cellHeight}",
++                h.presenter.cellWidth > initialW || h.presenter.cellHeight > initialH,
++            )
++        } finally {
++            events.forEach(MotionEvent::recycle)
++        }
++    }
++
++    /** 守卫2：手势结束那一次 resize 必须带最终行列数，不是中间某步的。
++     *  用「最终字号推算的预期 cols」vs「中间字号推算的预期 cols」验证。 */
++    @Test
++    fun pinchCommitCarriesFinalDims() {
++        val h = harness()
++        h.resizeCalls.clear() // 排除首帧 seed
++        val events = pinch(downTime = 3000L)
++
++        try {
++            // 先发前几个 MOVE（放大），记录中间字号。
++            for (e in events.take(5)) h.view.onTouchEvent(e)
++            val midW = h.presenter.cellWidth
++            val midH = h.presenter.cellHeight
++            // 继续放大到最大，结束手势。
++            for (e in events.drop(5)) h.view.onTouchEvent(e)
++            val finalW = h.presenter.cellWidth
++            val finalH = h.presenter.cellHeight
++
++            // 唯一一次 resize 的 cols 应对应最终字号（finalW），不是中间字号（midW）。
++            assertEquals("守卫2：手势结束的 resize 必须带最终行列数", 1, h.resizeCalls.size)
++            val (rows, cols) = h.resizeCalls[0]
++            // 预期 cols = viewportWidth / 最终字号；若最终字号 > 中间字号，最终 cols 应 < 中间 cols。
++            // viewport 宽 1080。比较「最终字号推算」vs「中间字号推算」。
++            val expectedFinalCols = 1080 / finalW
++            val expectedMidCols = 1080 / midW
++            assertEquals("resize 的 cols 应等于最终字号推算（1080/finalW）", expectedFinalCols, cols)
++            if (finalW > midW) {
++                assertTrue(
++                    "最终字号($finalW)>中间($midW) 时，最终 cols($cols) 应小于中间 cols($expectedMidCols)",
++                    cols < expectedMidCols,
++                )
++            }
++        } finally {
++            events.forEach(MotionEvent::recycle)
++        }
++    }
++
++    private fun event(
++        downTime: Long, eventTime: Long, action: Int, vararg points: Pair<Float, Float>,
++    ): MotionEvent {
++        val properties = Array(points.size) { index ->
++            MotionEvent.PointerProperties().apply { id = index; toolType = MotionEvent.TOOL_TYPE_FINGER }
++        }
++        val coords = Array(points.size) { index ->
++            MotionEvent.PointerCoords().apply {
++                x = points[index].first; y = points[index].second; pressure = 1f; size = 1f
++            }
++        }
++        return MotionEvent.obtain(downTime, eventTime, action, points.size, properties, coords, 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
++    }
++}

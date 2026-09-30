@@ -1,0 +1,4 @@
+seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.meter 当前分支=pr/d2-meter 目标分支=pr/d2-meter
+seal-pr: 工作区待提交条目=0
+seal-pr: 分支超出 main 的提交数=1  head=b43e7c344
+b43e7c344 [pr/d2-meter] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）

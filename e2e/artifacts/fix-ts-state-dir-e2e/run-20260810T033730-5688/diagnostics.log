@@ -1,0 +1,59 @@
+## headscale-configtest.log
+
+
+## headscale.stderr
+
+
+## headscale-cli.stderr
+
+
+## sandbox-check.log
+
+
+## go-build.log
+
+
+## daemon.stderr
+time=2026-08-10T03:38:04.697+08:00 level=INFO msg="single-instance guard acquired" pidfile=TASK_TMP/daemon-state/agentmirrord.pid
+time=2026-08-10T03:38:04.698+08:00 level=INFO msg="pairing token source=explicit"
+time=2026-08-10T03:38:04.698+08:00 level=INFO msg="agentmirrord starting" listen=127.0.0.1:43920 qr_listen="" token_source=explicit upload_dir="" max_upload_mib=20 list_interval=2s
+time=2026-08-10T03:38:04.698+08:00 level=INFO msg="tailnet 已启用" hostname=MacBook-Pro.local state_dir=TASK_TMP/daemon-state/tsnet
+time=2026-08-10T03:38:04.698+08:00 level=INFO msg="tailnet 入网中（等待 Tailscale 控制面握手）…"
+2026/08/10 03:38:04 tsnet running state path TASK_TMP/daemon-state/tsnet/tailscaled.state
+2026/08/10 03:38:04 tsnet starting with hostname "MacBook-Pro.local", varRoot "TASK_TMP/daemon-state/tsnet"
+2026/08/10 03:38:04 LocalBackend state is NeedsLogin; running StartLoginInteractive...
+2026/08/10 03:38:04 AuthLoop: state is Starting; done
+time=2026-08-10T03:38:07.814+08:00 level=INFO msg="tailnet 已入网" ip=100.64.0.1
+time=2026-08-10T03:40:32.154+08:00 level=INFO msg="shutting down"
+
+
+## android-start-user.log
+Success: user started
+
+
+## android-switch-user.log
+
+
+## android-app-start.log
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+
+
+## android-device-ready.log
+[exec] wake emulator device=emulator-5554 key=KEYCODE_WAKEUP
+[exec] dismiss keyguard device=emulator-5554 user=16
+[exec] unlock swipe device=emulator-5554 from=540,1900 to=540,300 duration_ms=350
+[state] wakefulness=Awake user_state=RUNNING_UNLOCKED focus=  mCurrentFocus=null
+
+
+## android-camera-state.log
+Active Camera Clients:
+[
+(Camera ID: 1, Cost: 100, PID: 11803, Score: 0, State: 2User Id: 16, Client Package Name: dev.agentmirror.app, Conflicting Client Devices: {})
+]
+Allowed user IDs: 16
+
+
+## camera-control.log
+[policy] foreground_mouse_control=forbidden
+[state] virtual-scene QR loaded; waiting for background Computer Use and authoritative App/headscale results
+

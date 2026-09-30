@@ -1,0 +1,33 @@
+archive-level2-v1
+created: 2026-08-18 19:41:04 +0800
+worktree: /Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt.rollback
+HEAD_at_archive: 1d3f60602d7cc45b28a4343b5c19583600c4d33c
+clean_baseline: f1c5a27c8137653da1e8c20f6883b1904144f0af
+server_commit: 82865233cf2629d2099640a48e947ac3d554c0d3
+app_commit: 53ac62866eb75e641484f5644d539f932f328644
+
+=== added ===
+app/app/src/main/java/dev/agentmirror/app/workspace/Level2LiveStreamScreen.kt
+app/app/src/main/java/dev/agentmirror/app/workspace/Level2ViewModel.kt
+app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2LiveStreamRenderTest.kt
+app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2NavigationIdentityTest.kt
+app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2StreamLifecycleTest.kt
+server/internal/api/level2.go
+server/internal/api/level2_test.go
+
+=== modified ===
+app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt
+app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt
+app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt
+app/app/src/main/java/dev/agentmirror/app/conn/Frames.kt
+app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt
+app/app/src/test/kotlin/dev/agentmirror/app/workspace/WorkspaceRefreshTest.kt
+server/internal/api/server.go
+server/internal/api/ws_conn.go
+server/internal/protocol/frames.go
+server/internal/protocol/frametype.go
+server/internal/protocol/json.go
+server/internal/protocol/json_test.go
+server/internal/protocol/testdata/list_delta.json
+server/internal/protocol/testdata/listing.json
+server/internal/protocol/validate.go

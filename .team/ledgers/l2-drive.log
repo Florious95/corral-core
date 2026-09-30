@@ -1,0 +1,26 @@
+[ledger-run 2026-08-18T12:57:13Z] 开工 start | ledger_id=ledger.level2-list-status.v1 revision=7 账本=.team/ledgers/l2-list-status-v1.json 墙钟上限=18100s 派单死线=90s
+[ledger-run 2026-08-18T12:57:14Z] 轮次 round | 第 1 轮开始：前沿 ["t.e2e"]（墙钟已跑 1s / 上限 18100s）
+[ledger-run 2026-08-18T12:57:14Z] 派单 dispatch | task=t.e2e 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/control 席位=control attempt=att-t.e2e-seq1-t1787057834776 delivery=del-t.e2e-seq1-t1787057834776
+[ledger-run 2026-08-18T12:57:15Z] 投递回执 send-ok | task=t.e2e case_id=ledger_level2-list-status_v1__t.e2e__r7 message_id=msg_309ffdcef128 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-18T12:57:15Z] 派单落地 dispatch-landed | task=t.e2e 席位 control 的收件箱已多出这条派单
+[ledger-run 2026-08-18T12:57:15Z] 等待 wait | task=t.e2e 在等的 key（case_id）=ledger_level2-list-status_v1__t.e2e__r7 team=grok-l2 预算=950s
+[ledger-run 2026-08-18T12:57:15Z] 已唤醒 wait-signaled | task=t.e2e 等到结果了
+[ledger-run 2026-08-18T12:57:15Z] 判据 acceptance | task=t.e2e 在跑 required=["A-e2-probe-green", "A-e2-mutation", "A-e2-report", "A-e2-clean"]
+[ledger-run 2026-08-18T13:00:24Z] 判据通过留档 acceptance-success | task=t.e2e 成功 attempt 落进 attempts[] writeback_revision=8 passed=["A-e2-probe-green", "A-e2-mutation", "A-e2-report", "A-e2-clean"]
+[ledger-run 2026-08-18T13:00:24Z] 原子写回 writeback-atomic | task=t.e2e state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=8 hash=1294aebac65bd17f）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-18T13:00:24Z] 写回 writeback | task=t.e2e state=succeeded revision=7 → 8
+[ledger-run 2026-08-18T13:00:24Z] 轮次 round | 第 2 轮开始：前沿 ["t.package"]（墙钟已跑 191s / 上限 18100s）
+[ledger-run 2026-08-18T13:00:24Z] 派单 dispatch | task=t.package 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/dev-app 席位=dev-app attempt=att-t.package-seq2-t1787058024556 delivery=del-t.package-seq2-t1787058024556
+[ledger-run 2026-08-18T13:00:24Z] 投递回执 send-ok | task=t.package case_id=ledger_level2-list-status_v1__t.package__r8 message_id=msg_c75c2ef9e6c8 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-18T13:00:24Z] 派单落地 dispatch-landed | task=t.package 席位 dev-app 的收件箱已多出这条派单
+[ledger-run 2026-08-18T13:00:24Z] 等待 wait | task=t.package 在等的 key（case_id）=ledger_level2-list-status_v1__t.package__r8 team=grok-l2 预算=2600s
+[ledger-run 2026-08-18T13:02:09Z] 已唤醒 wait-signaled | task=t.package 等到结果了
+[ledger-run 2026-08-18T13:02:09Z] 判据 acceptance | task=t.package 在跑 required=["A-pk-build", "A-pk-fresh", "A-pk-e2e"]
+[ledger-run 2026-08-18T13:05:10Z] 判据通过留档 acceptance-success | task=t.package 成功 attempt 落进 attempts[] writeback_revision=9 passed=["A-pk-build", "A-pk-fresh", "A-pk-e2e"]
+[ledger-run 2026-08-18T13:05:10Z] 延后落盘 writeback-deferred | task=t.package 这一格让整张账本进入全绿：**先通知 leader 再落盘**——不许出现「账本读起来全绿而没人被通知」的窗口
+[ledger-run 2026-08-18T13:05:10Z] 写回 writeback | task=t.package state=succeeded revision=8 → 9
+[ledger-run 2026-08-18T13:05:10Z] 收工 finish | 停机原因=AllSucceeded 写回=["t.e2e", "t.package"] 冻结=[] 不可判=[] 墙钟已跑 476s
+[ledger-run 2026-08-18T13:05:10Z] 通知 notify-begin | 正在把停机原因发给 leader
+[ledger-run 2026-08-18T13:05:10Z] 通知 notify-fail | 通知未送达：team key `annot` is not a runtime key in target workspace `/Volumes/nvme/Projects/远程Agent安卓` (spec/display name may differ from runtime key)
+[ledger-run 2026-08-18T13:05:10Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=9 hash=e4373bc7b31fadb0）——中途死也不会留下半份账本，进度不会全废
+{"ok":true,"ledger_id":"ledger.level2-list-status.v1","revision_before":7,"revision_after":9,"wrote_back":["t.e2e","t.package"],"unjudgeable":[],"frozen":[],"preflight_rejected":false,"notices_sent":["ledger_id: ledger.level2-list-status.v1 | revision: 9 | 停机原因: AllSucceeded | 最后失败判据: 全部任务 succeeded：本轮没有失败判据、没有投递失败、没有超限 | 各任务终态: t.app=Succeeded, t.design=Succeeded, t.e2e=Succeeded, t.package=Succeeded, t.rollback=Succeeded, t.server=Succeeded","通知未送达：team key `annot` is not a runtime key in target workspace `/Volumes/nvme/Projects/远程Agent安卓` (spec/display name may differ from runtime key)"]}

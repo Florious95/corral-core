@@ -1,0 +1,168 @@
+{
+  "task_id": "fix-connected-idle-economy",
+  "status": "pass",
+  "worker": "w-fix-onlinecpu3",
+  "date": "2026-08-10",
+  "source_sha": "bdf7b75616ed52b004e03cc86ef2892056b927ca",
+  "commit_sha": "no-commit",
+  "summary": "已连接静默状态采样从 per-pane TTL 扇出改为 fleet-wide FIFO + token bucket：持续上界 4 次/秒、固定 burst 8；3/27/200 pane 确定性测试证明速率不随 fleet 线性增长，200 pane 配置最坏状态可见时间 55s。隔离 27-pane 真进程三态各量测 >=60s：零连接 0.000%，已连接零订阅 2.481746%，已连接单订阅 2.398631%，两个在线态均 <= 冻结 5%。",
+  "confirmed_facts": [
+    {
+      "fact": "旧实现对一个已缓存且 TTL 全过期的稳定 fleet 在同一 listing 轮为每个 pane 启动采样；maxConc 只限制同时运行数，不限制总调度率。",
+      "evidence": "red-first.log 是写测试后的首次红（3/27/200 pane 分别观察到 3/27/187 次）；baseline-stable-red-replay.log 又在 source_sha 的 throwaway git archive 上精确预置稳定缓存+TTL 全过期，观察到 3/27/151 次，均为 expected exit 1。"
+    },
+    {
+      "fact": "defaultStateSamplingBudget=3s 仍只是单次采样 timeout 上界，不承担频率限流；频率由新增 token bucket 独立控制。",
+      "evidence": "server/internal/api/state_wiring.go"
+    },
+    {
+      "fact": "修复后已连接零订阅态持续存在 listing/state 成本，但在本轮 27 个真实 wrapper pane 中平均 CPU 2.481746%，capture-pane 3.997442/s。",
+      "evidence": "e2e/artifacts/fix-connected-idle-economy/metrics.json"
+    },
+    {
+      "fact": "修复后已连接单订阅态平均 CPU 2.398631%，capture-pane 3.997719/s；该窗口未显示单订阅带来额外持续 capture-pane 调度。",
+      "evidence": "e2e/artifacts/fix-connected-idle-economy/metrics.json"
+    },
+    {
+      "fact": "零连接态 60.042646016s 内 daemon CPU time 不增且 capture-pane 为 0。",
+      "evidence": "e2e/artifacts/fix-connected-idle-economy/metrics.json"
+    }
+  ],
+  "unknowns_and_limits": [
+    "FIELD 中历史 14.8% 样本的 listing 与单订阅成本占比仍不能从本轮修复后窗口反推；不报告历史百分比分摊。",
+    "历史样本来自用户现场混合 fleet，本轮来自 27 个隔离真实 wrapper pane；两者均为本机实测，但不声称 fixture 完全相同。",
+    "两个修复后在线态相差 0.083115 个百分点，不能据此声称订阅成本为负或精确为零；只确认两态均低于 5% 且持续 capture-pane 率相同。"
+  ],
+  "fix": {
+    "sampling": "State 只做缓存读取和去重入队；一个 fleet-wide token bucket 以 250ms/token、burst 8 从 FIFO 放行，TTL 只决定 eligibility。",
+    "fairness": "默认 2s listing cadence 下，首 token 后每轮最多 8；200 pane 最后首轮调度约 50s，加 3s 单次预算和下一次 2s listing，配置最坏可见时间 55s <= 60s。",
+    "concurrency": "maxConcurrent=16 仅覆盖 4 starts/s * 3s budget 的有界重叠；它不再被描述为频率限流。",
+    "discovery_isolation": "新增 DiscoverySocketDirs nil/non-nil seam；nil 仍调用 production discovery.Discover，显式 slice 调用 DiscoverWithDirs。未改 cmd 的真 e2e 只通过 AGENTMIRROR_E2E_DISCOVERY_SOCKET_DIRS opt-in。"
+  },
+  "frozen_thresholds": {
+    "online_mean_cpu_percent_max": 5.0,
+    "state_window_seconds_min": 60,
+    "fairness_seconds_max": 60,
+    "deterministic_fleet_sizes": [3, 27, 200],
+    "real_process_panes": 27
+  },
+  "measurements": [
+    {
+      "state": "zero_connection",
+      "panes": 27,
+      "wall_seconds": 60.042646016,
+      "cpu_time_start": "0:00.02",
+      "cpu_time_end": "0:00.02",
+      "cpu_delta_seconds": 0.0,
+      "mean_cpu_percent": 0.0,
+      "capture_pane_count": 0,
+      "capture_pane_per_second": 0.0
+    },
+    {
+      "state": "connected_zero_subscription",
+      "panes": 27,
+      "wall_seconds": 60.038387968,
+      "cpu_time_start": "0:00.11",
+      "cpu_time_end": "0:01.60",
+      "cpu_delta_seconds": 1.49,
+      "mean_cpu_percent": 2.481746,
+      "capture_pane_count": 240,
+      "capture_pane_per_second": 3.997442
+    },
+    {
+      "state": "connected_single_subscription",
+      "panes": 27,
+      "wall_seconds": 60.034235904,
+      "cpu_time_start": "0:01.77",
+      "cpu_time_end": "0:03.21",
+      "cpu_delta_seconds": 1.44,
+      "mean_cpu_percent": 2.398631,
+      "capture_pane_count": 240,
+      "capture_pane_per_second": 3.997719
+    }
+  ],
+  "isolation_and_cleanup": {
+    "runtime": "one mktemp-owned /tmp/am-cidle.* tree, one self-owned tmux -L socket, env -i daemon/client, one 127.0.0.1 high port",
+    "scoped_discovery": "daemon tmux shim refused before exec for every target outside its exact socket directory; 594 self-owned tmux targets, 0 out-of-scope targets",
+    "production_interaction": "none: no production HTTP/WS/connect/attach/signal and no user tmux socket opened",
+    "process_snapshot_deviation": "ps read-only snapshot; classification only beneath self-owned pane roots; raw process table not recorded or displayed; zero production interaction",
+    "cleanup": {
+      "client_pid_gone": true,
+      "daemon_pid_gone": true,
+      "tmux_pid_gone": true,
+      "owned_pane_pids_gone": true,
+      "listener_absent": true,
+      "runtime_handles_zero": true,
+      "socket_absent": true,
+      "runtime_tree_absent": true,
+      "out_of_scope_tmux_targets": 0
+    },
+    "evidence": [
+      "e2e/artifacts/fix-connected-idle-economy/isolation-summary.txt",
+      "e2e/artifacts/fix-connected-idle-economy/cleanup.log",
+      "e2e/artifacts/fix-connected-idle-economy/tmux-targets.tsv",
+      "e2e/artifacts/fix-connected-idle-economy/isolation-violations.log"
+    ]
+  },
+  "deviations": [
+    "Leader approved the minimal scoped discovery consumer seam inside server/internal/api because TMUX_TMPDIR alone still makes default discovery enumerate host defaults; production nil behavior and wire API remain unchanged.",
+    "Leader approved the existing state provider's ps -axo for the real wrapper fixture under the stated read-only boundary; no global process table was logged or displayed.",
+    "The first isolated e2e attempt exited 1 because separate Python processes exposed non-comparable monotonic epochs. The harness rejected the apparent 0.009s window, produced no product verdict, and its exact temp root/port were independently confirmed gone before switching to wall-clock nanoseconds and rerunning; see e2e-first-run-red.log."
+  ],
+  "changes": [
+    "server/internal/api/state_wiring.go",
+    "server/internal/api/connected_idle_economy_test.go",
+    "server/internal/api/discoverer.go",
+    "server/internal/api/options.go",
+    "server/internal/api/server.go",
+    "e2e/connected-idle-economy.sh",
+    "e2e/artifacts/fix-connected-idle-economy/",
+    ".team/evidence/fix-connected-idle-economy.json"
+  ],
+  "tests": [
+    {
+      "status": "executed",
+      "command": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test ./internal/api -run \\\"TestConnectedIdleEconomy(ScopedDiscoverySeamExists|SamplingDoesNotFanOutFleet)\\\" -count=1 -v\"'",
+      "exit_code": 1,
+      "expected": "red-first",
+      "log_path": "e2e/artifacts/fix-connected-idle-economy/red-first.log"
+    },
+    {
+      "status": "executed",
+      "command": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test ./internal/api -run TestConnectedIdleEconomyStableFleetOldFanOut -count=1 -v\"'",
+      "source": "throwaway git archive of bdf7b75616ed52b004e03cc86ef2892056b927ca with one additive test",
+      "exit_code": 1,
+      "expected": "baseline stable-fleet red replay",
+      "log_path": "e2e/artifacts/fix-connected-idle-economy/baseline-stable-red-replay.log"
+    },
+    {
+      "status": "executed",
+      "command": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test ./internal/api/... ./cmd/...\"'",
+      "exit_code": 0,
+      "log_path": "e2e/artifacts/fix-connected-idle-economy/server-acceptance.log"
+    },
+    {
+      "status": "executed",
+      "command": "bash -lc 'env -u TEAM_AGENT_* bash e2e/connected-idle-economy.sh'",
+      "exit_code": 0,
+      "log_path": "e2e/artifacts/fix-connected-idle-economy/e2e-acceptance.log"
+    },
+    {
+      "status": "executed",
+      "command": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -race ./internal/api -run \\\"TestConnectedIdleEconomy\\\" -count=1\"'",
+      "exit_code": 0,
+      "log_path": "e2e/artifacts/fix-connected-idle-economy/race.log"
+    }
+  ],
+  "write_scope": {
+    "in_scope": [
+      "server/internal/api/",
+      "e2e/connected-idle-economy.sh",
+      "e2e/artifacts/fix-connected-idle-economy/",
+      ".team/evidence/fix-connected-idle-economy.json"
+    ],
+    "app_protocol_server_cmd_changes": "none",
+    "git_commit": "none",
+    "git_push": "none"
+  }
+}

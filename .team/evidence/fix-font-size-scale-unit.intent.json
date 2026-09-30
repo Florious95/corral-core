@@ -1,0 +1,1 @@
+{"task_id":"fix-font-size-scale-unit","dispatched_to":"w-font-dev","base":".team/nodes/fix-font-size-scale-unit/CLAUDE.md","at":"2026-08-14","note":"用户改判做法：不改 sp→px 量纲映射，改为向下扩展可选档位（点名 18/6/4）。此裁定同时解除本任务对 cell_width_measured 的阻塞——加档位不需要那个数。"}

@@ -1,0 +1,14 @@
+{
+  "task_id": "fix-term-glyph-render",
+  "status": "pass",
+  "worker": "w-fix-glyph → w-fix-glyph2 → w-glyph-f5（三席接力）",
+  "date": "2026-08-09",
+  "summary": "终端豆腐块修复：字形回退链（GlyphProbe hasGlyph 逐码点+GlyphFallbackPolicy 候选链+GlyphFontProvider 缓存+PowerlineSymbols.otf 内置资产）+GlyphRunBuilder 分段绘制+等宽栅格单元格对齐。f5 席收尾修两处热路径分配违规（每码点临时 String→appendCodePoint；每格 StringBuilder/substring→(text,start,end) 区间重载，整格零分配）。",
+  "tests": {
+    "acceptance": "bash -lc 'cd app && ./gradlew -q :terminal:test :app:testDebugUnitTest' -> exit 0（leader 复跑实证）",
+    "screenshot": "e2e/artifacts/ui-review/term-glyph-after.png——leader 目检：框线/块元素渐变/CJK/emoji/Powerline 全真实字形零豆腐 ✓"
+  },
+  "relay_note": "三席接力：glyph1 落完整骨架后死于第三方 API api_error；glyph2 确认骨架质量+基线绿后同因死亡；两席均触发 A-24 拒启（已直报框架，样本×2）；f5（订阅通道）收尾。现场基两代传递有效——骨架零重写。",
+  "out_of_scope_findings": "两条界外实锤已立案 fix-term-render-debt：①增量流不唤醒渲染帧循环（clear+printf 后画面冻结，重 attach 才刷新——postFrame 仅 presenter 注入与 damage 自续触发，违红线5）；②行首 x 漂移（每行起点接上一行末尾，tmux capture 侧正常，疑 feed 链 \\n/\\r 处理；截图肉眼可见，『渲染别扭』元凶）",
+  "leader_note": "leader 复跑双套件 exit 0+截图目检零豆腐。交件即退役。"
+}

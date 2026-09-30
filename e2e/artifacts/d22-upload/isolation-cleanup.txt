@@ -1,0 +1,6 @@
+daemon=stopped
+port_19989=closed
+tmux=stopped
+one_time_token_file=deleted
+app=force_stopped_and_launcher_focused
+production_daemon=untouched

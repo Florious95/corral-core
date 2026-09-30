@@ -1,0 +1,11 @@
+{
+  "task_id": "d31-zoom-persist",
+  "status": "abandoned_superseded",
+  "worker": "w-dev-zoom-persist",
+  "dispatched_at": "2026-08-12T15:15:00+08:00",
+  "at": "2026-08-13",
+  "status_reason": "2026-08-13 账目审计：只有 intent 没有 evidence，看门狗永久算其在途。本记录关闭该虚假在途态。",
+  "交付核实": "grep 产品代码：CellSizeStore 在 app/app/src/main/ 下不存在。判定：未交付。",
+  "后继": "同一方向的几何持久化在 2026-08-13 重做过一次，实测有效（snapshots_from_resize 2→0），但引入首帧渲染异常，已回退（提交 6fe0b1128，补丁 docs/reverted-to-v6/geometry-persist.patch）。失败原因见 taskbook 审计纪律：测了函数的行为，没测函数会不会被触发——persistGeometry 只在捏合结束时调用，正常进出会话永不写。",
+  "缺陷现状": "未修，已按用户裁定封存。"
+}

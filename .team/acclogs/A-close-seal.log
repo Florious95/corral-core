@@ -1,0 +1,6 @@
+seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.proto 当前分支=pr/e14-provider-cmd 目标分支=pr/e12-close 待提交=0
+Switched to branch 'pr/e12-close'
+seal-pr: 工作区干净，已切到 pr/e12-close
+seal-pr: 工作区待提交条目=0
+seal-pr: 分支超出 main 的提交数=0  head=466912eb6
+红：封版后分支上仍无提交 —— 这一格没有可引用的交付物

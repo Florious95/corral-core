@@ -34,6 +34,7 @@ import dev.agentmirror.app.ui.components.FlatHairline
 import dev.agentmirror.app.ui.components.LightFlatGlass
 import dev.agentmirror.app.ui.components.flatGlass
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 
 /**
  * Claude Design Nocturne variables mapped one-for-one onto the Material slots consumed by the dock.
@@ -218,13 +219,19 @@ internal fun SessionDockTheme(dark: Boolean, content: @Composable () -> Unit) {
     // 选区柄 / 选区底走全 App 科技蓝：MaterialTheme 会按紫色 primary 重新派生 LocalTextSelectionColors，
     // 所以必须在它的 content 内部再覆盖一次，输入框才不会露出紫色选区。
     val accent = LocalAppPalette.current.accent
+    val kit = LocalThemeSuite.current
     val selectionColors = remember(accent) {
         TextSelectionColors(handleColor = accent, backgroundColor = accent.copy(alpha = 0.32f))
     }
     // The source uses real 40/36/32px controls rather than Material's injected 48dp target.
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
         MaterialTheme(
-            colorScheme = if (dark) sessionDockDarkScheme else sessionDockLightScheme,
+            // 液态玻璃沿用会话局部 Nocturne 色槽；直角风格直接用套件的 M3 色槽（墨色正文 / 猩红 error）。
+            colorScheme = when {
+                !kit.surfaces.isGlass -> kit.colors.materialScheme
+                dark -> sessionDockDarkScheme
+                else -> sessionDockLightScheme
+            },
             typography = MaterialTheme.typography,
             shapes = MaterialTheme.shapes,
         ) {

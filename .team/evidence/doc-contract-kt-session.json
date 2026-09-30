@@ -1,0 +1,199 @@
+{
+  "status": "pass",
+  "task_id": "doc-contract-kt-session",
+  "case_id": "msg_1a5446d4ffe8",
+  "changes": [
+    "app/app/src/main/java/dev/agentmirror/app/session/PackageDoc.kt",
+    "app/app/src/main/java/dev/agentmirror/app/session/SessionModels.kt",
+    "app/app/src/main/java/dev/agentmirror/app/session/HttpUrlConnectionUploader.kt",
+    "app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt",
+    "app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt"
+  ],
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.session",
+      "rc": 0,
+      "note": "单包硬判全绿（T3-1..T3-4 PASS）：T3-4 5 条漂移（conn/service/termview/tsnet/ui.theme）+ 返工新增 terminal 边全部消除"
+    },
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'",
+      "rc": 0,
+      "note": "包内测试绿：:app:testDebugUnitTest（含 dev.agentmirror.app.session 全部 6 个测试类）"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "全仓库既有判据未被打坏；返工后全仓库 T3-4 全 PASS（19 包，terminal 模块入图后无残留漂移），T3-1/T3-2/T3-3 PASS"
+    }
+  ],
+  "positive_control": {
+    "procedure": "临时删除 AttachmentUploader（SessionModels.kt:42）的 @err 标签，跑单包硬判，确认 exit 1 并精确指向该符号，随后改回",
+    "result_red": "T3-3 FAIL — 契约标签完备：1 条违规 [T3-3] dev.agentmirror.app.session  app/app/src/main/java/dev/agentmirror/app/session/SessionModels.kt:42  `@contract` — 缺契约标签: @err；结果：未通过（exit 1）",
+    "exit_red": 1,
+    "exit_after_restore": 0,
+    "note": "判据对 dev.agentmirror.app.session 真实生效且精确到符号行——非'扫不到包而全绿'。返工改动后复跑单包硬判仍 exit 0（改动仅注释，判据仍绿）"
+  },
+  "rewritten": [
+    {
+      "symbol": "PackageDoc (包级 KDoc)",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/PackageDoc.kt",
+      "original": "本包为占位骨架，由 session 任务落位实现",
+      "inaccuracy": "过时（谱系①旧状态残留）：session 任务早已落位——本包含完整实现（SessionScreen/SessionViewModel/HttpUrlConnectionUploader，6 个测试类）。KDoc 把已完成的活写成未来式",
+      "rewritten": "改为现状描述：会话页已完整落位，列举镜像流/发送必达/附件注入等已实现能力；并补包级 @consumes 五条（见 consumes_added）"
+    },
+    {
+      "symbol": "SessionViewModel.showBackToBottom",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt",
+      "original": "是否锁定在历史中（\"回到底部\"可见性；TermSurfaceView 自绘悬浮钮）",
+      "inaccuracy": "虚构消费方/未接线能力（谱系⑥/⑤）：TermSurfaceView.backToBottomLabel 全仓库唯一赋值点是声明处 null，恒为 null，自绘按钮是死路径永不渲染；实际渲染该按钮的是本包 SessionScreen 里的 Compose BackToBottomButton 悬浮钮（按键显示 showBackToBottom 渲染）",
+      "rewritten": "改为「会话屏 Compose 悬浮钮按此渲染」——与实际渲染方一致"
+    },
+    {
+      "symbol": "SessionViewModel.onScrollToBottom",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt",
+      "original": "回到底部：恢复跟随（与 TermSurfaceView 悬浮钮联动）",
+      "inaccuracy": "同上：联动方 TermSurfaceView 悬浮钮自绘为死路径；实际消费方是 SessionScreen 的 Compose 悬浮钮（BackToBottomButton onClick 回调）",
+      "rewritten": "改为「会话屏『回到底部』悬浮钮点击回调」"
+    },
+    {
+      "symbol": "SessionViewModel.dismissTransient",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt",
+      "original": "收起瞬时状态（Sent / 上传 Success / 错误提示，UI 延迟或点击触发）",
+      "inaccuracy": "虚构触发源（谱系⑤）：全仓库唯一调用点是 SessionScreen.kt:175 的 LaunchedEffect（delay 后自动触发），不存在任何点击触发路径（StatusArea 无 clickable，无其他 dismissTransient 调用点）",
+      "rewritten": "改为「会话屏 LaunchedEffect 延迟后自动触发」"
+    },
+    {
+      "symbol": "SessionViewModel.syncFromPresenter",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt",
+      "original": "视口信号收敛（Compose 每帧 / 测试显式调用）：滚动到顶即补页",
+      "inaccuracy": "节奏写错：Compose 组合不是逐帧回调本函数——唯一生产调用点是 SessionScreen.kt:157-163 的 LaunchedEffect 时钟泵（TICK_MS=100ms 周期）+ onScrollToBottom 显式调用",
+      "rewritten": "改为「会话屏时钟泵周期调用 / 测试显式调用」"
+    },
+    {
+      "symbol": "HttpUrlConnectionUploader (类 KDoc)",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/HttpUrlConnectionUploader.kt",
+      "original": "multipart 字段名取 \"file\"（服务端 ws-api 任务按此约定实现，一致时以 protocol.md §8 为准）",
+      "inaccuracy": "把客户端约定写成服务端契约（谱系②约束写错侧）：server/internal/api/upload.go findFilePart 明确写 'the field name the client uses is not part of the contract'——服务端按携带 filename 的首个 part 取文件，不校验字段名。原注释暗示服务端按此约定校验/实现，与实现相反",
+      "rewritten": "改为「multipart 字段名取 \"file\"；服务端按携带 filename 的首个 part 取文件，不校验字段名（见 server/internal/api/upload.go findFilePart）」——并补真实路径引用供 T3-2 校验"
+    },
+    {
+      "symbol": "SessionRoute (类 KDoc) 行 42——「MainActivity/AgentMirrorApp 双入口」",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt",
+      "original": "会话页路由挂载（MainActivity/AgentMirrorApp 接线处唯一入口）",
+      "inaccuracy": "漏网（复核席 w-doc-verify3 指出）：MainActivity 只挂载 Compose 根 AgentMirrorApp，不直接调 SessionRoute——全仓库唯一调用点是 AgentMirrorApp.kt:96 的 AppRoute.Session 分支。'MainActivity/AgentMirrorApp 双入口'称两处接线，实际只有一处",
+      "rewritten": "改为「[AgentMirrorApp] 的 Session 分支唯一入口」——与实际唯一调用方一致"
+    },
+    {
+      "symbol": "SessionRoute (类 KDoc) 行 42——「仅路由挂载，不含接线层」",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt",
+      "original": "仅路由挂载，不含接线层",
+      "inaccuracy": "漏网（复核席 w-doc-verify3 指出）：本组合实际承担接线层——DisposableEffect 挂 ServiceWire.uiConnector、createSessionViewModel 调 ServiceWire.manager(...).start()。'不含接线层'与实现相反",
+      "rewritten": "改为「本组合同时承担接线层：把当前会话 VM 挂到 ServiceWire.uiConnector 扇出，并安全创建共享连接」"
+    },
+    {
+      "symbol": "SessionRoute (类 KDoc) 行 44 + createSessionViewModel 行 99-100——「fg-service 持有 manager、前台服务决定启动」",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt",
+      "original": "共享 ConnectionManager 单例由 fg-service 持有（ServiceWire.manager）；前台服务可能尚未启动（连接由 UI/配对层决定启动，fg-service KDoc）；离屏后服务接手",
+      "inaccuracy": "漏网且与本批最重发现矛盾（复核席 w-doc-verify3 指出，.service 席已实证）：MirrorForegroundService 在 manifest 声明但全仓库零 startService/startForegroundService 调用点，前台服务从未被启动过——'fg-service 持有 manager'与'离屏后服务接手'是彻底的形态⑥（未接线能力写成现状）。manager 真实创建方是 startPersistentConnection（配对成功/冷启动，MainActivity.onCreate 先行调用）或本文件 createSessionViewModel；时钟泵由在屏组合 LaunchedEffect 驱动（SessionScreen/PairingScreen），fg-service 的 pumpRunnable 因服务未启动而不运行",
+      "rewritten": "改为「共享 ConnectionManager 单例的创建方是 ServiceWire.manager（首次调用构造），生产路径经 startPersistentConnection 或本文件 createSessionViewModel 触发；在屏期间由会话屏时钟泵驱动 pump/resolveExpiredInputs（配对页同机制）」，createSessionViewModel 处改为「manager 已存在时 start 为 no-op，冷启动配对层先经 startPersistentConnection 启动，此处兜底再 start 一次；时钟泵由在屏组合 LaunchedEffect 驱动，本文件不负责」"
+    }
+  ],
+  "contracts_added": [
+    {
+      "symbol": "AttachmentUploader",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/SessionModels.kt",
+      "tags": ["@contract", "@pre", "@post", "@err", "@inv"],
+      "pre": "baseUrl 非空 http(s) 基地址；attachment.bytes 非空",
+      "post": "返回 [UploadOutcome.Success]（path 为主机绝对路径）或 [UploadOutcome.Failure]（人类可读原因）",
+      "err": "网络异常 / 非 2xx / 响应无 path 一律折叠为 [UploadOutcome.Failure]，不抛出",
+      "inv": "上传结果只经返回值表达，不修改 attachment"
+    },
+    {
+      "symbol": "HttpUrlConnectionUploader",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/HttpUrlConnectionUploader.kt",
+      "tags": ["@contract", "@pre", "@post", "@err", "@inv"],
+      "pre": "baseUrl 非空 http(s) 基地址；attachment.bytes 非空",
+      "post": "成功返回 [UploadOutcome.Success]（主机绝对路径）；失败返回 [UploadOutcome.Failure]（人类可读原因）",
+      "err": "网络/IO 异常、非 2xx 响应、JSON 无 path 或 path 为空，全部折叠为 [UploadOutcome.Failure]，不抛出",
+      "inv": "每次调用独立建连，finally 必断开（无连接池）"
+    },
+    {
+      "symbol": "SessionViewModel.sendDraft",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt",
+      "tags": ["@contract", "@pre", "@post", "@err", "@inv"],
+      "pre": "connectionState 为 READY，且 inputStatus 非 Sending",
+      "post": "注入成功置 [InputStatus.Sending]，回执后由 [onInputResult] 转 [InputStatus.Sent] 或 [InputStatus.Failed]",
+      "err": "未就绪 / 注入失败置 [InputStatus.Failed] 并保留草稿",
+      "inv": "在途不回发（发送闸）"
+    },
+    {
+      "symbol": "SessionViewModel.sendKey",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt",
+      "tags": ["@contract", "@pre", "@post", "@err", "@inv"],
+      "pre": "connectionState 为 READY，且 inputStatus 非 Sending",
+      "post": "注入成功置 [InputStatus.Sending] 并标记本回执为快捷键（回执 ok 不动草稿）",
+      "err": "未就绪 / 注入失败置 [InputStatus.Failed] 并保留草稿",
+      "inv": "在途不回发（发送闸）"
+    },
+    {
+      "symbol": "SessionViewModel.uploadAttachment",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt",
+      "tags": ["@contract", "@pre", "@post", "@err", "@inv"],
+      "pre": "baseUrl 已注入（连接配置已落地），且 uploadStatus 非 Uploading",
+      "post": "成功：路径插入光标处并置 [UploadStatus.Success]；失败：置 [UploadStatus.Failed] 且不修改草稿",
+      "err": "未配置上传地址 / 上传失败均置 [UploadStatus.Failed] 明确报错",
+      "inv": "在途不重传；上传不自动发送草稿"
+    }
+  ],
+  "consumes_added": [
+    {
+      "pkg": "dev.agentmirror.app.session",
+      "target": "dev.agentmirror.app.conn",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/PackageDoc.kt",
+      "note": "import 了却未声明 @consumes（T3-4 漂移，Kotlin 侧共 20 条中属本包的 5 条之一）"
+    },
+    {
+      "pkg": "dev.agentmirror.app.session",
+      "target": "dev.agentmirror.app.service",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/PackageDoc.kt",
+      "note": "同上"
+    },
+    {
+      "pkg": "dev.agentmirror.app.session",
+      "target": "dev.agentmirror.app.termview",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/PackageDoc.kt",
+      "note": "同上"
+    },
+    {
+      "pkg": "dev.agentmirror.app.session",
+      "target": "dev.agentmirror.app.tsnet",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/PackageDoc.kt",
+      "note": "同上"
+    },
+    {
+      "pkg": "dev.agentmirror.app.session",
+      "target": "dev.agentmirror.app.ui.theme",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/PackageDoc.kt",
+      "note": "同上"
+    },
+    {
+      "pkg": "dev.agentmirror.app.session",
+      "target": "dev.agentmirror.terminal",
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/PackageDoc.kt",
+      "note": "返工追加：KT_SEARCH 修复后 dev.agentmirror.terminal 模块进入依赖图，本包 import 了 TerminalEmulator（SessionViewModel.kt:33）却未声明 @consumes——新暴露的 T3-4 漂移，本轮补齐"
+    }
+  ],
+  "uncertain": [
+    {
+      "symbol": "SessionRoute KDoc 中「fg-service 持有 ServiceWire.manager」/「[ServiceWire.uiConnector] 扇出」",
+      "note": "已核：MirrorForegroundService.onCreate 调用 ServiceWire.manager(connListener)，服务包装监听转投 uiConnector —— 与 KDoc 一致，未改写。无判不准项"
+    },
+    {
+      "symbol": "TermSurfaceView.backToBottomLabel",
+      "note": "确认恒 null（全仓库仅声明处赋值 null），自绘按钮死路径。但该死路径在 termview 包（write_scope 之外），本包只改正了本包注释里对它的指认（showBackToBottom/onScrollToBottom），未越界改 termview 源码"
+    }
+  ],
+  "deviation": [
+    "复核席 w-doc-verify3 指出 SessionRoute.kt 3 处漏网（行 42 MainActivity 双入口、行 42 不含接线层、行 44/99-100 fg-service 持有 manager 且前台服务决定启动），本轮已全部补齐改写；并顺带补 @consumes dev.agentmirror.terminal（KT_SEARCH 修复后新暴露的漂移边）。首次提交时未读透 SessionRoute.kt 的接线现状，教训：该类同时承担接线层（非仅路由），且 fg-service 全仓库零启动调用点（.service 席同批实证），两包对同一事件曾各说各话。"
+  ]
+}

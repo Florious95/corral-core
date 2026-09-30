@@ -64,6 +64,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,6 +76,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -103,11 +105,30 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.kyant.backdrop.backdrops.emptyBackdrop
 import dev.agentmirror.app.ui.components.GlassIconButton
+import dev.agentmirror.app.ui.components.ruledSurface
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 
 /** Source textarea height in dp: collapsed 32; focused `20 * expandLines + 12`. */
 internal fun sourceInputFieldHeightDp(focused: Boolean, expandedLines: Int): Int =
     if (focused) 20 * expandedLines.coerceIn(2, 5) + 12 else 32
+
+/** Capsule expansion progress at which the rising top edge has cleared the shortcut slot. */
+private const val ShortcutRevealStart = 0.7f
+/** The shortcut rises this far into its settled slot while fading in. */
+private val ShortcutRise = 8.dp
+
+/**
+ * Shortcut trigger entrance driven by the capsule height tween itself: 0 (not composed) until the
+ * capsule is [ShortcutRevealStart] of the way open, then 0→1 as it settles; collapse replays it
+ * backwards, so the trigger can never lead or trail the capsule edge.
+ */
+internal fun shortcutRevealFraction(fieldHeightDp: Float, expandedLines: Int): Float {
+    val collapsed = sourceInputFieldHeightDp(false, expandedLines)
+    val expanded = sourceInputFieldHeightDp(true, expandedLines)
+    val progress = (fieldHeightDp - collapsed) / (expanded - collapsed)
+    return ((progress - ShortcutRevealStart) / (1f - ShortcutRevealStart)).coerceIn(0f, 1f)
+}
 
 /**
  * Fixed height read from an animated [State] at layout time: the 250ms expand/collapse that runs
@@ -144,6 +165,9 @@ fun CommandInputBar(
     val glass = sessionDockGlassTokens()
     // 强调色一律走全 App 调色板的科技蓝（p.accent），⛔ 不用 dock 主题遗留的紫色 primary / accent*
     val p = LocalAppPalette.current
+    // 风格只换外壳（圆角薄片 / 直角固色）与描边、图标色；编辑器、焦点 / IME、展开高度与快捷钮几何一律不变。
+    val kit = LocalThemeSuite.current
+    val iconTint = if (kit.surfaces.isGlass) source.neutral400 else p.rowTitleText
     val keyboardController = LocalSoftwareKeyboardController.current
     val hostView = LocalView.current
     DisposableEffect(hostView) {
@@ -182,8 +206,16 @@ fun CommandInputBar(
         ),
         label = "inputFieldHeight",
     )
+    // Recomposes only when the trigger enters/leaves; per-frame alpha/rise are read in its layer.
+    val shortcutShown by remember(sourceExpandedLines) {
+        derivedStateOf { shortcutRevealFraction(fieldHeight.value.value, sourceExpandedLines) > 0f }
+    }
     val borderColor by animateColorAsState(
-        targetValue = if (focused) p.accent.copy(alpha = 0.85f) else glass.hairline,
+        targetValue = when {
+            !kit.surfaces.isGlass -> if (focused) p.accent else p.inputBorder
+            focused -> p.accent.copy(alpha = 0.85f)
+            else -> glass.hairline
+        },
         animationSpec = tween(
             durationMillis = SessionDockMotion.InputBorderMillis,
             easing = SessionDockMotion.Ease,
@@ -193,12 +225,18 @@ fun CommandInputBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .dockFlatGlass(
-                shape = RoundedCornerShape(22.dp),
-                fill = glass.fill,
-                hairline = borderColor,
-                topGlint = glass.topGlint,
-                bottomShade = glass.bottomShade,
+            .then(
+                if (kit.surfaces.isGlass) {
+                    Modifier.dockFlatGlass(
+                        shape = RoundedCornerShape(22.dp),
+                        fill = glass.fill,
+                        hairline = borderColor,
+                        topGlint = glass.topGlint,
+                        bottomShade = glass.bottomShade,
+                    )
+                } else {
+                    Modifier.ruledSurface(fill = p.inputBackground, stroke = borderColor, strokeWidth = kit.geometry.hairline)
+                },
             )
             .testTag("session-command-input"),
     ) {
@@ -215,7 +253,9 @@ fun CommandInputBar(
             ) {
                 // Overlay the shortcut control above (+) without changing the dock's measured
                 // height. It never requests focus, so tapping it leaves the IME untouched.
-                if (editorExpanded) {
+                // Drawn beneath (+) and gated on the height tween so it emerges behind the rising
+                // capsule edge instead of sitting in the capsule's path.
+                if (shortcutShown) {
                     GlassIconButton(
                         onClick = {
                             Trace.beginSection("shortcut/open")
@@ -231,10 +271,15 @@ fun CommandInputBar(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .offset(y = (-36).dp)
+                            .graphicsLayer {
+                                val reveal = shortcutRevealFraction(fieldHeight.value.value, sourceExpandedLines)
+                                alpha = reveal
+                                translationY = (1f - reveal) * ShortcutRise.toPx()
+                            }
                             .testTag("session-shortcut-button")
                             .semantics { contentDescription = "快捷命令" },
                     ) {
-                        Text(">_", color = source.neutral400, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                        Text(">_", color = iconTint, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                     }
                 }
                 GlassIconButton(
@@ -245,7 +290,7 @@ fun CommandInputBar(
                 ) {
                     Icon(
                         DockIconPlus, contentDescription = "添加附件",
-                        modifier = Modifier.width(20.dp), tint = source.neutral400,
+                        modifier = Modifier.width(20.dp), tint = iconTint,
                     )
                 }
             }
@@ -375,15 +420,22 @@ private fun ShortcutGlassMenu(
     onSelect: (ShortcutCommand) -> Unit,
 ) {
     val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
     Column(
         modifier = modifier
             .width(190.dp)
-            .dockFlatGlass(
-                shape = RoundedCornerShape(16.dp),
-                fill = glass.fill,
-                hairline = glass.hairline,
-                topGlint = glass.topGlint,
-                bottomShade = glass.bottomShade,
+            .then(
+                if (kit.surfaces.isGlass) {
+                    Modifier.dockFlatGlass(
+                        shape = RoundedCornerShape(16.dp),
+                        fill = glass.fill,
+                        hairline = glass.hairline,
+                        topGlint = glass.topGlint,
+                        bottomShade = glass.bottomShade,
+                    )
+                } else {
+                    Modifier.ruledSurface(fill = p.sheetBackground, stroke = kit.colors.headerRule, strokeWidth = kit.geometry.hairline)
+                },
             )
             .padding(vertical = 4.dp)
             .testTag("session-shortcut-menu"),

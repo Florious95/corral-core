@@ -1,0 +1,32 @@
+{
+  "task_id": "state-ident-wrapper",
+  "status": "pass",
+  "acceptance": {
+    "command": "bash -lc 'cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./internal/agentstate/...'",
+    "exit_code": 0,
+    "output": "ok github.com/remote-agent/agentmirror/internal/agentstate 0.492s"
+  },
+  "changes": [
+    "server/internal/agentstate/identify.go (新增：AgentKind/IdentifyInput/Identify/identifyFromTable/classifyArgv/readProcTable/parseProcTable，500ms 有界 ps 单次采样)",
+    "server/internal/agentstate/identify_test.go (新增：17 测试，fake 进程表驱动 + 真实 ps 冒烟一条)",
+    "server/internal/agentstate/sample.go (加法：Registry.DetectForKind，旧 Detect/DefaultRegistry 未动)",
+    "server/internal/agentstate/doc.go (包注释补充识别器定位)"
+  ],
+  "tests": {
+    "count": 17,
+    "suite": "go test ./internal/agentstate/...",
+    "red_first": "spec 先行时构建红（undefined Proc/AgentKind），实现落盘后全绿",
+    "positive_controls": [
+      "fake 树 bash→sh→claude 判 claude",
+      "fake 树 sh→node→codex 链判 codex",
+      "无匹配后代判 unknown",
+      "取消上下文判 unknown（超时降级）"
+    ],
+    "real_host_smoke": "readProcTable 冒烟通过（0.07s，含自身 PID）；真实 wrapper 链 `team-agent claude …` 端到端判出 claude（临时测试，验后已删）",
+    "gofmt": "clean",
+    "vet": "clean",
+    "go_build": "go build ./... 绿（红线：每次落盘保持可编译）"
+  },
+  "notes": "红测抓到裸词误报：ps 重连丢引号，`-c developer_instructions=\"… codex …\"` 会误报 codex；修复为仅匹配可执行+node 包装直接启动目标（argv[0:2] 路径基名）。测试净化前缀照旧；未 git push、未 commit。",
+  "leader_note": "leader 复跑 -count=1 exit 0 确认；真实 wrapper 链（team-agent claude）端到端命中已验证；加法契约有对等测试，ws-api 在途无破坏。"
+}

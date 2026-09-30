@@ -1,0 +1,16 @@
+{
+  "task_id": "fix-term-render-debt",
+  "status": "pass",
+  "worker": "w-term-debt",
+  "date": "2026-08-09",
+  "summary": "P0 两条清偿：①增量流不唤醒渲染帧循环——TermViewPresenter 新增 onFrameRequested 帧请求回调（脏区到达/滚动/回到底部/字号变化触发），TermSurfaceView 线程安全接管（WS 收件线程经缓存 Runnable+AtomicBoolean 跳主线程，稳态零分配），帧循环改纯数据驱动并顺带拆除 showBackToBottom 60fps 空转自续（锁定历史时的静默经济违规）；②行首 x 漂移——根因是 capture-pane 快照行间裸 LF 无 CR（pipe-pane 增量经 ONLCR 带 CR LF，feed 严格 VT 语义无罪），replaySnapshot 期间 LF 隐式回车 + 剥除尾随行终结 LF（否则底行 scrollUp 整屏上移一行且每次重 attach 污染一行 scrollback）。连带加固：帧唤醒使『WS 线程 feed / 主线程帧读』成为常态并发，TerminalEmulator 五个公开入口 @Synchronized + ScrollbackBuffer 内部锁 + presenter pendingDamage 锁（ArrayDeque 裸并发撕裂防护）。",
+  "tests": {
+    "acceptance": "bash -lc 'cd app && ./gradlew -q :terminal:test :app:testDebugUnitTest' -> exit 0",
+    "red_first": "CaptureFixtureTest.snapshotReplayWithBareLfStartsEveryRowAtColumnZero 红（expected GLYPH_OK 行 was 漂移行，与真机截图同型）；TermViewFrameWakeTest 3 红（feed/滚动/字号均无人请求帧）→ 实现后全绿",
+    "fixtures": "真实字节夹具（隔离 tmux 3.6a 80x24 采集，socket /tmp/w-term-debt-fix.sock 已清）：capture-pane -e -p → terminal+app 测试资源 capture/snapshot.bin（裸 LF+尾随终结 LF）；pipe-pane -o 原始 pty 字节 → capture/delta.bin（CR LF+ESC[H ESC[J）",
+    "e2e_regression": "e2e/layer2.sh 全旅程 PASS（真 WS 连接+列表+会话页+输入回显+force-stop 恢复）",
+    "on_device": ".team/evidence/fix-term-render-debt/A-snapshot-align.png（SNAPSHOT 重放 ALIGN_A..D 行首全对齐第 0 列）；B-delta-wake.png（主机侧 clear+printf 注入后 3s 内**零交互**画面更新=冻结已修，无重 attach）；C-delta-wake-2.png（第二轮增量继续零交互到达，非一次性巧合）"
+  },
+  "out_of_scope_findings": "两条界外渲染残债（截图内肉眼可见，均非本案两条 P0）：①resize 后服务端不补快照——客户端 resize 协议帧后 bash SIGWINCH 重绘提示符落在客户端旧游标行（A 图中屏孤立 bash-3.2$ 残影），TerminalGrid.resize KDoc 写明『内容以随后到达的服务端快照为准』但服务端 resize 后并未下发新 SNAPSHOT，疑 server 侧接线缺口；②首行裁切——TermSurfaceView.onDraw canvas.translate(0,-lineHeightPx) 使首逻辑行被上移一行高、被顶栏遮住只露下半（A/B/C 三图首行同状），绘制基线/平移账目疑有欠账，牵动 glyph 案栅格断言故未顺手动。",
+  "discipline": "红测先行（两案均先红后绿留档）；无定时器轮询（帧循环纯数据驱动，空闲零帧，且拆除既有 60fps 空转）；热路径零新增分配（跨线程唤醒用缓存 Runnable+CAS 合并）；只写 write_scope（app/terminal、termview、src/test、测试资源；e2e/ 只运行未改动）；未 commit 未 push。"
+}

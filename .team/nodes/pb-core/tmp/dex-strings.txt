@@ -1,0 +1,3 @@
+PerfTrace 17
+addBinaryListener 1
+debug.agentmirror.perftrace 1

@@ -1,0 +1,81 @@
+{
+  "task": "doc-contract-api",
+  "status": "pass",
+  "pkg": "internal/api",
+  "summary": "改写 4 条不实注释（第一批谱系形态 #5『虚构/过期的待办状态』的逆形态：把『任务落地前』写成现在式——pairing-security 与 state-parser/fix-state-wiring 均已落地但做的是别的事，原注释声称它们会替换掉本包的默认实现，实际 cmd/agentmirrord 仍用 staticToken/unknownState 默认 + Options 装配）；补 9 个 @contract（NewServer/Server.Close/Server.Handler/NewStateProvider/wiredStateProvider.Close/State/StateProvider.State/TokenValidator.ValidateToken/Discoverer.Discover）；消 4 条 T3-4 漂移（internal/agentstate、internal/bridge、internal/discovery、internal/protocol）。已做阳性对照（删 NewServer 的 @err → 单包硬判 exit 1 精确指向 server.go:72，改回后恢复 exit 0）。",
+  "tests": [
+    {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/api", "rc": 0, "note": "单包硬判全绿（T3-1/T3-2/T3-3/T3-4 均 PASS）"},
+    {"argv": "bash -lc 'cd server && env -u TEAM_AGENT_* go test -count=1 ./internal/api/...'", "rc": 0, "note": "ok github.com/agentmirror/agentmirror/internal/api 5.247s"},
+    {"argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0, "note": "全仓库判据 exit 0；剩余 T3-1(1)/T3-4(24) 均为他包（Kotlin dev.agentmirror.app.* 与 cmd/agentmirrord），internal/api 条目已清零"}
+  ],
+  "changes": [
+    "server/internal/api/doc.go — 包级 doc 补充 agentstate 消费说明；新增 4 个独立 @consumes 声明块（internal/agentstate/bridge/discovery/protocol）",
+    "server/internal/api/options.go — 文件头与 TokenValidator/StateProvider 字段 doc 从『a later task replaces』改为落地事实（staticToken/unknownState 默认 + pairing 生成 token + fix-state-wiring 装配）",
+    "server/internal/api/state.go — StateProvider 接口 doc 从『state-parser task lands the real implementation』改为 wiredStateProvider 装配事实；State 方法补 @contract",
+    "server/internal/api/token.go — TokenValidator 接口 doc 从『pairing-security task replaces』改为 pairing 生成 token 不替换验证器的事实；ValidateToken 补 @contract",
+    "server/internal/api/state_wiring.go — NewStateProvider/Close/State 补 @contract",
+    "server/internal/api/server.go — NewServer/Close/Handler 补 @contract",
+    "server/internal/api/discoverer.go — Discoverer.Discover 方法补 @contract"
+  ],
+  "rewritten": [
+    {
+      "symbol": "StateProvider.State 接口",
+      "file": "server/internal/api/state.go",
+      "old": "// The state-parser task lands the real implementation; the default always returns protocol.StateUnknown",
+      "untrue": "state-parser 任务已落地（taskbook 有 state-parser.json 证据）且产出的是 agentstate 包（规则/识别），不是『本接口的实现』；生产实现 wiredStateProvider 由 fix-state-wiring 任务装配（main.go:116 NewStateProvider → Options.StateProvider），不属于 state-parser。原注释把任务归属与实现路径都说错了。",
+      "basis": "taskbook.yaml 85-95（state-parser 目标=per-agent 适配器，write_scope=internal/agentstate）；taskbook.yaml 317-327（fix-state-wiring 装配 agentstate→api.Options.StateProvider）；main.go:116,122-130；state_wiring.go NewStateProvider",
+      "new": "// The production implementation is wiredStateProvider (state_wiring.go), assembled by NewStateProvider and handed to the api server by cmd/agentmirrord (task fix-state-wiring); a caller that wires no provider gets unknownState, which always returns protocol.StateUnknown (requirement 008 first-class value)."
+    },
+    {
+      "symbol": "TokenValidator 接口",
+      "file": "server/internal/api/token.go",
+      "old": "// The pairing-security task replaces the default static-token implementation with a real pairing flow; until then the daemon validates against the token configured at startup.",
+      "untrue": "pairing-security 已落地（pairing 包生成 token），但没有『替换 staticToken』——cmd/agentmirrord 仍以 Options.Token 注入静态 token，main.go 的 Options.Token: token 一行即是装配；staticToken 仍是唯一实现。原注释把『未来任务会替换默认』当现状，而实际上任务落地后做的事不是替换。",
+      "basis": "taskbook.yaml 97-106（pairing-security 目标=服务端生成 token+WS 校验）；main.go:96-100（resolveToken 生成/复用 token）、main.go:122-130（Options.Token: token）；token.go staticToken",
+      "new": "// The default is staticToken, validating in constant time against the token configured at startup (Options.Token); the seam stays so a future pairing flow can plug in without touching auth frame handling. pairing generates the token itself (task pairing-security); it does not replace this validator — cmd/agentmirrord wires the resolved token in via Options.Token."
+    },
+    {
+      "symbol": "Options.TokenValidator 字段",
+      "file": "server/internal/api/options.go",
+      "old": "// It is the seam the pairing-security task replaces with a real pairing flow; the default validates against Options.Token.",
+      "untrue": "同上——pairing-security 没有替换默认，默认仍是 staticToken；字段 doc 把任务落地效果写成了『替换 seam』。",
+      "basis": "taskbook.yaml 97-106；token.go；main.go:122-130",
+      "new": "// The default is staticToken, validating against Options.Token in constant time; the seam stays for a future pairing flow. pairing generates the token itself (task pairing-security), it does not replace this validator."
+    },
+    {
+      "symbol": "Options.StateProvider 字段",
+      "file": "server/internal/api/options.go",
+      "old": "// The default always returns protocol.StateUnknown (requirement 008 first-class value); the state-parser task lands the real provider and the wiring is a later integration.",
+      "untrue": "wiring 已落地（fix-state-wiring 在 main.go:116-130 完成 NewStateProvider→Options.StateProvider 装配），不是『later integration』；state-parser 产出 agentstate 包，不是本字段的实现。",
+      "basis": "taskbook.yaml 85-95, 317-327；main.go:116,122-130；state_wiring.go",
+      "new": "// The default is unknownState, always returning protocol.StateUnknown (requirement 008 first-class value); the production wiring is wiredStateProvider via NewStateProvider, assembled by cmd/agentmirrord (task fix-state-wiring). State failures must never affect mirroring or input — this interface is the seam that guarantees it."
+    }
+  ],
+  "contracts_added": [
+    {"symbol": "NewServer", "file": "server/internal/api/server.go", "tags": ["@pre", "@post", "@err", "@inv"]},
+    {"symbol": "Server.Close", "file": "server/internal/api/server.go", "tags": ["@pre", "@post", "@err", "@inv"]},
+    {"symbol": "Server.Handler", "file": "server/internal/api/server.go", "tags": ["@pre", "@post", "@err", "@inv"]},
+    {"symbol": "NewStateProvider", "file": "server/internal/api/state_wiring.go", "tags": ["@pre", "@post", "@err", "@inv"]},
+    {"symbol": "wiredStateProvider.Close", "file": "server/internal/api/state_wiring.go", "tags": ["@pre", "@post", "@err", "@inv"]},
+    {"symbol": "wiredStateProvider.State", "file": "server/internal/api/state_wiring.go", "tags": ["@pre", "@post", "@err", "@inv"]},
+    {"symbol": "StateProvider.State", "file": "server/internal/api/state.go", "tags": ["@pre", "@post", "@err", "@inv"]},
+    {"symbol": "TokenValidator.ValidateToken", "file": "server/internal/api/token.go", "tags": ["@pre", "@post", "@err", "@inv"]},
+    {"symbol": "Discoverer.Discover", "file": "server/internal/api/discoverer.go", "tags": ["@pre", "@post", "@err", "@inv"]}
+  ],
+  "consumes_added": [
+    {"pkg": "internal/api", "target": "internal/agentstate"},
+    {"pkg": "internal/api", "target": "internal/bridge"},
+    {"pkg": "internal/api", "target": "internal/discovery"},
+    {"pkg": "internal/api", "target": "internal/protocol"}
+  ],
+  "uncertain": [],
+  "deviation": [],
+  "positive_control": {
+    "performed": true,
+    "method": "删掉 server/internal/api/server.go NewServer 的 @err 标签",
+    "expect": "单包硬判 exit 1 且精确指向该符号",
+    "observed": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/api → exit 1；T3-3 FAIL：server/internal/api/server.go:72 `@contract` — 缺契约标签: @err（精确指向 NewServer）",
+    "restored": true,
+    "restored_rc": 0
+  }
+}

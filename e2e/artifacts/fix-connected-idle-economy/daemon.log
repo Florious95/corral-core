@@ -1,0 +1,5 @@
+time=2026-08-10T02:29:34.531+08:00 level=INFO msg="single-instance guard acquired" pidfile=/tmp/am-cidle.DhGORv/state/agentmirrord.pid
+time=2026-08-10T02:29:34.532+08:00 level=INFO msg="pairing token source=explicit"
+time=2026-08-10T02:29:34.532+08:00 level=INFO msg="agentmirrord starting" listen=127.0.0.1:63275 qr_listen="" token_source=explicit upload_dir=/tmp/am-cidle.DhGORv/uploads max_upload_mib=20 list_interval=2s
+time=2026-08-10T02:29:34.532+08:00 level=WARN msg="tailnet 未启用：未配置 TS authkey，仅 LAN 监听"
+time=2026-08-10T02:32:48.799+08:00 level=INFO msg="shutting down"

@@ -1,0 +1,136 @@
+{
+  "task": "fix-app-runtime-sa",
+  "case_id": "msg_71d88dbdb2e0",
+  "status": "pass",
+  "summary": "两件事全绿交付：①补在屏兜底时钟泵——新增 AppClockPump（泵单一事实源 + fallbackPumpOnce 让出判据）、OnScreenFallbackPump（根组合兜底泵，RESUMED 门控）与 ServiceWire.servicePumpActive（服务 onStartCommand 置位/onDestroy 复位）。服务被杀时前台界面由兜底泵接管继续推进重连调度与输入超时裁决（004 自检标准：删掉前台服务产品功能仍完整，只是后台降级；前台不再降级）；服务恢复即让出，不双泵（双泵会 UI 抖动 + 白烧 CPU，撞静默经济红线）。红测 6 条全绿 + 双向阳性对照（去掉让出判据→no-double-pump 红；去掉兜底泵拍→service-inactive 红）。②修分组 E 全部 10 条：ApplySharedPref/UseKtx×5（PairingConfigStore + PairingScreen toUri）、ObsoleteSdkInt×2（NotificationHelper 判据删除 + mipmap-anydpi-v26 迁 mipmap）、UnusedResources（colors.xml brand_primary 删除 + Theme.kt 注释同步）、MonochromeLauncherIcon×2（双图标加 monochrome 标签）。每组逐条判明实际风险与修复后风险消失（见 changes 逐条）。lint 复扫 src/main 0 条（原 10 条全清），gate app 面 15→5 条（剩 5 条全为分组 F build.gradle.kts，归 fix-sa-appbuild deferred 项，超出本席 write_scope，见 deviation）。注释同步三包（.service/.session/.workspace）到位，未造第三版不实注释。",
+  "tests": [
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'",
+      "rc": 0,
+      "result": "46 suites / 358 tests / 0 failures / 0 errors（解析 test-results XML 确认非零，非仅 exit 0）。新增 AppClockPumpTest 4 条 + OnScreenFallbackPumpTest 2 条全绿。"
+    },
+    {
+      "argv": "bash -lc 'python3 tools/archwiki/build_wiki.py --check'",
+      "rc": 0,
+      "result": "T1-1/T1-2/T3-1/T3-2/T3-3/T3-4 全 PASS（19 包 31 条依赖边），exit 0。"
+    },
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash tools/gate/run.sh'",
+      "rc": 1,
+      "result": "结论 fail：3 套件共 1099 用例。server ok(315)、archwiki ok(1)、app fail(783) 失败仅 5 条 lint 全部落在 app/app/build.gradle.kts:50/96/34/108/122（OldTargetApi + GradleDependency + NewerVersionAvailable×3）——分组 F 项，由 fix-sa-appbuild 证据明确 deferred（core-ktx 需 AGP 9.1 跨主版本、kotlin.plugin.serialization 与 Kotlin 2.2 工具链耦合、okhttp 5.4 跨主版本破坏性 API、targetSdk 属产品决策），超出本席 write_scope（app/app/src/main|test），本席无法消除。本席 scope 内分组 E 10 条已全清（见 lint 复扫）。棘轮上行 771→783（+12，只增不降，无 ratchet-down）。"
+    }
+  ],
+  "positive_controls": [
+    {
+      "target": "补在屏兜底泵（no-double-pump）",
+      "method": "临时删掉 AppClockPump.fallbackPumpOnce 里的 `if (serviceActive()) return` 让出判据，跑 AppClockPumpTest.serviceActive_fallbackPump_yields_noDoublePump",
+      "result": "1 test completed, 1 failed —— 断言红（服务泵在跑时兜底泵重复重拨，双泵缺陷被当场揭穿）。撤销后恢复原文（diff 干净），再跑绿。"
+    },
+    {
+      "target": "补在屏兜底泵（service-inactive 仍泵）",
+      "method": "临时把 OnScreenFallbackPump 的 LaunchedEffect 循环体改为只 delay 不 pump，跑 OnScreenFallbackPumpTest.screenVisible_serviceInactive_fallbackPumpDrivesReconnect",
+      "result": "1 test completed, 1 failed —— 断言红（服务不可用 + 在屏时无泵，前台降级缺陷被当场揭穿）。撤销后恢复原文（diff 干净），再跑绿。"
+    },
+    {
+      "target": "分组 E lint 真在跑",
+      "method": "临时在 NotificationHelper.createChannels 恢复 `if (SDK_INT < O) return`（ObsoleteSdkInt 构造），重跑 :app:lintDebug",
+      "result": "LINT FLAGS ObsoleteSdkInt: .../NotificationHelper.kt —— lint 真实捕获该构造。撤销后恢复原文（diff 干净）。"
+    }
+  ],
+  "changes": [
+    {
+      "file": "app/app/src/main/java/dev/agentmirror/app/service/AppClockPump.kt",
+      "new": "新增。AppClockPump：泵单一事实源（fallbackPumpOnce = serviceActive 让出 + pumpManager）；OnScreenFallbackPump：根组合兜底泵，LocalLifecycleOwner RESUMED 门控，LaunchedEffect 首拍即拍（生产路径）。",
+      "why": "服务被杀时前台无泵（功能回退）。兜底泵在服务不可用时接管、服务恢复让出；RESUMED 门控保证后台不泵（004 后台降级可接受，不白烧 CPU）。"
+    },
+    {
+      "file": "app/app/src/main/java/dev/agentmirror/app/service/ServiceWire.kt",
+      "new": "新增 servicePumpActive 标记 + 注释同步。",
+      "why": "泵归属判据：服务 onStartCommand 置位 / onDestroy 复位，兜底泵据此让出，不双泵。"
+    },
+    {
+      "file": "app/app/src/main/java/dev/agentmirror/app/service/MirrorForegroundService.kt",
+      "new": "onStartCommand 置位 servicePumpActive；onDestroy 复位；KDoc/泵单拍注释同步兜底泵归属。",
+      "why": "标记随服务生命周期走，兜底泵接管/让出判据正确；注释不落后于实现。"
+    },
+    {
+      "file": "app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt",
+      "new": "根组合挂 OnScreenFallbackPump()。",
+      "why": "任一屏（工作区/会话/设置/配对）在屏且 RESUMED 即有一个兜底泵；服务常驻时零工作。"
+    },
+    {
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt",
+      "new": "KDoc 同步：泵归属 = 服务 + 在屏兜底（服务被杀时接管，恢复即让出）。",
+      "why": "注释同步纪律：泵归属再次变化，不造第三版不实注释。"
+    },
+    {
+      "file": "app/app/src/main/java/dev/agentmirror/app/session/SessionScreen.kt",
+      "new": "连接时钟泵注释同步兜底接管。",
+      "why": "同上。"
+    },
+    {
+      "file": "app/app/src/main/java/dev/agentmirror/app/service/PackageDoc.kt",
+      "new": "包文档同步在屏兜底泵。",
+      "why": "同上。"
+    },
+    {
+      "file": "app/app/src/main/java/dev/agentmirror/app/pairing/PairingConfigStore.kt",
+      "new": "#13/#14/#15 UseKtx + #12 ApplySharedPref：save/clear 改 KTX edit{}（异步 apply 语义不变）；discardConfigAfterMigrationFailure 改 edit(commit=true)（保留同步落盘）。",
+      "why": "ApplySharedPref 的实际风险是 commit 在 UI 线程同步写盘；save/clear 路径无同步语义要求（失败由下次 load 判断），KTX apply 更稳；discard 路径必须同步——apply 异步若进程写盘前被杀，遗留 url/token 会被下次 load 误读为合法 LAN 配置（误配对），故 commit=true 是 lint 认可的保留 commit 写法，风险消失。"
+    },
+    {
+      "file": "app/app/src/main/java/dev/agentmirror/app/pairing/PairingScreen.kt",
+      "new": "#16 UseKtx：Uri.parse → String.toUri()（KTX 等价封装）。",
+      "why": "纯风格等价（toUri 内部即 Uri.parse），无行为差异；删去未用的 android.net.Uri import。"
+    },
+    {
+      "file": "app/app/src/main/java/dev/agentmirror/app/service/NotificationHelper.kt",
+      "new": "#17 ObsoleteSdkInt：删除 `if (SDK_INT < O) return`（minSdk 26 = API 26，判据恒真）。",
+      "why": "该判据恒为 false（永不 return），是死代码；删掉后 createChannels 永远执行（API 26+ NotificationChannel 必可用），行为不变，死判据风险（误导维护者以为低版本不可用）消失。"
+    },
+    {
+      "file": "app/app/src/main/res/mipmap-anydpi-v26/* → app/app/src/main/res/mipmap/*",
+      "new": "#18 ObsoleteSdkInt：mipmap-anydpi-v26 目录迁为 mipmap（minSdk 26 时 v26 限定冗余）。",
+      "why": "anydpi 必须带版本限定，v26 与 minSdk 26 等价故冗余；迁 mipmap 后资源始终生效，不再依赖过时目录限定。"
+    },
+    {
+      "file": "app/app/src/main/res/values/colors.xml",
+      "new": "#19 UnusedResources：删除 brand_primary 色；brand_background 保留（启动图标背景引用）。",
+      "why": "brand_primary 实测零引用（Compose 主题经 ui/theme 直接取值，不读 R.color）；删除后主题实际颜色来源唯一（ui/theme），不再有'同值但不同源'的漂移风险。Theme.kt 注释同步。"
+    },
+    {
+      "file": "app/app/src/main/res/mipmap/ic_launcher.xml",
+      "new": "#20 MonochromeLauncherIcon：加 <monochrome> 标签。",
+      "why": "Android 13+ 主题图标缺失时系统用图标本身着色，前景为纯白矢量可直接复用为单色稿；补上后主题色图标正常显示。"
+    },
+    {
+      "file": "app/app/src/main/res/mipmap/ic_launcher_round.xml",
+      "new": "#21 MonochromeLauncherIcon：同上。",
+      "why": "同 #20。"
+    },
+    {
+      "file": "app/app/src/main/java/dev/agentmirror/app/ui/theme/Theme.kt",
+      "new": "brandPrimary/brandBackground 注释同步（brand_primary 资源已删，不再有资源对照）。",
+      "why": "注释同步纪律：资源删除后原'与资源同值'描述不实。"
+    },
+    {
+      "file": "app/app/src/test/java/dev/agentmirror/app/service/AppClockPumpTest.kt",
+      "new": "新增 4 条红测：serviceInactive_fallbackPump_drivesReconnect（服务不可用+在屏⇒泵仍在跑）、serviceActive_fallbackPump_yields_noDoublePump（服务恢复⇒不双泵）、servicePumpActive_setOnStartCommand_resetOnDestroy（归属标记随生命周期）、fallbackPump_nullManager_isNoop（空闲态有界）。",
+      "why": "红测断言任务要求的两件事；Robolectric 驱动生产 pumpOnce/fallbackPumpOnce 逻辑，不靠假泵。"
+    },
+    {
+      "file": "app/app/src/test/java/dev/agentmirror/app/service/OnScreenFallbackPumpTest.kt",
+      "new": "新增 2 条 Compose 红测：渲染真实 OnScreenFallbackPump（生产组合），断言服务不可用时首拍推进重连 / 服务在跑时首拍让出。",
+      "why": "'测试假泵掩盖生产无泵'教训（PairingScreenClockPumpTest 同款）：这里测的是生产组合，不是直接调逻辑的测试通路。"
+    }
+  ],
+  "deviation": [
+    "gate run.sh 退出码 1：app 面剩 5 条 lint 失败全部位于 app/app/build.gradle.kts（OldTargetApi/GradleDependency/NewerVersionAvailable×3），属分组 F，fix-sa-appbuild 证据明确 deferred 且超出本席 write_scope（app/app/src/main|test），本席无法消除；分组 E 10 条已全清（lint 复扫 src/main 0 条）。此红为上游在途项，非本席引入。",
+    "本席 scope 内无其他 deviation：全部改动落在 write_scope（app/app/src/main/ 与 app/app/src/test/），未触碰 build.gradle.kts / manifest / lintOptions / 规则集，未加任何 @Suppress 或 lint 豁免。"
+  ],
+  "notes": {
+    "scope_boundary": "分组 F 5 条（build.gradle.kts）与分组 G（tsnetbind AAR）由 fix-sa-appbuild / fix-tsnetbind-align 承接；本席只处理分组 E 运行时 10 条。",
+    "pump_ownership_semantics": "servicePumpActive 与 serviceListener 同生命周期槽（都挂在服务上）但语义独立：前者管时钟归属（兜底让出判据），后者管事件扇出。服务被系统杀（进程存活）→ onDestroy 复位 → 前台兜底泵接管；服务重建（START_STICKY/冷启动 start）→ onStartCommand 置位 → 兜底泵让出。进程死亡 → 冷启动重连照常（004 无状态免疫），兜底泵随进程重建后由 RESUMED+flag 状态自洽接管/让出。",
+    "no_double_pump_with_pairing": "PairingScreen 自带的 onTick 泵驱动的是配对试探用独立 ConnectionManager（PairingViewModel 构造注入，非 ServiceWire 常驻单例），与兜底泵泵的共享连接不重叠，无双泵。"
+  }
+}

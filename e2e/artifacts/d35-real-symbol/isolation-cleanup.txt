@@ -1,0 +1,3 @@
+isolated_tmux_cleaned=yes
+socket_path_exists_after_kill=yes
+note=tmux server/list-sessions unreachable; stale filesystem socket path may remain

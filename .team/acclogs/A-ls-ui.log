@@ -1,0 +1,4 @@
+SCREEN: ['收藏', '3 SESSIONS · 1 ACTIVE', 'LAN', '★', 'leader', '/Volumes/nvme/Projects/讨论team-agent', '空闲', '★', '远控 leader', '/Volumes/nvme/Projects/远程Agent安卓', '进行中', '★', 'team-leader-2', '/Users/alauda/Documents/code/agent前沿探索/多agent协作', '空闲', '★', '收藏', '☰', '会话', '⚙', '设置']
+A-fv-online offline=0 online_status=3 names=['远控 leader', 'team-leader-2', 'leader']
+SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/land-list/shot-favorites.png
+PASS t.list land-list

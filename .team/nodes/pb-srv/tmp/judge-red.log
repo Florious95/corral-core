@@ -1,0 +1,5 @@
+$ cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-pb-srv
+$ sh tools/perfbase/judge-srv-green.sh; echo "JUDGE_RC=$?"
+grep: --include=*.go: No such file or directory
+FAIL server 源码缺键 perf_subscribe
+JUDGE_RC=1

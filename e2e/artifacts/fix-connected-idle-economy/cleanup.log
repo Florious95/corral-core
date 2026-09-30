@@ -1,0 +1,10 @@
+client_pid_gone=true
+daemon_pid_gone=true
+tmux_pid_gone=true
+owned_pane_pids_gone=true
+listener_absent=true
+runtime_handles_zero=true
+socket_absent=true
+runtime_tree_absent=true
+out_of_scope_tmux_targets=0
+ps_scope=read-only snapshot; classification only beneath self-owned pane roots; raw process table not recorded or displayed; zero production interaction

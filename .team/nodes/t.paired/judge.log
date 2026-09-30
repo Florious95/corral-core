@@ -1,0 +1,4 @@
+  ok   .team/perf/paired-r2.json    段数=6  可分辨效应=34.3%
+  ok   .team/perf/paired-r3.json    段数=6  可分辨效应=26.7%
+PASS 两轮都已配对重算：段齐、n_pairs 够、CI 自洽、丢弃样本有计数、可分辨效应已给出
+     ⚠️ 本判据⛔ 不核 median 的正负——B 更快或更慢都是合法结论。

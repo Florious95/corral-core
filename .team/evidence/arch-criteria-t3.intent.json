@@ -1,0 +1,1 @@
+{"task_id": "arch-criteria-t3", "dispatched_to": "w-arch-t3", "base": ".team/nodes/arch-criteria-t3/CLAUDE.md", "case_id": "msg_22dc6d686c80", "at": "2026-08-11 00:02:00", "note": "leader 人工派单（本轮为人工调度，非编排引擎）；补写此 intent 是为让 watchdog 的 inflight_seats() 能看见本席，否则停摆计数永不自增"}

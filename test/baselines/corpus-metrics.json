@@ -1,0 +1,192 @@
+{
+  "generatedAt": "2026-08-13T02:21:37.194Z",
+  "groups": {
+    "d38-baseline-healthy": {
+      "provenance": {
+        "device": "agentmirror_geo_1260x2800",
+        "latencyMs": 0,
+        "fixture": "realcc-baseline",
+        "buildSha": "known-healthy"
+      },
+      "origin": "HEALTHY",
+      "metrics": {
+        "25-app-baseline-realcc": {
+          "variance": 9655,
+          "avgGray": 81,
+          "contentRatio": 0.0094,
+          "bottomMarginPx": 6,
+          "rightMarginPx": 0,
+          "terminalBand": "300-1999",
+          "contentBounds": {
+            "top": 300,
+            "bottom": 1993,
+            "left": 0,
+            "right": 1079
+          }
+        }
+      }
+    },
+    "d38-verify-healthy": {
+      "provenance": {
+        "device": "avd-1080x2400",
+        "latencyMs": 0,
+        "fixture": "d38-verify",
+        "buildSha": "d38-fixed"
+      },
+      "origin": "HEALTHY",
+      "metrics": {}
+    },
+    "ime-normal-healthy": {
+      "provenance": {
+        "device": "avd-1080x2400",
+        "latencyMs": 0,
+        "fixture": "ime",
+        "buildSha": "ime-fixed"
+      },
+      "origin": "HEALTHY",
+      "metrics": {
+        "ime-normal-dark": {
+          "variance": 1078,
+          "avgGray": 28,
+          "contentRatio": 0.0395,
+          "bottomMarginPx": 26,
+          "rightMarginPx": 34,
+          "terminalBand": "0-2399",
+          "contentBounds": {
+            "top": 47,
+            "bottom": 2373,
+            "left": 1,
+            "right": 1045
+          }
+        },
+        "ime-normal-light": {
+          "variance": 9863,
+          "avgGray": 85,
+          "contentRatio": 0.044,
+          "bottomMarginPx": 669,
+          "rightMarginPx": 394,
+          "terminalBand": "300-1999",
+          "contentBounds": {
+            "top": 300,
+            "bottom": 1330,
+            "left": 1,
+            "right": 685
+          }
+        },
+        "d35-normal-dark": {
+          "variance": 600,
+          "avgGray": 25,
+          "contentRatio": 0.0215,
+          "bottomMarginPx": 26,
+          "rightMarginPx": 0,
+          "terminalBand": "0-2399",
+          "contentBounds": {
+            "top": 47,
+            "bottom": 2373,
+            "left": 1,
+            "right": 1079
+          }
+        },
+        "d35-normal-light": {
+          "variance": 9768,
+          "avgGray": 83,
+          "contentRatio": 0.0181,
+          "bottomMarginPx": 1366,
+          "rightMarginPx": 0,
+          "terminalBand": "300-1999",
+          "contentBounds": {
+            "top": 300,
+            "bottom": 633,
+            "left": 1,
+            "right": 1079
+          }
+        }
+      }
+    },
+    "p0-blank-dead": {
+      "provenance": {
+        "device": "avd-1080x2400",
+        "latencyMs": 0,
+        "fixture": "p0-accident",
+        "buildSha": "p0-accident"
+      },
+      "origin": "KNOWN_BAD",
+      "metrics": {
+        "02-baseline": {
+          "variance": 586,
+          "avgGray": 245,
+          "status": "INDETERMINATE",
+          "reason": "未找到任何深底 band（背景阈值可能不对）"
+        },
+        "02b-retry": {
+          "variance": 585,
+          "avgGray": 245,
+          "status": "INDETERMINATE",
+          "reason": "未找到任何深底 band（背景阈值可能不对）"
+        },
+        "03-clean-head": {
+          "variance": 586,
+          "avgGray": 245,
+          "status": "INDETERMINATE",
+          "reason": "未找到任何深底 band（背景阈值可能不对）"
+        },
+        "06-render-check": {
+          "variance": 586,
+          "avgGray": 245,
+          "status": "INDETERMINATE",
+          "reason": "未找到任何深底 band（背景阈值可能不对）"
+        }
+      }
+    },
+    "user-d38-fail": {
+      "provenance": {
+        "device": "agentmirror_geo_1260x2800",
+        "latencyMs": "tailscale",
+        "fixture": "user-upload",
+        "buildSha": "user-upload"
+      },
+      "origin": "KNOWN_BAD",
+      "metrics": {
+        "151812-2637": {
+          "variance": 682,
+          "avgGray": 22,
+          "contentRatio": 0.0292,
+          "bottomMarginPx": 1123,
+          "rightMarginPx": 56,
+          "terminalBand": "0-2799",
+          "contentBounds": {
+            "top": 57,
+            "bottom": 1676,
+            "left": 56,
+            "right": 1203
+          }
+        }
+      }
+    },
+    "ime-4line-pinched": {
+      "provenance": {
+        "device": "avd-1080x2400",
+        "latencyMs": 0,
+        "fixture": "ime-4line",
+        "buildSha": "ime-4line"
+      },
+      "origin": "KNOWN_BAD",
+      "metrics": {
+        "11-final-screenshot": {
+          "variance": 10890,
+          "avgGray": 94,
+          "contentRatio": 0.0367,
+          "bottomMarginPx": 669,
+          "rightMarginPx": 621,
+          "terminalBand": "300-1699",
+          "contentBounds": {
+            "top": 300,
+            "bottom": 1030,
+            "left": 1,
+            "right": 458
+          }
+        }
+      }
+    }
+  }
+}

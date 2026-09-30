@@ -1,0 +1,56 @@
+{
+  "task_id": "fix-dogfood-pairing-ux",
+  "status": "pass",
+  "rechecked_at": "2026-08-11T00:09:00+08:00",
+  "rechecker": "w-recheck-settle",
+  "tests": [
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'",
+      "rc": 0,
+      "note": "recheck acceptance argv; forced --rerun-tasks real execution: 345 tests 0 failures, PairingUxTest 2 tests fresh"
+    },
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/pairing/...\"'",
+      "rc": 0,
+      "note": "recheck acceptance argv; 26 === RUN lines, ok 0.692s"
+    }
+  ],
+  "positive_control": {
+    "app_xml": "42 files, 345 tests, failures=0 errors=0 skipped=0, ALL fresh (mtime 00:08:20 > rerun start 00:07:55)",
+    "terminal_xml": "9 files, 67 tests, failures=0 errors=0 skipped=0, ALL fresh",
+    "PairingUxTest": "tests=2 failures=0, fresh; methods manualToken_isAbsentFromVisibleTextNodes + workspaceSettings_reachesSingleProfileRepair present and passed",
+    "gradle_rerun_forced": "initial -q run was UP-TO-DATE (XML mtime 23:43, before 00:07:55 start); --rerun-tasks forced real re-execution"
+  },
+  "goal_checks": [
+    {
+      "claim": "D-07 token 不出现在任何可见文本节点（有对应断言）",
+      "verdict": "met",
+      "evidence": "PairingUxTest.manualToken_isAbsentFromVisibleTextNodes: sets manualToken='visible-secret-sentinel', asserts 0 nodes whose Text/EditableText contains it"
+    },
+    {
+      "claim": "D-14 设置页重配入口从主导航真的可达（不是只有个文件）",
+      "verdict": "met",
+      "evidence": "WorkspaceScreen TopBar '设置' TextButton -> onOpenSettings -> AgentMirrorApp onOpenSettings={showSettings=true} -> AppRoute.Settings -> SettingsScreen '重新配对' Button -> onRePair={showSettings=false; showPairing=true}. PairingUxTest.workspaceSettings_reachesSingleProfileRepair performs click chain and asserts nav.showPairing"
+    },
+    {
+      "claim": "原先谎称'设置里有重配按钮'的注释已改成与实现相符",
+      "verdict": "met",
+      "evidence": "No stale '设置里有重配' comment remains in source (only historical mention in docs/next-round-plan-20260810.md describing the original defect). AgentMirrorApp.kt comments now: '设置页：单档模型只提供重配' and '工作区：…顶栏设置钮进入真实设置页，再选择重新配对'"
+    },
+    {
+      "claim": "D-11 README/protocol 的 token 吊销与轮换说明已补齐",
+      "verdict": "met",
+      "evidence": "server/README.md §'配对 token 吊销与轮换': auto token file agentmirror/token 0600, delete+restart revokes all, explicit value not written to file, explicit -token/AGENTMIRROR_TOKEN rotation; docs/protocol.md §9.1 same semantics"
+    }
+  ],
+  "gaps": [],
+  "suggested_commit_files": [
+    "app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt",
+    "app/app/src/main/java/dev/agentmirror/app/MainNavState.kt",
+    "app/app/src/main/java/dev/agentmirror/app/SettingsScreen.kt",
+    "app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt",
+    "app/app/src/test/java/dev/agentmirror/app/PairingUxTest.kt",
+    "server/README.md",
+    "docs/protocol.md"
+  ]
+}

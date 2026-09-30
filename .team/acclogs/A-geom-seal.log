@@ -1,0 +1,4 @@
+seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.geom 当前分支=pr/geom-resume 目标分支=pr/geom-resume
+seal-pr: 工作区待提交条目=0
+seal-pr: 分支超出 main 的提交数=1  head=ae8fa38e5
+ae8fa38e5 [pr/geom-resume] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）

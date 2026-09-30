@@ -1,0 +1,19 @@
+source_sha: bdf7b75616ed52b004e03cc86ef2892056b927ca
+fixture: git archive of source_sha in a throwaway /tmp tree; one additive test only; no tmux/daemon/network access
+argv: bash -lc 'env -u TEAM_AGENT_* bash -lc "cd server && go test ./internal/api -run TestConnectedIdleEconomyStableFleetOldFanOut -count=1 -v"'
+exit_code: 1
+
+=== RUN   TestConnectedIdleEconomyStableFleetOldFanOut
+=== RUN   TestConnectedIdleEconomyStableFleetOldFanOut/panes_3
+    connected_idle_stable_red_test.go:45: stable 3-pane expired fleet dispatched 3 samples in one round; want <=1 before a global pacing permit
+=== RUN   TestConnectedIdleEconomyStableFleetOldFanOut/panes_27
+    connected_idle_stable_red_test.go:45: stable 27-pane expired fleet dispatched 27 samples in one round; want <=1 before a global pacing permit
+=== RUN   TestConnectedIdleEconomyStableFleetOldFanOut/panes_200
+    connected_idle_stable_red_test.go:45: stable 200-pane expired fleet dispatched 151 samples in one round; want <=1 before a global pacing permit
+--- FAIL: TestConnectedIdleEconomyStableFleetOldFanOut (0.00s)
+    --- FAIL: TestConnectedIdleEconomyStableFleetOldFanOut/panes_3 (0.00s)
+    --- FAIL: TestConnectedIdleEconomyStableFleetOldFanOut/panes_27 (0.00s)
+    --- FAIL: TestConnectedIdleEconomyStableFleetOldFanOut/panes_200 (0.00s)
+FAIL
+FAIL github.com/agentmirror/agentmirror/internal/api 0.524s
+FAIL

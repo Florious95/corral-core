@@ -1,0 +1,5 @@
+paired_url_class=tailnet_100_64_10
+workspace_listing_received=yes
+isolated_session_received=yes
+android_system_tailnet_route=not_used
+socks5_path=connection_manager_ready_via_explicit_tsnet_proxy_socket_factory

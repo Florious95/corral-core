@@ -45,12 +45,16 @@ import androidx.compose.ui.unit.sp
 import com.kyant.shapes.RoundedRectangle
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.GlassCircleBackButton
+import dev.agentmirror.app.ui.components.TokenText
 import dev.agentmirror.app.ui.components.flatGlass
-import dev.agentmirror.app.ui.theme.DarkPalette
+import dev.agentmirror.app.ui.components.ruledSurface
 import dev.agentmirror.app.ui.theme.Dims
+import dev.agentmirror.app.ui.theme.HeaderStyle
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 import dev.agentmirror.app.ui.theme.Motion
 import dev.agentmirror.app.ui.theme.TypeSizes
+import dev.agentmirror.app.ui.theme.isDark
 
 /*
  * 设置页分组套件：iOS 分组卡 + 彩色图标砖 + 发丝分隔。
@@ -86,8 +90,23 @@ private val DarkSettingsGlass = SettingsGlassTokens(
 )
 
 @Composable
-internal fun settingsGlassTokens(): SettingsGlassTokens =
-    if (LocalAppPalette.current === DarkPalette) DarkSettingsGlass else LightSettingsGlass
+internal fun settingsGlassTokens(): SettingsGlassTokens {
+    val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
+    return when {
+        // 直角风格：不透明卡面 + 实色描边，无高光 / 暗边。
+        !kit.surfaces.isGlass -> SettingsGlassTokens(
+            fill = p.cardBackground,
+            hairline = p.cardBorder,
+            topGlint = Color.Transparent,
+            bottomShade = Color.Transparent,
+            pressed = p.chipPressed,
+            divider = kit.colors.separator,
+        )
+        p.isDark -> DarkSettingsGlass
+        else -> LightSettingsGlass
+    }
+}
 
 internal val SettingsGroupShape = RoundedRectangle(20.dp)
 
@@ -95,7 +114,9 @@ internal val SettingsGroupShape = RoundedRectangle(20.dp)
 @Composable
 internal fun Modifier.settingsGlass(shape: RoundedRectangle = SettingsGroupShape): Modifier {
     val g = settingsGlassTokens()
-    val lifted = if (LocalAppPalette.current === DarkPalette) {
+    val kit = LocalThemeSuite.current
+    if (!kit.surfaces.isGlass) return ruledSurface(fill = g.fill, stroke = g.hairline, strokeWidth = kit.geometry.hairline)
+    val lifted = if (LocalAppPalette.current.isDark) {
         this
     } else {
         shadow(4.dp, shape, clip = false, ambientColor = LiftShadow, spotColor = LiftShadow)
@@ -123,6 +144,12 @@ internal fun SettingsGroup(
 /** 行间发丝线：从图标砖右侧的文字列起始，iOS 分组列表同款内缩。 */
 @Composable
 internal fun SettingsGroupDivider() {
+    val kit = LocalThemeSuite.current
+    if (!kit.surfaces.isGlass) {
+        // 直角风格：通栏 1dp 发丝线，不内缩。
+        Box(Modifier.fillMaxWidth().height(kit.geometry.hairline).background(kit.colors.separator))
+        return
+    }
     Box(
         Modifier
             .fillMaxWidth()
@@ -135,6 +162,16 @@ internal fun SettingsGroupDivider() {
 /** 分组上方的小标题（不与行标题同名，免得语义树出现重名节点）。 */
 @Composable
 internal fun SettingsSectionLabel(text: String) {
+    val kit = LocalThemeSuite.current
+    if (kit.recipes.header == HeaderStyle.Display) {
+        TokenText(
+            text = text,
+            color = kit.colors.eyebrow,
+            token = kit.typography.eyebrow,
+            modifier = Modifier.padding(start = 6.dp, top = 14.dp, bottom = 4.dp),
+        )
+        return
+    }
     AppText(
         text = text,
         color = LocalAppPalette.current.metaText,
@@ -275,13 +312,10 @@ internal fun SettingsSubPageHeader(
             trailing()
         }
         Column(Modifier.padding(start = Dims.screenHPadding + 2.dp, end = Dims.screenHPadding, top = 2.dp, bottom = 12.dp)) {
-            AppText(
+            TokenText(
                 text = title,
                 color = p.titleText,
-                fontSize = TypeSizes.screenTitleSecondary,
-                fontWeight = FontWeight.Bold,
-                lineHeightMultiplier = 1.2f,
-                letterSpacing = (-0.4).sp,
+                token = LocalThemeSuite.current.typography.sectionTitle,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -314,10 +348,23 @@ internal enum class SettingsGlyph(val top: Color, val bottom: Color) {
     Theme(Color(0xFFF472B6), Color(0xFFDB2777)),
     Appearance(Color(0xFFFBBF24), Color(0xFFEA8A0B)),
     Logs(Color(0xFF94A3B8), Color(0xFF64748B)),
+    Style(Color(0xFF4ADE80), Color(0xFF16A34A)),
 }
 
 @Composable
 internal fun SettingsIconTile(glyph: SettingsGlyph, size: Dp = IconTileSize) {
+    if (!LocalThemeSuite.current.surfaces.isGlass) {
+        // 直角风格：不画彩色砖，只留墨色线性图标，占位不变。
+        val ink = LocalAppPalette.current.rowTitleText
+        Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+            if (glyph == SettingsGlyph.Font) {
+                AppText("Aa", ink, (size.value * 0.42f).sp, fontWeight = FontWeight.Bold, lineHeightMultiplier = 1f)
+            } else {
+                Canvas(Modifier.size(size * 0.6f)) { drawGlyph(glyph, ink) }
+            }
+        }
+        return
+    }
     val shape = RoundedRectangle(size * 0.3f)
     // flatGlass 的两道描边画在内层渐变之上：顶部一线玻璃高光 + 发丝边
     Box(
@@ -342,15 +389,14 @@ internal fun SettingsIconTile(glyph: SettingsGlyph, size: Dp = IconTileSize) {
                 lineHeightMultiplier = 1f,
             )
         } else {
-            Canvas(Modifier.size(size * 0.6f)) { drawGlyph(glyph) }
+            Canvas(Modifier.size(size * 0.6f)) { drawGlyph(glyph, Color.White) }
         }
     }
 }
 
-private fun DrawScope.drawGlyph(glyph: SettingsGlyph) {
+private fun DrawScope.drawGlyph(glyph: SettingsGlyph, ink: Color) {
     val w = size.width
     val h = size.height
-    val ink = Color.White
     val stroke = Stroke(width = w * 0.1f, cap = StrokeCap.Round, join = StrokeJoin.Round)
     fun polyline(vararg points: Pair<Float, Float>) {
         val path = Path()
@@ -410,6 +456,13 @@ private fun DrawScope.drawGlyph(glyph: SettingsGlyph) {
             polyline(0.34f to 0.34f, 0.66f to 0.34f)
             polyline(0.34f to 0.52f, 0.66f to 0.52f)
             polyline(0.34f to 0.70f, 0.54f to 0.70f)
+        }
+        // 田字格：一实三空，示意界面风格
+        SettingsGlyph.Style -> {
+            drawRect(ink, Offset(w * 0.08f, h * 0.08f), Size(w * 0.36f, h * 0.36f))
+            drawRect(ink, Offset(w * 0.56f, h * 0.08f), Size(w * 0.36f, h * 0.36f), style = stroke)
+            drawRect(ink, Offset(w * 0.08f, h * 0.56f), Size(w * 0.36f, h * 0.36f), style = stroke)
+            drawRect(ink, Offset(w * 0.56f, h * 0.56f), Size(w * 0.36f, h * 0.36f), style = stroke)
         }
         SettingsGlyph.Font -> Unit
     }

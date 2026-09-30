@@ -114,6 +114,16 @@ class MirrorForegroundService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /**
+     * Android 15+（targetSdk 35）限制 dataSync 前台服务后台累计时长（24h 内 6h）；到时系统回调
+     * 本方法，数秒内不 stopSelf 即以 RemoteServiceException 崩进程。主动停服（onDestroy 释放连接），
+     * 用户回前台时 MainActivity 从已存配对配置重建连接并重启服务。
+     */
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        Log.w(TAG, "foreground service timed out (type=$fgsType); stopping")
+        stopSelf()
+    }
+
     override fun onDestroy() {
         // 停时钟泵并释放连接（幂等）；前台服务随进程死亡由 Activity 冷启动重连恢复（004 无状态免疫）。
         handler.removeCallbacks(pumpRunnable)

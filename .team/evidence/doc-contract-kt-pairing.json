@@ -1,0 +1,142 @@
+{
+  "status": "pass",
+  "task_id": "doc-contract-kt-pairing",
+  "case_id": "msg_1b2635e35298",
+  "summary": "Kotlin 包 dev.agentmirror.app.pairing：核实并改写 8 处不实/过时注释（含 2 处 UI 层 D-14 形态、1 处旧 API 残留、1 处死错误面/幽灵消费者、1 处虚构消费方、1 处约束时序过时、1 处超时语义过时、1 处失败原因枚举过时、1 处包级假状态），补 5 个 @contract（4 个符号四标签齐全），消 4 条 T3-4 架构漂移。判据全绿（单包硬判 exit 0、包内测试绿、全仓 check exit 0）。阳性对照已做：删 @err 后硬判 exit 1 精确指向 PersistentConnection.kt:35，恢复后 exit 0。",
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.pairing",
+      "rc": 0,
+      "note": "施工前基线 exit 1（T3-4 4 条漂移）；施工后 exit 0，T3-1/2/3/4 全 PASS"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_* bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Pairing*\"'",
+      "rc": 0,
+      "note": "包内配对测试保持绿"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_* bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'",
+      "rc": 0,
+      "note": "全量 Debug 单测保持绿"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "全仓库既有判据未被打坏；剩余 T3-1(tsnet)/T3-4(service,workspace) 违规均为别包，非本包"
+    }
+  ],
+  "changes": [
+    "app/app/src/main/java/dev/agentmirror/app/pairing/PackageDoc.kt",
+    "app/app/src/main/java/dev/agentmirror/app/pairing/PairingModels.kt",
+    "app/app/src/main/java/dev/agentmirror/app/pairing/PairingRoute.kt",
+    "app/app/src/main/java/dev/agentmirror/app/pairing/PairingViewModel.kt",
+    "app/app/src/main/java/dev/agentmirror/app/pairing/PersistentConnection.kt",
+    "app/app/src/main/java/dev/agentmirror/app/pairing/QrPayloadParser.kt"
+  ],
+  "rewritten": [
+    {
+      "symbol": "PackageDoc.kt 包级 KDoc",
+      "original": "「本包为占位骨架，由 pairing 任务落位实现。」",
+      "problem": "形态①旧状态残留 + 形态⑥把未完成状态写成现状：包内已实现完整配对流程（扫码/解析/状态机/持久化/常驻连接装配），PairingScreen、PairingViewModel、startPersistentConnection 均真实存在且有消费者；「占位骨架」的说法已不实。",
+      "basis": "全包文件读码：QrPayloadParser.parse、PairingViewModel、PairingScreen、startPersistentConnection 均已实现并被 AgentMirrorApp/MainActivity 调用。",
+      "replaced_with": "改为描述真实职责：相机扫码、地址解析与配对握手、配置持久化与常驻连接装配，并以 [startPersistentConnection] 为唯一装配入口。"
+    },
+    {
+      "symbol": "PairingRoute.kt 函数 KDoc 首行",
+      "original": "「仅路由挂载，不含接线层」",
+      "problem": "与函数体内实际行为矛盾（函数确实做了 tsnet 环境兜底注入、stateListener 接线、配对成功装配常驻连接）；且「MainActivity/AgentMirrorApp」双入口说法不实——函数唯一调用点是 AgentMirrorApp，MainActivity 不直接调它。",
+      "basis": "PairingRoute.kt 函数体（TsnetBootstrap.install / DisposableEffect onTsnetState / startPersistentConnection 装配）；grep 全仓唯一调用点 app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt:97。",
+      "replaced_with": "「配对页路由挂载（[AgentMirrorApp] 接线处唯一入口）：挂载时兜底注入 tsnet 运行环境并接线 [TsnetWire.stateListener]，配对成功时装配常驻连接。」"
+    },
+    {
+      "symbol": "PairingRoute.kt createPairingViewModel 内联注释",
+      "original": "「工厂用 ServiceWire.transportFactory（默认 OkHttp）」",
+      "problem": "形态⑧真函数名写错：实际调用的是 [ServiceWire.pairingTransportFactory()]（配对专用工厂，改写连接路径徽标为 false），不是 transportFactory。两者都真实存在，T3-2 只验存在性验不了指向正确性。",
+      "basis": "PairingRoute.kt:75 实际调用 ServiceWire.pairingTransportFactory()；ServiceWire.kt:56-57 定义（internal fun pairingTransportFactory()）。",
+      "replaced_with": "「工厂经 ServiceWire.pairingTransportFactory() 取真实传输（默认 OkHttp 配对专用工厂，不改写连接路径徽标）。」"
+    },
+    {
+      "symbol": "PairingViewModel.connectionState",
+      "original": "「试配对连接状态（配对中顶部提示「配对中…」；READY 即成功）。」",
+      "problem": "形态⑤虚构消费方 + 形态⑥把未接线的能力写成现状：声称 UI 顶部提示消费它；实际全仓（main + 配对测试）无任何读取，UI 的「连接中…」由 pairingStatus.targetUrl 呈现，connectionState 仅由 ConnectionManager 回调写入（write-only）。",
+      "basis": "grep 全仓：connectionState 仅在 PairingViewModel.kt 的 var 声明与 onStateChanged 赋值两处出现，无第三处读取；PairingScreen 状态区读 viewModel.pairingStatus。",
+      "replaced_with": "「试配对连接状态镜像（[ConnectionManager] 回调写入；当前无 UI 读取，保留供后续接线）。」"
+    },
+    {
+      "symbol": "PairingViewModel.manualToken",
+      "original": "「手填 token 草稿（明文编辑；落配置后进入存储加密 TODO）。」",
+      "problem": "形态③死错误面/幽灵 TODO：声称落配置后进入「存储加密」，全仓库无任何 token 加密实现或 TODO 记录；实际 token 以明文存 SharedPreferences（历史欠账），TS authkey 才单独加密持久化。",
+      "basis": "grep 全仓 token 加密 TODO 仅此一处；PairingConfigStore.save 里 token 明文 putString，仅 tsAuthKey 走 secretCipher.encrypt。",
+      "replaced_with": "「手填 token 草稿（明文编辑）。落配置后 token 以明文存于 SharedPreferences（历史欠账，见 [SharedPreferencesPairingConfigStore] KDoc）；TS authkey 单独加密持久化。」"
+    },
+    {
+      "symbol": "PairingViewModel.canRetry",
+      "original": "「失败态是否可重试：解析失败的坏 payload 无配置，重试无意义（应重扫或手填）。」",
+      "problem": "语义夸大：把「解析失败无配置」写成唯一决定因素；实际 getter 只读 currentConfig != null（最近一次试配对是否已建立配置），解析失败只是「无配置」的一个成因。",
+      "basis": "PairingViewModel.kt:241 val canRetry get() = currentConfig != null；PairingViewModelTest:412 断言重试以失败时配置重拨。",
+      "replaced_with": "「失败态是否可重试：由最近一次试配对是否已建立配置（[currentConfig]）决定；首启即解析失败的坏 payload 无配置，重试无意义（应重扫或手填）。」"
+    },
+    {
+      "symbol": "PairingFailCause.TIMEOUT 枚举 doc",
+      "original": "「配对超时：15s 内未完成拨号+auth 握手。」",
+      "problem": "约束写错/时序过时：15s 只是无候选单地址预算；有候选逐试时每地址 3s（CANDIDATE_TRY_MS）。doc 只描述 15s 单一时序，与实现不符。",
+      "basis": "PairingViewModel.kt:136 attemptBudgetMs 按队列大小取 CANDIDATE_TRY_MS(3s) 或 PAIR_TIMEOUT_MS(15s)；常量定义在 companion。",
+      "replaced_with": "「配对超时：候选逐试每地址 3s、无候选 15s，期限内未完成拨号+auth 握手。」"
+    },
+    {
+      "symbol": "PairingStatus.Failed doc",
+      "original": "「[cause] 供 UI 区分超时/拒绝/不可达/解析失败」",
+      "problem": "原因枚举不全：PairingFailCause 实含五类（含 PROTOCOL_ERROR），doc 只列四类，把真实错误面说少了。",
+      "basis": "PairingModels.kt PairingFailCause 枚举定义含 PROTOCOL_ERROR；PairingViewModel.onFrame/onLocalDecodeError 均以 PROTOCOL_ERROR 失败。",
+      "replaced_with": "「[cause] 供 UI 区分超时/拒绝/不可达/解析失败/协议错误」"
+    }
+  ],
+  "contracts_added": [
+    {
+      "symbol": "PairingViewModel 类 KDoc",
+      "tags": "contract / pre(none) / post / err / inv"
+    },
+    {
+      "symbol": "QrPayloadParser.parse",
+      "tags": "contract / pre(none) / post / err / inv"
+    },
+    {
+      "symbol": "isValidWsUrl",
+      "tags": "contract / pre(none) / post / err(none) / inv(none)"
+    },
+    {
+      "symbol": "deriveUploadBase",
+      "tags": "contract / pre / post / err(none) / inv(none)"
+    },
+    {
+      "symbol": "startPersistentConnection",
+      "tags": "contract / pre(none) / post / err / inv"
+    }
+  ],
+  "consumes_added": [
+    {
+      "pkg": "dev.agentmirror.app.pairing",
+      "declared": [
+        "dev.agentmirror.app.conn",
+        "dev.agentmirror.app.service",
+        "dev.agentmirror.app.tsnet",
+        "dev.agentmirror.app.ui.theme"
+      ],
+      "where": "PackageDoc.kt 包级 KDoc",
+      "note": "与真实 import 图一致（T3-4 施工前 4 条漂移清零）"
+    }
+  ],
+  "uncertain": [
+    {
+      "symbol": "QrPayloadParser.PAYLOAD_VERSION",
+      "note": "doc 写「qr.go PayloadVersion」；已核对 server/internal/pairing/qr.go 的 PayloadVersion=1 与 parse 断言一致。非改写，仅核对。"
+    }
+  ],
+  "deviation": [],
+  "positive_control": {
+    "method": "临时删除 startPersistentConnection 的 @err 标签",
+    "result": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.pairing → exit 1，T3-3 FAIL 1 条违规精确指向 [T3-3] dev.agentmirror.app.pairing  app/app/src/main/java/dev/agentmirror/app/pairing/PersistentConnection.kt:35  `@contract` — 缺契约标签: @err",
+    "restored": true,
+    "note": "判据能扫到本包、能识别契约符号、能精确到符号行号；恢复后 exit 0"
+  }
+}

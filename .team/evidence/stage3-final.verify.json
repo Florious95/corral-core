@@ -1,0 +1,122 @@
+{
+  "task": "stage3-final-verify",
+  "seat": "w-final-verify",
+  "case_id": "msg_3f9c56b1db20",
+  "scope": "任务缩减后只验兜底泵批（fix-app-runtime-sa，已入库 94538ef）；D-15（fix-dogfood-notif-toggle）已被用户撤销并整条回退，leader 复跑确认零残留，本席只核回退后状态未验 D-15 逻辑本身",
+  "pump_invariant": {
+    "race_analysis": {
+      "servicePumpActive_type": "@Volatile 普通布尔，无原子/锁/状态机",
+      "thread_model": "服务泵 pumpRunnable 挂 Handler(mainLooper)（MirrorForegroundService:160）；兜底泵 OnScreenFallbackPump 的 LaunchedEffect 默认 Main dispatcher；service/conn 包 grep 确认零 Dispatchers.* 显式指定；ConnectionManager 无自己的 Looper/Handler。两泵均主线程串行。",
+      "double_pump_risk": "不存在线程级并行双泵——两泵主线程串行，manager.pump()/resolveExpiredInputs() 天然互斥（ConnectionManager 注释明言'同一收件线程串行使用，无需加锁'）。真正风险是决策-执行窗口内的归属翻转：fallback 读 serviceActive()=false 决定 pump → 服务 onStartCommand 置位 → 同拍服务泵也 pump → 一拍的窄窗口内至多多 pump 一次。这等价于把服务首拍提前一拍，非周期双拍，不抖 UI 不白烧 CPU。让出判据在服务正常运行下恒让出（测试 screenVisible_serviceActive_fallbackPumpYields_noDoublePump 证实兜底泵零工作）。",
+      "no_pump_window": "服务 onDestroy 复位标记后，fallback 下一拍才接管，该一拍无泵可接受（2s 周期下一拍补上）。",
+      "verdict": "不变量'任意时刻至多一个泵在拍共享连接'成立；短暂双泵窗口不存在（主线程串行 + 一拍窗口内至多一次重放），短暂无泵存在但可接受。"
+    },
+    "bidirectional_verification": {
+      "mutation1_remove_yield": {
+        "method": "临时删除 AppClockPump.fallbackPumpOnce 的 if(serviceActive()) return 让出判据",
+        "result": "6 tests completed, 2 failed——serviceActive_fallbackPump_yields_noDoublePump（AppClockPumpTest:145）+ screenVisible_serviceActive_fallbackPumpYields_noDoublePump（OnScreenFallbackPumpTest:156）均转红，断言指向'服务泵在跑时兜底泵重复重拨'双泵缺陷",
+        "restored": "git diff app/app/src 自证干净"
+      },
+      "mutation2_remove_fallback": {
+        "method": "临时把 OnScreenFallbackPump 的 LaunchedEffect 循环体改为只 delay 不 pump",
+        "result": "6 tests completed, 1 failed——screenVisible_serviceInactive_fallbackPumpDrivesReconnect（OnScreenFallbackPumpTest:139）转红，断言'服务不可用+在屏时无泵，前台降级'",
+        "restored": "git diff app/app/src 自证干净"
+      },
+      "verdict": "与承办席自报完全一致，判据与兜底泵均真实有效"
+    },
+    "req004_reverse_derivation": {
+      "connection_independent_of_service": "ConnectionManager 是 ServiceWire 进程级单例，由 startPersistentConnection（配对成功/冷启动）或 createSessionViewModel（进会话兜底）创建，不依赖前台服务；服务只在 onStartCommand runCatching{manager().start()} 幂等确保",
+      "foreground_covered_by_fallback": "OnScreenFallbackPump 挂根组合，任一屏 RESUMED 即起拍（serviceActive=false 时接管），服务从未启动时它即唯一泵 → 前台不降级",
+      "background_degradation_ok": "RESUMED 门控：后台期间不泵、无常驻通知，004 允许'后台期间体验降级'",
+      "cold_start_recovery": "MainActivity.onCreate 读 prefs → 有配置即 startPersistentConnection 建 manager + 起服务；服务没起来兜底泵+冷启动链路照常",
+      "verdict": "004 底线成立：删掉前台服务产品仍完整可用（连接独立 + 在屏兜底），机制非白加"
+    },
+    "gap_releaseManager_vs_fallback_takeover": {
+      "finding": "MirrorForegroundService.onDestroy 在 servicePumpActive=false 后立即调 ServiceWire.releaseManager()（置空 manager + m.stop() 连接 STOPPED）。releaseManager 是泵批之前（feat-fg-service-wiring 时代）就有的语义（git show 94538ef^ 确认），泵批未动它。因此'服务 onDestroy → 兜底泵接管'的实际状态是 serviceActive()=false（接管判据成立）但 managerOrNull()=null（连接已被停），兜底泵 pumpManager 直接 return 零工作。",
+      "scenario_split": {
+        "process_kill_main_path": "Android 前台服务被回收的真实主路径是进程被杀：onDestroy 不保证调，进程没了。重启后冷启动重建 manager + 兜底泵随进程重建。004 无状态免疫成立，无 gap。",
+        "service_instance_kill_rare": "服务实例被单杀且进程存活（Android 极少）：onDestroy 调 → releaseManager 停连接 → 兜底泵空转。此时连接 STOPPED 无待办，泵不出力'不算错'，但与承办席声明'服务被杀时兜底泵继续推进重连调度'不符（重连已无、manager 已停）。"
+      },
+      "severity": "条件性 gap，影响面=服务实例被单杀且进程存活的窄场景。生产 daemon 常驻下兜底泵只在服务缺失时补位；兜底泵设计上只'推进既有连接的重连调度'不'重建连接'，连接重建靠冷启动/进会话路径。不改变 004 底线成立。"
+    }
+  },
+  "notif_toggle": {
+    "status": "用户撤销，D-15 整条回退，未验 D-15 逻辑",
+    "rollback_verified": "NotificationPrefs.kt/NotificationToggleTest.kt 已删除；SettingsScreen/NotificationHelper/MirrorForegroundService/PackageDoc 已 git checkout 复原为 HEAD；全 app/src grep 'R-5|通知全局开关|notificationsEnabled|NotificationPrefs|cancelAllState' 零命中；NotificationHelper 无任何开关引用",
+    "current_state": "HEAD 版本 NotificationHelper = 泵批分组 E 修复（ObsoleteSdkInt 判据删除） + 无开关逻辑，纯净"
+  },
+  "stale_notification_cleanup": {
+    "status": "标的已随 D-15 撤销，未验 activeStateRefs 进程级登记",
+    "note": "角色文件优先级三标的（activeStateRefs 进程级登记失效场景）因 D-15 整条回退而不再适用"
+  },
+  "group_e_real_fix": {
+    "no_suppression_sweep": "全 app/app/src 搜 @Suppress/lintOptions/lint{}/disable：仅两处遗留 @Suppress——MirrorForegroundService:110 @Suppress('DEPRECATION')（startForeground 低版本重载，git show HEAD 确认泵批前已存在，非新增）+ TermSurfaceView:176 @SuppressLint('ClickableViewAccessibility')（非本批文件）。build.gradle.kts 无 lint 块。零新增豁免。",
+    "spotcheck1_apply_shared_pref": {
+      "change": "PairingConfigStore.save/clear 改 KTX edit{}（apply 异步）；discardConfigAfterMigrationFailure 保留 edit(commit=true)（同步）",
+      "caller_analysis": "save() 唯一生产调用点 PairingViewModel.onStateChanged(READY)（280 行）：save 后只做 pendingConfig=cfg + pairingStatus=Success + stopProbe，均为内存态推进，不立即 load() 读回依赖磁盘写入完成",
+      "sync_semantics_verdict": "commit→apply 语义正确：save 路径丢配对（apply 写盘前进程被杀→下次 load() 返回 null→落回配对页）是可接受体验降级，非安全/正确性问题（不会把残留误读为合法配置）；discard 路径必须同步（残留 url/token 会被下次 load() 误读为合法 LAN 配置→误配对），commit=true 是 lint 认可的保留 commit 写法。真修非糊。"
+    },
+    "spotcheck2_unused_resources": {
+      "change": "colors.xml 删 brand_primary；brand_background 保留",
+      "verdict": "brand_primary 零引用（grep 确认仅注释提及）；brand_background 确实被两个 mipmap 自适应图标引用（保留正确）。Theme.kt 注释同步'资源随 #19 删除，token 无资源对照'。真修。"
+    },
+    "spotcheck3_obsolete_sdk_int": {
+      "change": "NotificationHelper 删 if(SDK_INT<O) return；mipmap-anydpi-v26 迁 mipmap",
+      "verdict": "minSdk 26 = API 26，判据恒假是死代码，删除后行为不变；NotificationHelper 现 grep SDK_INT 零命中。mipmap 单目录（无 v26 限定）已确认，两图标含 monochrome 标签。真修。"
+    },
+    "lint_rescan": "app/app/build/reports/lint-results-debug.xml（13:55 泵批产物）仅 5 条 Warning 全在 build.gradle.kts（NewerVersionAvailable×3/OldTargetApi/GradleDependency），src/main 0 条。",
+    "verdict": "真修非糊：抽查 3 条的实际风险均真正消失，零 @Suppress 零 lint 豁免，ApplySharedPref 调用点无同步语义依赖"
+  },
+  "comments_v5": {
+    "status": "第五次核 .service 包注释（泵批同步后的最终实现）",
+    "verified_consistent": [
+      "AppClockPump KDoc：泵单一事实源 + 让出判据声明，与实现一致",
+      "ServiceWire.servicePumpActive KDoc：onStartCommand 置位/onDestroy 复位，与实现一致",
+      "MirrorForegroundService KDoc：泵归属 + 兜底接管声明，与实现一致（R-5 通知开关相关措辞已随 D-15 回退删除，现在是纯净版）",
+      "PackageDoc：兜底泵接管段，与实现一致",
+      "SessionScreen:156 连接时钟泵归属注释，与实现一致",
+      "SessionRoute:57 兜底接管段（泵批新增），与实现一致"
+    ],
+    "comment_provenance_note": "SessionRoute:58 的'[MirrorForegroundService] 持有 [ServiceWire.manager] 单例'措辞：git show 94538ef 确认该句在泵批**之前**已存在（feat-fg-service-wiring 时代），泵批保留并追加兜底段。语义上服务经 ServiceWire 间接访问同一单例、不缓存引用，是概括性措辞非谎报，且非本批新造。",
+    "no_new_false_comments": "D-15 回退后 leader 清掉的两处假注释已复原；全 app/src 无开关残留注释；泵批同步的兜底注释均与最终实现相符。",
+    "verdict": "注释未再落后：第五次核未发现新的不实注释"
+  },
+  "gate_delta": {
+    "acceptance": [
+      {
+        "argv": ":app:testDebugUnitTest（env 去 TEAM_AGENT_* 后 bash -c，cd app && ./gradlew -q）",
+        "rc": 0,
+        "result": "46 suites / 358 tests / 0 failures / 0 errors（解析 test-results XML 确认非零，非仅 exit 0）"
+      },
+      {
+        "argv": "python3 tools/archwiki/build_wiki.py --check",
+        "rc": 0,
+        "result": "19 包 31 条依赖边，T1-1/T1-2 PASS，T3-1~T3-4 无违规，exit 0"
+      },
+      {
+        "argv": "bash tools/gate/run.sh（env 去 TEAM_AGENT_*）",
+        "rc": 1,
+        "result": "3 套件共 1099 用例。server ok(315, ratchet same)、archwiki ok(1, ratchet same)、app fail(783)：5 条 lint 失败全在 app/app/build.gradle.kts（OldTargetApi:50 / GradleDependency:96 / NewerVersionAvailable:34/108/122）——分组 F 项，由 fix-sa-appbuild 证据明确 deferred（core-ktx 需 AGP 9.1 跨主版本、kotlin.plugin.serialization 与 Kotlin 2.2 工具链耦合、okhttp 5.4 跨主版本破坏性 API、targetSdk 属产品决策），非本批引入。棘轮 app 771→783 上行（+12，只增不降，无 ratchet-down）；baseline_accept 未应用。"
+      }
+    ],
+    "newly_introduced_by_this_batch": "0 条（泵批产品代码零 lint 失败；5 条红全是上游 deferred）",
+    "side_effects_of_gate_rerun": "tools/gate/baseline.json 由 gate 自身从 771 更新到 783（上行棘轮正常行为，与承办席自报一致）；docs/wiki/t3-report.md 文件基名索引 2300→2303（archwiki 再生成统计 +3 = 泵批新增 3 个源文件）。两者均为工具正常运行产物，非本席污染。"
+  },
+  "write_scope": {
+    "pump_batch": "94538ef 产品代码改动 100% 落在 app/app/src/main|test（git show 列出 17 个 src 文件），未碰 build.gradle.kts/manifest/lintOptions/规则集",
+    "d15_rollback": "已整条回退，无越界残留",
+    "this_seat": "写入仅 .team/verify-final/（analysis-notes.md，已清理 .bak）与 .team/evidence/stage3-final.verify.json；临时产物已清理，不留残留目录"
+  },
+  "gaps": [
+    "onDestroy 的 releaseManager 与'兜底泵接管继续推进重连'声明不一致（条件性 gap）：服务实例被单杀且进程存活时，releaseManager 停连接使兜底泵 managerOrNull()=null 空转。影响面窄（Android 前台服务回收主路径是进程杀，onDestroy 不保证调），不改变 004 底线成立。建议后续若做'服务实例级杀后的连接存活'可在此细化。",
+    "SessionRoute:58 '持有单例'措辞非泵批新造（既有延续），若追求极致精确可改为'经 ServiceWire 间接访问同一单例、不缓存引用'，但不构成不实。",
+    "git 仓库跟踪了 build 产物/缓存/测试结果（历史 commit 已混入），复跑测试会改变这些跟踪文件（本次 git status 的 M 全为运行副产物，产品源码 app/app/src 零改动）。这是仓库既有卫生问题，非本批引入。"
+  ],
+  "notes": {
+    "D-15_skipped": "D-15 部分（notif_toggle 三条红测、常驻通知咨询开关、UI 文案、activeStateRefs 进程级登记）因用户撤销而未验，见 leader 缩减指令",
+    "pump_batch_already_committed": "fix-app-runtime-sa 已入库 94538ef，复核折叠到本席",
+    "production_daemon_untouched": "生产 daemon（pid 3393，:9900）与用户 tmux 全程未触碰",
+    "bi_directional_restored": "双向验证的临时 mutation 均原样恢复，git diff app/app/src 自证干净",
+    "verified_by_self_not_trusted": "优先级一/四/五/六均为本人独立复做/复跑，未采信承办席自报"
+  }
+}

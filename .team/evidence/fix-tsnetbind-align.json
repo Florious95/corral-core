@@ -1,0 +1,119 @@
+{
+  "task_id": "fix-tsnetbind-align",
+  "status": "pass",
+  "case_id": "msg_3afba9a16f50",
+  "dispatched_to": "w-tsnet-align",
+  "completion_ts": "2026-08-11T12:10:00+08:00",
+  "channel": "provider=claude_code / auth_mode=compatible_api / profile=worker-api (deepseek-v4-flash), contention=impl, 返工 0，未升级 codex",
+  "summary": "G 组 3 条 Aligned16KB 告警（同一 AAR 的重复告警）为真实发布阻断项：app/app/libs/tsnetbind.aar 内 jni/arm64-v8a/libgojni.so LOAD 段未 16KB 对齐（Align 0x1000=4KB），Android 15+ 对未 16KB 对齐 native 库加载时强制拒绝。修复：在 tools/tsnetbind/build.sh 的 gomobile 构建链加 -extldflags=-Wl,-z,max-page-size=16384，重建 AAR 替换。阳性对照实测 LOAD 段 Align 0x1000(4KB)→0x4000(16KB)，两条 LOAD 均过 (p_align>=16K) 且 ((p_offset-p_vaddr)%16K==0)。lint 重扫 Aligned16KB 从 3 条降为 0（gradle 缓存 transformed .so 时间戳与 AAR 重建同刻，证明是真重扫）。TS 链全部测试仍绿（app 34 条 Tsnet* + terminal 67 条 + tools go test + server tsnetd）。未用 lint 豁免；重建步骤已写入 tools/tsnetbind/README.md 可复现。",
+  "tests": [
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'",
+      "rc": 0,
+      "detail": "taskbook acceptance #1。42 suites / 345 tests / 0 failures / 0 errors（解析 test-results XML 确认非零，非仅 exit 0）。TS 链套件全绿：TsnetAuthKeyTest(4) TsnetDialTest(9) TsnetInterfaceCodecTest(3) TsnetManagerTest(7) TsnetSocksTest(5) TsnetWireTest(6)。"
+    },
+    {
+      "argv": "bash -lc 'python3 tools/archwiki/build_wiki.py --check'",
+      "rc": 0,
+      "detail": "taskbook acceptance #2。结果：通过（exit 0）。"
+    },
+    {
+      "argv": "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest :terminal:test'",
+      "rc": 0,
+      "detail": "补充回归：app 单测 345 全绿 + terminal 9 suites 67 tests 全绿（AltScreen/CaptureFixture/CharWidth/CursorAndErase/SgrParsing/SnapshotReplay/StreamAndDamage/WideChar/WrapAndScrollback）。"
+    },
+    {
+      "argv": "bash -lc 'cd app && ./gradlew -q :app:lintDebug'",
+      "rc": 1,
+      "detail": "lint 重扫：Aligned16KB 0 条（修前 gate last-run 3 条）。lint 仍红仅因既有的 AndroidManifest.xml:40 PermissionImpliesUnsupportedChromeOsHardware（camera 权限缺 uses-feature）——该告警在修复前就在 gate last-run/app.json 已知失败清单里（grep 命中 1），非本任务引入，超出本任务 write_scope，见 out_of_scope。构建失败（AbortOnError）为门禁对既有 error 的正常反应，非 Aligned16KB 残留。"
+    },
+    {
+      "argv": "aarch64-linux-android-readelf -l <libgojni.so>  # 阳性对照：读 LOAD 段 Align",
+      "rc": 0,
+      "detail": "修复前（旧 AAR）：LOAD#1 Align=0x1000(4096=4KB) FAIL，LOAD#2 Align=0x1000(4096=4KB) 且 (off-vaddr)%16K!=0 FAIL。修复后（新 AAR）：LOAD#1 Align=0x4000(16384=16KB) PASS，LOAD#2 Align=0x4000(16384=16KB) 且 (off-vaddr)%16K==0 PASS。逐条满足 Android 16KB 语义双条件。"
+    },
+    {
+      "argv": "aarch64-linux-android-objdump -p <libgojni.so>  # 阳性对照：LOAD align 2**14",
+      "rc": 0,
+      "detail": "修复后：LOAD off=0x0 vaddr=0x0 align 2**14 (r-x)，LOAD off=0x11a6048 vaddr=0x11aa048 align 2**14 (rw-)。2**14=16384=16KB。"
+    },
+    {
+      "argv": "readelf -l <gradle-cache transformed tsnetbind/jni/arm64-v8a/libgojni.so>  # 阳性对照：证明 lint 重扫的是新产物",
+      "rc": 0,
+      "detail": "gradle 缓存 8c9c262a.../transformed/tsnetbind/jni/arm64-v8a/libgojni.so LOAD align=0x4000(16KB)，时间戳 12:07 与 AAR 重建同刻——证明 :app:lintDebug 重扫的正是重建后的 16KB 对齐产物，Aligned16KB 消失是产物真修好，不是缓存假阴性。"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_* go test ./...  (cd tools/tsnetbind)",
+      "rc": 0,
+      "detail": "tsnetbind 包单测绿（parseInterfaces wire 契约 3 用例）。"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_* go test ./internal/tsnetd/...  (cd server)",
+      "rc": 0,
+      "detail": "服务端 tsnetd 单测绿。"
+    }
+  ],
+  "changes": [
+    "tools/tsnetbind/build.sh",
+    "tools/tsnetbind/README.md",
+    "app/app/libs/tsnetbind.aar",
+    "app/app/libs/README.md"
+  ],
+  "fixed": [
+    {
+      "inventory_no": 36,
+      "rule": "Aligned16KB",
+      "actual_risk": "tsnetbind.aar 内 jni/arm64-v8a/libgojni.so 的 ELF LOAD 段 p_align=0x1000(4KB)。Android 15+（API 35）要求 native 库 16KB 对齐（p_align>=0x4000 且 (p_offset-p_vaddr)%16K==0），否则 dlopen 加载直接失败。不修则 App 在 Android 15+ 无法加载 tsnet 功能，属上架硬性阻断（P1）。",
+      "how_fixed": "tools/tsnetbind/build.sh 的 gomobile bind -ldflags 追加 -extldflags=-Wl,-z,max-page-size=16384（Go c-shared 走外部链接，NDK clang 出最终 ELF），重建 AAR 替换 app/app/libs/tsnetbind.aar。实测 LOAD Align 0x1000→0x4000。",
+      "verification": "readelf -l 修复后两条 LOAD Align=0x4000 且 (off-vaddr)%16K==0；objdump -p align 2**14；lint 重扫 Aligned16KB 0 条；TS 链测试全绿。"
+    },
+    {
+      "inventory_no": 37,
+      "rule": "Aligned16KB",
+      "actual_risk": "与 #36 同一 AAR 的重复告警（同一 libgojni.so，同一未 16KB 对齐缺陷）。",
+      "how_fixed": "同 #36：同一构建链修复覆盖全部 ABI 产物，重复告警一并消除。",
+      "verification": "lint 重扫 Aligned16KB 0 条（修前 gate last-run 3 条，即 #36/#37/#38 同源）。"
+    },
+    {
+      "inventory_no": 38,
+      "rule": "Aligned16KB",
+      "actual_risk": "与 #36 同一 AAR 的重复告警（同上）。",
+      "how_fixed": "同 #36。",
+      "verification": "同 #37。"
+    }
+  ],
+  "positive_control": {
+    "before": {
+      "libgojni.so_LOAD1_align": "0x1000 (4096 = 4KB)",
+      "libgojni.so_LOAD2_align": "0x1000 (4096 = 4KB)",
+      "LOAD2_off_vaddr_mod16K": 0,
+      "Aligned16KB_lint_count_gate_lastrun": 3
+    },
+    "after": {
+      "libgojni.so_LOAD1_align": "0x4000 (16384 = 16KB)",
+      "libgojni.so_LOAD2_align": "0x4000 (16384 = 16KB)",
+      "LOAD2_off_vaddr_mod16K": 0,
+      "Aligned16KB_lint_count_after_rescan": 0,
+      "gradle_transform_LOAD_align": "0x4000 (16KB)",
+      "objdump_LOAD_align_pow": "2**14 = 16384 = 16KB"
+    },
+    "ts_functional": {
+      "app_Tsnet_test_suites": 6,
+      "app_Tsnet_test_count": 34,
+      "app_Tsnet_failures": 0,
+      "terminal_test_count": 67,
+      "terminal_failures": 0,
+      "tools_tsnetbind_go_test": "ok",
+      "server_tsnetd_go_test": "ok"
+    }
+  },
+  "ignored": [],
+  "out_of_scope": [
+    {
+      "issue": "AndroidManifest.xml:40 PermissionImpliesUnsupportedChromeOsHardware（camera 权限缺 uses-feature android.hardware.camera required=false）",
+      "why": "该 lint error 在修复前就存在于 gate last-run/app.json 已知失败清单（grep 命中 1），非本任务引入；源文件 AndroidManifest.xml 不在本任务 write_scope（tools/tsnetbind/、app/app/libs/），属其他阶段三修复批的施工面。本任务只消除 Aligned16KB 阻断项。"
+    }
+  ],
+  "deferred": [],
+  "deviation": []
+}

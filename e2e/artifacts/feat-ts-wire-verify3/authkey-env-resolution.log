@@ -1,0 +1,4 @@
+=== RUN   TestTSAuthKeyResolution
+--- PASS: TestTSAuthKeyResolution (0.00s)
+PASS
+ok  	github.com/agentmirror/agentmirror/internal/config	0.508s

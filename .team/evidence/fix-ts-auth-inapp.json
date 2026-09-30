@@ -1,0 +1,22 @@
+{
+  "task_id": "fix-ts-auth-inapp",
+  "status": "pass",
+  "acceptance_results": [
+    {
+      "cmd": "cd app && env -u 'TEAM_AGENT_SECRET' -u 'TEAM_AGENT_TOKEN' ./gradlew :app:testDebugUnitTest",
+      "exit": 0
+    }
+  ],
+  "result_id": "res_fix_ts_auth_inapp_0001",
+  "notes": "D-25 修复：App 内置 TS auth key 入网不工作。根因：tailnet 配置（100.64/10 目标 + TS authkey）常驻连接路径（startPersistentConnection，pairing/PersistentConnection.kt）在内嵌 tsnet 节点起网失败落 TsnetState.Error 后直接装配连接、直拨不可达的 100.x 地址——节点未 Up 无 SOCKS 通道，直拨必败，ConnectionManager 进入永久 RECONNECTING，节点永不重试，tsnet 失败被通用「重连中」掩盖（正是用户实测：必须外部小火箭先连通 TS 才能用 App）。修复：pairing 层节点 Error 落定时经 TsnetWire.ensureStarted 重建节点有限重试（TS_RETRY_ON_ERROR_LIMIT=1，重建起网本身幂等），重注册 whenSettled 等新终态；节点 Up 后才拨号，重试耗尽才落常驻连接（失败经连接态可见，不静默）。conn 层无需改动（RECONNECTING 是直拨不可达地址的必然症状，非缺陷本身）。改动文件：app/app/src/main/java/dev/agentmirror/app/pairing/PersistentConnection.kt（新增 waitForTailnetOrRetry + TS_RETRY_ON_ERROR_LIMIT）；新增红测 app/app/src/test/java/dev/agentmirror/app/pairing/PersistentConnectionTailnetRecoveryTest.kt（3 测：节点先失败后成功不在 Error 期直拨、恒失败重试耗尽后落可见失败连接、即刻成功起网恰一次；修前 2 红 1 绿，修后全绿）。写范围外说明：测试文件在 app/app/src/test/java/dev/agentmirror/app/pairing/，符合红测先行纪律（fix-ts-dial-timing 同款 write_scope 含 test/ 先例）。禁 git commit/push 遵守。",
+  "changes": [
+    {
+      "file": "app/app/src/main/java/dev/agentmirror/app/pairing/PersistentConnection.kt",
+      "detail": "新增 waitForTailnetOrRetry：tailnet 节点 Error 落定后重建起网有限重试，Up 才拨号，重试耗尽落可见失败连接"
+    },
+    {
+      "file": "app/app/src/test/java/dev/agentmirror/app/pairing/PersistentConnectionTailnetRecoveryTest.kt",
+      "detail": "新增 3 条红测锁定 D-25 修复语义"
+    }
+  ]
+}

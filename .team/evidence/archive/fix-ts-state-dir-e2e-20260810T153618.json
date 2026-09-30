@@ -1,0 +1,81 @@
+{
+  "status": "red",
+  "tests": [
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "env -u TEAM_AGENT_* bash -lc \"cd server && go test ./cmd/agentmirrord/... ./internal/config/... ./internal/tsnetd/...\""
+      ],
+      "rc": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "env -u TEAM_AGENT_* bash e2e/feat-ts-wire-headscale.sh"
+      ],
+      "rc": 1,
+      "artifact": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T145139-85487",
+      "failure_reason": "app_pid_missing"
+    },
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "env -u TEAM_AGENT_* bash e2e/feat-ts-wire-headscale.sh"
+      ],
+      "rc": 1,
+      "artifact": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T145801-27901",
+      "failure_reason": "app_pid_missing"
+    },
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "env -u TEAM_AGENT_* bash e2e/feat-ts-wire-headscale.sh"
+      ],
+      "rc": 1,
+      "artifact": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T150156-94334",
+      "failure_reason": "expected_two_headscale_nodes"
+    },
+    {
+      "argv": [
+        "bash",
+        "-n",
+        "e2e/feat-ts-wire-headscale.sh"
+      ],
+      "rc": 0
+    }
+  ],
+  "changes": [
+    {
+      "path": "server/cmd/agentmirrord/main.go",
+      "summary": "将 cmd 已解析的有效 stateDir 以 filepath.Join(stateDir, \"tsnet\") 传入 tsnetd.Options.Dir；未新增第二套 state-dir 配置，tailnet 未启用路径仍由 tsnetd 在使用 Dir 前返回。"
+    },
+    {
+      "path": "server/cmd/agentmirrord/main_test.go",
+      "summary": "通过 newTSNetGroup 窄 seam 锁定 tsnetd 消费方实际收到独立 tsnet 子目录。"
+    },
+    {
+      "path": "e2e/feat-ts-wire-headscale.sh",
+      "summary": "使用 adb stdin 写入临时 Android 用户的 app-private 配对存储，完全绕开摄像头、Extended Controls、前台鼠标与窗口寻址；当前源码 APK 由脚本临时安装并在 cleanup 中按 SHA-256 恢复原 APK，多用户进程按 root pidof 与精确 UID 识别。"
+    },
+    {
+      "path": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T150156-94334",
+      "summary": "最终红测证据：daemon state-dir 成立，App 节点未加入，自建 headscale 节点数为 1，cleanup 全绿。"
+    }
+  ],
+  "deviation": [
+    "E2E 验收未通过；按 judge 裁定在三次清洁复跑后停止，保留 status=red，不跨 write_scope 修改 App/tools。",
+    "首次 Go 预检曾直接由 zsh 解释 env -u TEAM_AGENT_*，在测试启动前因 nomatch 返回 rc=1；随后使用派单中的完整 bash -lc 验收 argv，rc=0。"
+  ],
+  "notes": [
+    "最终权威运行是 run-20260810T150156-94334：result.json 记录 headscale_node_count=1、failure_reason=expected_two_headscale_nodes、state_dir_proof=yes、cleanup_status=yes。",
+    "同一运行的已脱敏 app log 记录 tsnet running state、NeedsLogin 与 StartLoginInteractive，但 App 节点未完成自建 headscale 注册。",
+    "旧 APK 在同场景的 run-20260810T134912-69413 曾记录 headscale_node_count=2；当前源码 APK 的 App 起网回归归属 feat-tsnet-wiring。",
+    "App/tools 超出本任务 write_scope；依 judge 裁定仅记录归属与证据指针，不修改、不改派。",
+    "run-20260810T150156-94334/cleanup.txt 记录 cleanup_status=yes、生产 agentmirrord 基线未触碰、原模拟器 APK 已按哈希恢复、临时 Android user/adb reverse/任务目录/自建 tmux/五个端口均零残留。",
+    "配对注入路径为 adb_private_store_stdin：密钥不进入 injector argv、日志、UI 或截图；daemon 仍校验 pairing token，App 仍必须以真实 tsnet 节点入网，因此未弱化认证或连通性验收。"
+  ]
+}

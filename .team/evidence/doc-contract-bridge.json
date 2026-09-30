@@ -1,0 +1,114 @@
+{
+  "status": "pass",
+  "task_id": "doc-contract-bridge",
+  "case_id": "msg_a4b001695428",
+  "scope": "server/internal/bridge/",
+  "summary": "核实并改写 4 条不实注释：① Pane.Socket/Target/Timeout 三条访问器原注释谎称 '(used by the stream layer)'，实际 stream.go 直接读同包私有字段 p.socket/p.target/p.timeout，这三个导出方法全仓库零消费（生产代码与测试均无调用）——谱系第 5 类「虚构一个已存在的消费方」（第一批 QRListenAddr 同形态），已改写为如实描述绑定值；② WithTimeout 原注释称 'Useful for slow clients whose pane operations legitimately take longer'，实际 WithTimeout 全仓库零消费（无生产调用者），'slow clients' 为虚构使用场景——谱系第 5 类，已改写为如实描述 copy 语义。补 8 个 @contract（NewPane/Snapshot/CursorPos/Scrollback/Inject/SendKeys/Resize/Subscribe，四标签齐全，@err 对代码逐条列全）。消 0 条 T3-4 漂移——本包 import 图只有标准库，T3-4 漂移清单无 internal/bridge 行；按第一批 protocol 包先例在包级 doc 显式补 '@consumes none' 声明'零内部依赖'（不新增漂移，'none' 不在已知包键集永不放行）。三项验收全绿 + 阳性对照证实判据真实扫描本包。",
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/bridge",
+      "rc": 0,
+      "note": "基线（改动前）exit 0；收口（改动后）exit 0，T3-1..T3-4 全 PASS。基线就是绿的，本包是'交白卷也能过 acceptance'的多数包——靠 rewritten 清单让复核席逐条核属实"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/bridge/...\"",
+      "rc": 0,
+      "note": "ok github.com/agentmirror/agentmirror/internal/bridge 6.117s——包内测试全绿，实现零改动"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "全仓库 exit 0；T3-1 1 条（TsnetInterfaceCodec.kt:46 属 kotlin tsnet 包，非本包）、T3-4 27 条（含 internal/api 的 3 条——api 包漂移属另一包职责），bridge 无违规，未被打坏"
+    }
+  ],
+  "changes": [
+    "server/internal/bridge/bridge.go: 改 4 条不实注释（WithTimeout + Socket/Target/Timeout）+ 补 7 个 @contract（NewPane/Snapshot/CursorPos/Scrollback/Inject/SendKeys/Resize），48 行注释变更，0 行实现变更",
+    "server/internal/bridge/stream.go: 补 1 个 @contract（Subscribe），5 行注释变更，0 行实现变更",
+    "server/internal/bridge/doc.go: 包级 doc 补 @consumes none 显式声明（零内部依赖），3 行注释变更"
+  ],
+  "rewritten": [
+    {
+      "symbol": "Pane.Socket",
+      "file": "server/internal/bridge/bridge.go:280",
+      "inaccurate": "原注释称 '(used by the stream layer to build its own commands)'。核实：stream.go 的 subscribe() 直接使用同包私有字段 p.socket（subscribe(ctx, p.socket, ...)），从不用 Socket() 访问器；全仓库 grep 确认 .Socket() 零生产消费、零测试消费（server/ 下无任何调用方）。'stream layer 用它构建命令'是虚构的消费方——谱系第 5 类「虚构一个已存在的消费方」（第一批 QRListenAddr 同形态：注释在、工整、位置正确、内容是假的）。",
+      "rewritten_to": "如实改写为 'Socket exposes the socket the Pane is bound to. An empty string means the tmux default socket.'——只描述它暴露的值与空串语义（runTmux/newTmuxCommand 的 socket=='' 分支确实走 -L default），不再虚构消费方。"
+    },
+    {
+      "symbol": "Pane.Target",
+      "file": "server/internal/bridge/bridge.go:283",
+      "inaccurate": "原注释称 '(used by the stream layer)'。核实：stream.go 用 p.target 私有字段，不调 Target()；全仓库 .Target() 零消费。同谱系第 5 类，虚构消费方。",
+      "rewritten_to": "如实改写为 'Target exposes the bare pane id (e.g. \"%0\") the Pane is bound to.'——只描述暴露的裸 pane id，与新构造约定（Pane 注释 'bare pane id (e.g. %0)'）一致。"
+    },
+    {
+      "symbol": "Pane.Timeout",
+      "file": "server/internal/bridge/bridge.go:286",
+      "inaccurate": "原注释称 '(used by the stream layer)'。核实：stream.go 用 p.timeout 私有字段，不调 Timeout()；全仓库 .Timeout() 零消费（grep 到的都是 context.WithTimeout，非 Pane 访问器）。同谱系第 5 类，虚构消费方。",
+      "rewritten_to": "如实改写为 'Timeout exposes the per-command timeout that bounds every tmux invocation the Pane makes.'——只描述它在 Pane 内每个 tmux 调用的作用（runTmux/newTmuxCommand 的 deadline），不再虚构消费方。"
+    },
+    {
+      "symbol": "Pane.WithTimeout",
+      "file": "server/internal/bridge/bridge.go:38",
+      "inaccurate": "原注释称 'Useful for slow clients whose pane operations legitimately take longer'——把 API 层描述为它的使用场景。核实：WithTimeout 全仓库零消费（grep 无任何调用方，生产与测试皆无），'slow clients' 是虚构的使用场景（谱系第 5 类）。另外原注释没说清语义（值拷贝）。",
+      "rewritten_to": "如实改写为 'WithTimeout returns a copy of p with a custom per-command timeout, overriding the default set by NewPane. The receiver p is left unchanged.'——只描述代码实际做的（cp := *p 值拷贝、改 timeout、返回新指针），去掉虚构的 'slow clients' 场景。"
+    }
+  ],
+  "contracts_added": [
+    {
+      "symbol": "NewPane",
+      "file": "server/internal/bridge/bridge.go",
+      "contract": "@contract + @pre none（参数不校验）+ @post 返回绑定 socket/paneID 的 Pane，timeout 为 defaultTimeout + @err none（实现只赋值，无错误分支）+ @inv none（纯构造）"
+    },
+    {
+      "symbol": "Pane.Snapshot",
+      "file": "server/internal/bridge/bridge.go",
+      "contract": "@contract + @pre none + @post 返回 ANSI 保留的原始终端字节（capture-pane -e）+ @err 目标 pane 不存在→ErrPaneNotFound；server 不可达→ErrServerUnreachable；超时→ErrTmuxTimeout（runTmux 三 sentinel 分类，TestSnapshotDeadPaneIsErrPaneNotFound/TestDeadSocketIsErrServerUnreachable/TestRunTmuxTimeout 实证）+ @inv none（只读）"
+    },
+    {
+      "symbol": "Pane.CursorPos",
+      "file": "server/internal/bridge/bridge.go",
+      "contract": "@contract + @pre none + @post 返回 0-based 列 x 行 y + @err tmux 失败→三 sentinel；cursor 输出非 '%d,%d' 解析失败→fmt.Errorf（实现 line 66-68 的 fmt.Errorf('tmux: parse cursor pos %q')）+ @inv none（只读）"
+    },
+    {
+      "symbol": "Pane.Scrollback",
+      "file": "server/internal/bridge/bridge.go",
+      "contract": "@contract + @pre start/end 为负偏移且 start < end（调用方约定，见注释）+ @post 返回该页 ANSI 保留字节（capture-pane -e -S/-E）+ @err tmux 失败→三 sentinel + @inv none（只读）"
+    },
+    {
+      "symbol": "Pane.Inject",
+      "file": "server/internal/bridge/bridge.go",
+      "contract": "@contract + @pre 目标 pane 存在（requirePane 前置检查）+ @post 整条消息进入并按一次 Enter，单行走 send-keys -l，多行走 load-buffer + paste-buffer + @err pane 不存在→ErrPaneNotFound（requirePane）；server 不可达/超时→ErrServerUnreachable/ErrTmuxTimeout + @inv none（除注入文本与一次 Enter 外不触碰 pane 运行态）"
+    },
+    {
+      "symbol": "Pane.SendKeys",
+      "file": "server/internal/bridge/bridge.go",
+      "contract": "@contract + @pre pane 存在、每个 key 属 namedKeys 闭集 + @post 全部命名 key 单次 send-keys 按序发送不追加 Enter + @err 未知 key→ErrInvalidKey（在任意 tmux 调用前，TestSendKeysUnknownKeyRejects 实证）；pane 不存在→ErrPaneNotFound；server 不可达/超时→sentinels + @inv none"
+    },
+    {
+      "symbol": "Pane.Resize",
+      "file": "server/internal/bridge/bridge.go",
+      "contract": "@contract + @pre pane 存在 + @post window-size latest 已设、resize-window 已执行、返回 pane 实际新尺寸（读回值非请求值，TestResizeChangesActualSize 实证 120x30）+ @err 解析 window id/尺寸失败→fmt.Errorf；tmux 失败→三 sentinel + @inv none（只改尺寸）"
+    },
+    {
+      "symbol": "Pane.Subscribe",
+      "file": "server/internal/bridge/stream.go",
+      "contract": "@contract + @pre 目标 pane 存在 + @post 返回 ch 与 detach；detach 后 pipe 拆除、FIFO 移除、ch 关闭；relay 满缓冲丢字节（下个快照对账）+ @err Mkfifo 失败→fmt.Errorf；attach 超时→ErrTmuxTimeout；tmux 失败→ErrServerUnreachable/ErrPaneNotFound；FIFO 无 writer→fifoOpenTimeout 后 decidable error（TestOpenFIFOTimesOut/TestSubscribeTeardownNotBlockedAfterCrashedPipe 实证）+ @inv none（纯镜像）"
+    }
+  ],
+  "consumes_added": [
+    {
+      "pkg": "internal/bridge",
+      "target": "none",
+      "file": "server/internal/bridge/doc.go",
+      "note": "本包 import 图只有标准库（context/fmt/os/strconv/strings/syscall/time/os/exec/bytes/sync/sync/atomic/path/filepath），T3-4 漂移清单无 internal/bridge 行，零条漂移可消。按第一批 protocol 包先例在包级 doc 显式 '@consumes none' 声明零内部依赖——'none' 不在已知包键集，永不产生'声明了没 import'的误判。"
+    }
+  ],
+  "uncertain": [],
+  "deviation": [],
+  "positive_control": {
+    "method": "删除 NewPane 的 @err 标签，跑 python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/bridge，确认 exit 1 且精确指向该符号，然后改回",
+    "rc_before_break": 0,
+    "rc_while_broken": 1,
+    "output_summary": "T3-3 : FAIL — 契约标签完备：1 条违规  [T3-3] internal/bridge  server/internal/bridge/bridge.go:31  '@contract' — 缺契约标签: @err；结果：未通过（exit 1）。随后已改回，收口复跑 rc=0。判据确实扫描本包并精确定位到 NewPane（bridge.go:31），非'没扫到所以全绿'。",
+    "restore_verified": true
+  }
+}

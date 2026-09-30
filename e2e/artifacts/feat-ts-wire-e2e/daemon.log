@@ -1,0 +1,58 @@
+time=2026-08-10T00:22:01.441+08:00 level=INFO msg="single-instance guard acquired" pidfile=/tmp/tswire-e2e2/state/agentmirrord.pid
+time=2026-08-10T00:22:01.441+08:00 level=INFO msg="pairing token source=explicit"
+time=2026-08-10T00:22:01.441+08:00 level=INFO msg="agentmirrord starting" listen=0.0.0.0:33900 qr_listen="" token_source=explicit upload_dir="" max_upload_mib=20 list_interval=2s
+time=2026-08-10T00:22:01.442+08:00 level=INFO msg="tailnet 已启用" hostname=MacBook-Pro.local state_dir="/tmp/tswire-e2e2/home/Library/Application Support/agentmirror/tsnet"
+time=2026-08-10T00:22:01.442+08:00 level=INFO msg="tailnet 入网中（等待 Tailscale 控制面握手）…"
+2026/08/10 00:22:01 tshttpproxy: using proxy "https://claude:082643aef9ac8bdc3929dceb37eea0f6@sg-proxy2.team-agent.net:8443" for URL: "https://controlplane.tailscale.com/"
+2026/08/10 00:22:01 tsnet running state path /tmp/tswire-e2e2/home/Library/Application Support/agentmirror/tsnet/tailscaled.state
+2026/08/10 00:22:01 tsnet starting with hostname "MacBook-Pro.local", varRoot "/tmp/tswire-e2e2/home/Library/Application Support/agentmirror/tsnet"
+2026/08/10 00:22:01 LocalBackend state is NeedsLogin; running StartLoginInteractive...
+2026/08/10 00:22:01 AuthLoop: state is Starting; done
+time=2026-08-10T00:22:01.574+08:00 level=INFO msg="tailnet 已入网" ip=100.64.0.1
+                                                                     
+                                                                     
+    █▀▀▀▀▀█ ▄▄▄█▀███ ▀ █▄▀██ ▄██▀█▀████ ████ █▀▄▄▀██▀▀ ██ █▀▀▀▀▀█    
+    █ ███ █ █▀▄▄ ▀█▀▄▀▄ ▄ ▀ ▀███  ▀▄▀█▄▄▄▄▄██ ▀▀███▀▄ █▀█ █ ███ █    
+    █ ▀▀▀ █  █▀█▀▀▄ ▄▄▄ ▀▀▀█▀▄▀ █▀▀▀██ ▄█▄   ██▄▀█▄██▀█▀  █ ▀▀▀ █    
+    ▀▀▀▀▀▀▀ █▄█▄█ █▄█ █▄▀▄▀ █ ▀▄█ ▀ █ █▄▀▄█ █▄▀▄█ ▀ ▀ ▀ ▀ ▀▀▀▀▀▀▀    
+    █▄ ▄ ▄▀▄▀▄ ▄ ▄ ▀██ █ █▄▄▀▀ ▄████▀ ▄ █ █▄▄ ▄█▄ ██▀▄█ █▀█▄▄███     
+    ██ ▀ █▀▄ ███▄▀█    ▀█▀█▄▀██▀▀▀▄▄▄▄▀█▀▀▀ ▄▀ ▀▄ ▀█  ▀▀ ▄▄█▄  ▄▀    
+    ▀▀█▀ █▀▄█ ▀█▄  ▀▄▀█ ▄███▄██▄▄ ▄▀█▀ █▀▀ █▀ █▀▀▄▀▄▀▀ █ ██▀█▄▄█▀    
+    ▀▀█▄ ▀▀▀▄▄▄ ▄▄▄ ▀▀██▄█▀▀ ▄ ██▄▄▄ ▄█ ██▀ ▄ ▄  ▄██▀ █▀█   ▀ █▀▀    
+    ▀▄ ▀██▀▄▄█▄▀▄▄█▀██▄██  █▄ ▄▀ ▀ ▄█▄ ▀ ▄▀ █ █▄▄▀ ▄▀▄▀▀▀ ▄  ▀█▄▀    
+      █▄ ▄▀▄█ ▀█▄██▀██ ▀ █▀▄█ ▄█  █▀█  ▄ ▀▄▄▄▀▄▀█  ▀▀▀ ▄▀▄ ██   ▀    
+     ▀▄▄▄█▀▄█▄ ▀  ▄▄▀ █▀█▀█▄█▀██▄▀▄▄  ▄ ▀ ▄█▄▀█▄ ██ ▀ ▄▄█ ▄ ▄▀█ ▀    
+     ▀█▀▀▀▀▀ ▄ ██▀▄▄▄ ▀█▀█▀▄ ▄██▄▀██▄▄██ ▄█▀▄█ ██ ▀▄▀▄█▄ ▀▄ ▄▄▀ ▀    
+     ▀▄▀▄▄▀▄█▀   ▀▀▄▀▀██▀▄▄█▀ ██▄ █▄▀█▄▄██▄▄█▄███▀▀▀█▀    █▄▀▀▄█     
+       █▄▀▀█  ▄▀██ █  ▀▄▄▄▀▄   ▄█ ▄▄▄▀▄▄▀ ▄█ ▀▄   ▀▄▄█▀█▀▄    ▄ ▀    
+    ▀ ▀ █▀▀▀█▄██ ▄ ▄▄    ▄▀█▄▄▄▄█▀▀▀█▀ ▄█ ▀█▄ ▄█▄▀▀█▀  ▄█▀▀▀█▄▀█     
+    █▄  █ ▀ █ █▄█▄ ▀▄ █▄▀█ ▄▄█▀▄█ ▀ █  █▀ ▄▄█ ▄█▄█ █▀█▄▀█ ▀ █ ▀▀▀    
+    ▄  ▄▀▀▀▀█ ▄▀ ▀█▄▄▀▀█ █ ▀▄▄ ██▀▀▀█ ▄▄▀ ▄█▄ ▄▄▄▄▄▀▀ ▄ ██████▀▀▀    
+      ██ ▄▀▀██▄   ███ ▄  ▀▄ ▄ ▄█  ▀▀▀ ▀▄██▀▄ ▀▄▄▄ █▄▀ ▀▄▄▀▀▀█ ▀ ▀    
+    ▀█  █▀▀▀▄█  ▀██ ██▀▄██▀ ▄▀█▄  ▀    ███▀█▀▀▄▄██▀█▀ ▀▀▀▄█    ▀     
+    █  █ ▀▀ █ ▄▀█ █▄▀▄▄█▄▄█ ▀▄▄▀██▀█▄██ ▀▄▀█   ▀ ██ ▀█▀█ ▄▀ ███▀▄    
+    █▄▀▄▄▀▀ ▄█▄ █▀▀▄▄▀▀▄▄█▄▀█▄ ███▀ █▀▀▄█ ▀▀▄▀█ ▄▄▀▄▀█▀█ ▄▀▀▀▄█▄▀    
+    ▄▄▀ ██▀▀ ▄ █▀█▀▀▀█▀▄▄ ▄ █▄▀█▀▀█    ▀▀   ▄▄ █▄  █▀  █▄█▀▀▀▄▀█▀    
+    ▀▀█▀▄█▀██ ▀▄█ █ ▄ ▀█▀▀▄█▄▀ ▀█▄▀ █ ▄▀█▀▄  ▀█  ▀▄ █▀▄█▄▀▀▀█▀█ ▀    
+     ▄▀▄ ▄▀██ ▄█▄█▀█▄▀ ▀▄█▄ ▄ ▄▀▀▀ █▀  ▀▀▀ █▄ █▀▄███▀▀▀█ ▄▀ ▀█  █    
+    ▄▀ ███▀▀▄▄▄▄█▀▄▄▀▄▀██ ▀ ▄ ██▀ ▄▄▄▀▀ █▀▀▀█▀█ ▀   █▀ ▀█ ▄█ █▄█▀    
+    ▄▄█▀█▀▀█▄▀  █▀▀█▀▄█▄▀█▄▄  ▄▀▄▀▄▄ ▀██▀▀██   ▄▀██▀▀▀███ ▀ █▀█ ▀    
+    ▀▀▀▀  ▀▀▄▀ ▀█▀ ▄▀▄█ ▄▄ ▀▄ ▄██▀▀▀█   ▀ ▀▀▄ ▄▄▄█  ▀▄▀██▀▀▀█ ▀█▀    
+    █▀▀▀▀▀█  ▄▀█▀▄▀████▀ █  ▄   █ ▀ █  ▀▄ ▄  █ ▄▄▀ █  ▄ █ ▀ █ ▀▀▀    
+    █ ███ █  ▀█ ██▄  ██ ▄▀▄ ▄  █▀▀█▀▀▀█▀ █▄ ▀ ██ ██ ▀▄▄█▀██▀▀▄█ █    
+    █ ▀▀▀ █  ██▄▄▀█ ▄▀ ▀▄█▀▄ ▀█▀▄ ▄██ ██  ▀ █ ▄██▀▀▄ ▄▀█▄▀██▄▀▀ █    
+    ▀▀▀▀▀▀▀ ▀  ▀  ▀▀  ▀▀ ▀▀▀▀   ▀▀ ▀▀▀ ▀▀  ▀▀▀ ▀▀   ▀   ▀    ▀  ▀    
+                                                                     
+                                                                     
+
+──────────────────────────────────────────────
+配对信息 · 用 App 扫码，或手填以下内容：
+  服务端 ws 地址 : ws://10.20.55.20:33900/ws
+  配对 token      : smoke-e2e
+  其他可达地址（若上面的连不上，改用下列之一）：
+    ws://10.20.55.20:33900/ws   [lan]
+    ws://192.168.31.116:33900/ws   [lan]
+    ws://100.64.0.1:33900/ws   [tailnet]
+  tailnet 地址   : ws://100.64.0.1:33900/ws
+2026/08/10 00:22:04 tshttpproxy: CONNECT response from https://claude:082643aef9ac8bdc3929dceb37eea0f6@sg-proxy2.team-agent.net:8443 for target "log.tailscale.com:443" (auth "Basic Y2xhdWRlOjA4Mj...(58 total bytes)"): 200 Connection established
+time=2026-08-10T00:23:05.027+08:00 level=WARN msg="ws: accept failed" err="failed to accept WebSocket connection: WebSocket protocol violation: Connection header \"\" does not contain Upgrade"

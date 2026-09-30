@@ -1,0 +1,39 @@
+## headscale-configtest.log
+
+
+## headscale.stderr
+
+
+## headscale-cli.stderr
+
+
+## sandbox-check.log
+
+
+## go-build.log
+
+
+## daemon.stderr
+time=2026-08-10T03:08:57.084+08:00 level=INFO msg="single-instance guard acquired" pidfile=TASK_TMP/daemon-state/agentmirrord.pid
+time=2026-08-10T03:08:57.084+08:00 level=INFO msg="pairing token source=explicit"
+time=2026-08-10T03:08:57.084+08:00 level=INFO msg="agentmirrord starting" listen=127.0.0.1:43920 qr_listen="" token_source=explicit upload_dir="" max_upload_mib=20 list_interval=2s
+time=2026-08-10T03:08:57.085+08:00 level=INFO msg="tailnet 已启用" hostname=MacBook-Pro.local state_dir=TASK_TMP/daemon-state/tsnet
+time=2026-08-10T03:08:57.085+08:00 level=INFO msg="tailnet 入网中（等待 Tailscale 控制面握手）…"
+2026/08/10 03:08:57 tsnet running state path TASK_TMP/daemon-state/tsnet/tailscaled.state
+2026/08/10 03:08:57 tsnet starting with hostname "MacBook-Pro.local", varRoot "TASK_TMP/daemon-state/tsnet"
+2026/08/10 03:08:57 LocalBackend state is NeedsLogin; running StartLoginInteractive...
+2026/08/10 03:08:57 AuthLoop: state is Starting; done
+time=2026-08-10T03:09:00.220+08:00 level=INFO msg="tailnet 已入网" ip=100.64.0.1
+time=2026-08-10T03:11:52.221+08:00 level=INFO msg="shutting down"
+
+
+## android-start-user.log
+Success: user started
+
+
+## android-switch-user.log
+
+
+## android-app-start.log
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+

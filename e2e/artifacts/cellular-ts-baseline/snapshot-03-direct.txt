@@ -1,0 +1,9 @@
+# 打洞成功后基线  2026-08-14 00:28:15
+## tailscale status（权威）
+100.75.207.88    macbook-pro-1          alaudalancy@  macOS    -                                                        
+100.114.207.123  agentmirror-v2502a     alaudalancy@  android  offline, last seen 6h ago                                
+100.69.43.120    v2502a                 alaudalancy@  android  active; direct 113.84.129.117:23443, tx 174352 rx 29544  
+## ICMP RTT 30 包
+30 packets transmitted, 30 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 21.988/147.417/438.895/123.541 ms
+## 应用层：daemon WS 连接的内核 srtt

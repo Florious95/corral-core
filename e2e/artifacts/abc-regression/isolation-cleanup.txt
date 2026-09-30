@@ -1,0 +1,2 @@
+tmux_cleaned=yes
+daemon_cleaned=yes

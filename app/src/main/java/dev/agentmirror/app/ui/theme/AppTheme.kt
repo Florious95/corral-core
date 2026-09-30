@@ -110,7 +110,7 @@ internal val appDarkScheme = darkColorScheme(
  * 等宽只用在 ASCII 标识符、路径、数字、按键标签上 —— FontFamily.Monospace 走系统等宽，
  * 中文落到 Monospace 上时系统会回退到默认中文字体，宽度不再是整格，所以中文文本别用它。
  */
-private val AppTypography = Typography(
+internal val appTypography = Typography(
     headlineMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Bold,
@@ -158,12 +158,14 @@ private val AppTypography = Typography(
 
 /**
  * 用法：
- *   AppTheme(appearance = uiState.appearance) { ... }
- * appearance 由你那边持有（DataStore / SharedPreferences），这里只读不写。
+ *   AppTheme(appearance = uiState.appearance, themeId = uiState.themeId) { ... }
+ * appearance / themeId 由你那边持有（SharedPreferences），这里只读不写。
+ * 嵌套调用不传参时两者都继承外层，不把强制深 / 浅或所选风格冲回默认。
  */
 @Composable
 fun AppTheme(
     appearance: Appearance = LocalAppearance.current,
+    themeId: ThemeId = LocalThemeSuite.current.id,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -173,14 +175,15 @@ fun AppTheme(
         Appearance.Dark -> true
         Appearance.System -> isSystemInDarkTheme()
     }
-    val palette = if (dark) DarkPalette else LightPalette
+    val suite = ThemeRegistry.resolve(themeId, ThemeContext(isDark = dark))
     CompositionLocalProvider(
-        LocalAppPalette provides palette,
+        LocalAppPalette provides suite.colors.palette,
         LocalAppearance provides appearance,
+        LocalThemeSuite provides suite,
     ) {
         MaterialTheme(
-            colorScheme = if (dark) appDarkScheme else appLightScheme,
-            typography = AppTypography,
+            colorScheme = suite.colors.materialScheme,
+            typography = suite.typography.material,
             content = content,
         )
     }
@@ -191,6 +194,6 @@ fun AppTheme(
 fun currentTerminalPalette(): TerminalPalette {
     val context = LocalContext.current
     TermPalette.bind(SharedPreferencesTermThemeStore(context))
-    val dark = LocalAppPalette.current === DarkPalette
+    val dark = LocalAppPalette.current.isDark
     return TermPalette.asTerminalPalette(dark)
 }

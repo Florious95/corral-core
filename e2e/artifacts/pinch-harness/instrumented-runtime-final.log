@@ -1,0 +1,11 @@
+Performing Streamed Install
+Success
+INSTRUMENTATION_RESULT: pinch_harness=FAIL
+INSTRUMENTATION_RESULT: stack=java.lang.IllegalStateException: 系统注入已成功但 TermSurfaceView 未改变字格: 10x20 -> 10x20
+	at dev.agentmirror.app.termview.PinchHarnessInstrumentation.runPinchTest(TermSurfacePinchInstrumentedTest.kt:89)
+	at dev.agentmirror.app.termview.PinchHarnessInstrumentation.onStart(TermSurfacePinchInstrumentedTest.kt:45)
+	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2594)
+
+INSTRUMENTATION_CODE: 0
+
+Note: the custom runner reports failure in the result bundle; shell exit 0 is not a pass signal.

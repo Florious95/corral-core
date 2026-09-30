@@ -1,0 +1,16 @@
+{
+  "status": "fail",
+  "failure_reason": "headscale_exited_early",
+  "workspace_visible": "no",
+  "isolated_session_visible": "no",
+  "headscale_node_count": 0,
+  "paired_url_class": "unknown",
+  "socks5_loopback_proof": "unknown",
+  "state_dir_proof": "no",
+  "argv": {
+    "ts_authkey_flag_present": "unknown",
+    "authkey_value_present": "unknown"
+  },
+  "artifact_secret_value_present": "unknown",
+  "cleanup_status": "yes"
+}

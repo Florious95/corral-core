@@ -1,0 +1,7 @@
+argv: bash -lc 'env -u TEAM_AGENT_* bash e2e/connected-idle-economy.sh'
+exit_code: 0
+
+zero_connection               wall=60.042646016s cpu_delta=0.000000s mean_cpu=0.000000% capture=0 rate=0.000000/s panes=27
+connected_zero_subscription   wall=60.038387968s cpu_delta=1.490000s mean_cpu=2.481746% capture=240 rate=3.997442/s panes=27
+connected_single_subscription wall=60.034235904s cpu_delta=1.440000s mean_cpu=2.398631% capture=240 rate=3.997719/s panes=27
+connected-idle-economy: PASS

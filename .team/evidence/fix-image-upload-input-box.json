@@ -1,0 +1,64 @@
+{
+  "task_id": "fix-image-upload-input-box",
+  "status": "pass_user_verified",
+  "round": 2,
+  "at": "2026-08-14T14:10:00Z",
+  "user_expectation": "「图片能发送、能上屏、同时它能一次性读取」（2026-08-14 回炉后裁定）",
+  "solution": "三步序列：paste-buffer -d -p 只贴纯路径（不掺文字）→ send-keys -l 单独送文字（文字非空时）→ 等 pasteSettleDelay 后一次 send-keys Enter",
+  "seat_self_correction_round1_probe_was_false_positive": "第 1 轮探针得出「纯路径零延时可提交」，用的是【不存在的假路径】/fake/path/imgpure.png。Claude Code 对读不到的文件几乎瞬间失败，根本没进异步窗口，所以显得安全。真实图片要解码、缩放、重编码、写 ~/.claude/image-cache —— 那段 I/O 才是真正的竞态窗口。席位在第 2 轮真实产品链路上自己发现并推翻了自己的结论。这是当日第 10 次「验证的不是真正的被测对象」，也是唯一一次由席位自己逮到自己的。",
+  "end_to_end_evidence": {
+    "how": "隔离 tmux + 真实编译的 agentmirrord（走仓库已有的 AGENTMIRROR_E2E_DISCOVERY_SOCKET_DIRS 隔离口子）+ 最小 WS 客户端 import 真实 internal/protocol，走真实 POST /upload → 真实 Input{Text,AttachmentPath} → 真实 input_ack。全链路无一处手搓 tmux 命令代替产品代码。",
+    "run_a_caption_plus_image": "capture-pane：`❯ FINAL_A_describe_this_image[Image #5]` + `⎿ [Image #5]` + `⏺` 回复里 Claude 真的描述出了截图内容（状态栏/标题/按键条/输入框布局）+ Ctx 34751→35745",
+    "run_b_plain_control": "无附件纯文本零延时秒提交，Ctx 35745 不受影响，不倒退",
+    "three_criteria_all_met": "[Image #N] 内联 ✓ / 文字在场 ✓ / 消息真提交（输入框清空 + ⏺ + Ctx 变大）✓"
+  },
+  "leader_independent_verification": {
+    "gates": "server go build/vet/test 全绿；app :app:testDebugUnitTest 0 失败；archwiki --strict-t3 exit 0（仓库根跑）",
+    "mutation": "leader 变异（与席位所做不同）：删掉 time.Sleep(pasteSettleDelay)",
+    "mutation_result": "【全部测试仍然通过】—— 承重墙无单测保护，见 known_gaps"
+  },
+  "known_gaps": [
+    "① 2s 沉降延时无任何单测保护：删掉它门全绿而功能当场废。根因是 time.Sleep 硬编码、时钟不可注入，不注入时钟就测不了竞态。目前唯一保护它的是端到端实测。",
+    "② 2000ms 是实测出的阈值不是理论上界：500ms 不够、2000ms 够。更大的图 / 更慢的机器可能仍不够。健壮做法是等一个明确的「粘贴已处理完成」信号（例如轮询 capture-pane 直到出现 [Image #N]）而不是固定 sleep。",
+    "③ time.Sleep 跑在 wsConn 的读循环里（ws_conn.go:347 handleFrame → handleInput 同步调用）：发图后这条连接的帧处理被阻塞约 2 秒，期间用户的输入/滚动指令不会被处理。镜像输出走独立 goroutine 不受影响。"
+  ],
+  "separated_out": "本轮交付时工作区里混进了一份与本任务无关、无人派单、未验收的 WIP：PaneSizeChanged 帧 + Server.fanoutPaneReflow（多客户端共用 pane 时的尺寸广播）。leader 已完整剥离并存档到 docs/archive/pane-reflow-wip/pane-size-changed-wip.patch，剥离后 server + app 双门复跑全绿。来源未查明，未随本次进入生产。",
+  "commit": "86ec49c0c",
+  "apk": "agentmirror-attach-preview-86ec49c0c.apk",
+  "user_verification": {
+    "at": "2026-08-14T14:45:14Z",
+    "by": "用户真机实测（非席位自报、非模拟器）。用户原话：「没问题了」",
+    "screenshot": "upload-20260814T144514-1000022730.jpg",
+    "capture": "❯ 把这些通道给删除了。[Image #30] —— 文字在场 + 内联成功 + 消息真提交",
+    "cost_half_also_verified": "用户发来这张截图时，leader 侧收到的就是内联的 [Image #262]，全程零次 Read 调用 —— 成本那半（每多一次 Read = 一次完整 LLM 请求）当场自证"
+  },
+  "deployed": {
+    "pid": 4140,
+    "started_at": "2026-08-14T23:57:32+08:00",
+    "listen": "0.0.0.0:9900",
+    "attach_preview_count": 4
+  },
+  "round3_attach_preview": {
+    "requirement": "requirement-base/entries/057-发图预贴与一次性注入的例外.md（commit 752abfe3e）",
+    "design": "上传成功即发 AttachPreview{Ref,Path} 贴路径并按 pane 记时间戳；点发送只送文字+Enter；沉降在用户打字期间完成",
+    "e2e_numbers": {
+      "RUN1_纯文字基线": "31.06ms",
+      "RUN2_预贴+打字3s+发送": "33.04ms（与基线相差不到 2ms，肉眼零等待）",
+      "RUN3_预贴+立刻发不打字": "2.0400075s（补差额分支正确兜住，未被静默优化掉）"
+    },
+    "leader_independent_verification": {
+      "gates": "go clean -testcache 后 go build/vet/test 全绿（9 包）；:app:testDebugUnitTest 0 失败；archwiki --strict-t3 exit 0",
+      "mutation": "leader 变异（与席位两次都不同）：把 consumeAttachPreview 改成不消费（删掉 delete）",
+      "mutation_result": "TestConsumeAttachPreviewMatchingPathHits 应声转红 —— 本轮红测挡住了 leader 的探针，前两轮的缺口没有再出现"
+    },
+    "seat_self_caught_false_signal": "TestInputWithMatchingPreviewSkipsRepaste 最初用「数 cat pane 里路径出现次数」证明没重贴，实测发现 cat 在 cooked-mode 下对任何成功提交的行天然回显两次（tty 本地回显 + cat 自己写回 stdout），与有没有重贴无关。该计数法测的是错误的东西，已删除并改到 bridge 层用 fake-tmux 直接看 argv。",
+    "ruling_compliance": "057 五款逐条落地：只对带图子场景 ✓；预贴只贴路径不掺文字 ✓；不清理 CLI 残留（采纳 B）✓；附件改可累加、显示「已附加 N 张图」✓；手感同量级 ✓",
+    "user_verification": {
+      "at": "2026-08-15T00:07:15+08:00",
+      "by": "用户真机实测（非席位自报、非模拟器）",
+      "quote": "「确实很快，不错不错，基本上很少有纯图片的。」「明白了，那我没什么疑问了，就这样吧。」",
+      "screenshot": "upload-20260814T160715-1000022735.jpg",
+      "note": "用户同时给出了一条对优先级有用的使用事实：【纯图片不带文字的场景很少】。这直接降低了 fix-paste-settle-signal 的紧迫度——那 2 秒只在这个罕见路径上出现。"
+    }
+  }
+}

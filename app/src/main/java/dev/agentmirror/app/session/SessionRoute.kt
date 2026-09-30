@@ -157,6 +157,8 @@ internal fun createSessionViewModel(ref: String, context: Context? = null): Sess
     // 启动连接（幂等）：manager 已存在（startPersistentConnection 已启动）时 start 为 no-op；
     // 冷启动配对层先于本路径经 startPersistentConnection 启动，此处兜底再 start 一次。
     manager.start()
+    // 断线时点进会话不等退避（最长 30s）：RECONNECTING 立即重拨，占位层显示重连态直到首帧。
+    ServiceWire.reconnectNow()
     // feat-fg-service-wiring：进入会话即确保前台服务在运行（幂等）——连接与时钟泵由服务
     // 承接（后台期间通知栏常驻 + 重连/超时裁决不依赖在屏组合）。若冷启动已启动过服务，
     // 这里只是再投一次 onStartCommand（系统对已运行服务幂等）。Context 未注入（纯 JVM 测试）
