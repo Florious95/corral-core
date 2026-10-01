@@ -10,7 +10,7 @@
 // built with Hostname/AuthKey/Dir wired through and its state directory is
 // created, but the node only comes up when Up or ListenTailnet is called. This
 // keeps the no-authkey red line (zero control-plane contact) trivially
-// enforceable and keeps unit tests network-free.
+// guaranteed and keeps unit tests network free.
 //
 // Cross-layer dependencies (T3-4): this package imports only the standard
 // library and the external tailscale.com/tsnet library — no internal package,

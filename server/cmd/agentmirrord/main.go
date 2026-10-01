@@ -38,6 +38,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -125,6 +126,15 @@ func run(args []string) int {
 		logger.Error("failed to resolve pairing token", "err", err)
 		return 1
 	}
+	hostID, err := pairing.EnsureHostID(stateDir)
+	if err != nil {
+		logger.Error("failed to resolve host identity", "err", err)
+		return 1
+	}
+	advertisedPort, err := strconv.Atoi(listenPort(cfg.ListenAddr))
+	if err != nil || advertisedPort < 1 || advertisedPort > 65535 {
+		advertisedPort = 9900
+	}
 
 	logger.Info("agentmirrord starting",
 		"listen", cfg.ListenAddr,
@@ -147,6 +157,9 @@ func run(args []string) int {
 	// it is passed into the validator seam and never logged or echoed here
 	// (docs/protocol.md §9).
 	apiServer := api.NewServer(api.Options{
+		HostID:               hostID,
+		HostName:             hostname(),
+		ListenPort:           advertisedPort,
 		Token:                token,
 		UploadDir:            cfg.UploadDir,
 		MaxUploadBytes:       cfg.MaxUploadBytes,

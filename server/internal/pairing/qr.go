@@ -34,7 +34,7 @@ type Payload struct {
 	TSAuthKey string `json:"ts_authkey"`
 	// Candidates is the OPTIONAL full candidate ws URL set for THIS host (its
 	// other NICs, LAN + tailnet, never loopback). It is forward compatible:
-	// omitempty keeps a no-candidate QR byte-identical to the pre-feature
+	// omitempty preserves a no-candidate QR byte-identical to the earlier
 	// contract, so no version bump. When non-empty it leads with the primary
 	// URL (docs/protocol.md §2.1).
 	Candidates []string `json:"candidates,omitempty"`

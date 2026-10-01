@@ -39,17 +39,31 @@ type socketClass struct {
 
 // classifySocketDirectory is intentionally evaluated before ReadDir. A
 // tmux-<other uid> directory is outside this daemon's discovery object and
-// must not even have its entries considered for a tmux child process.
+// must not even have its entries considered for a tmux child process. Explicit
+// nonstandard directories are accepted only when owned by this uid; this is
+// the seam used by isolated deployments and tests.
 func classifySocketDirectory(dir string) socketClass {
-	base := filepath.Base(filepath.Clean(dir))
+	clean := filepath.Clean(dir)
+	base := filepath.Base(clean)
 	current := "tmux-" + strconv.Itoa(os.Getuid())
-	if base != current {
-		if strings.HasPrefix(base, "tmux-") {
-			return socketClass{name: "other_uid_directory"}
-		}
+	if base == current {
+		return socketClass{allowed: true, name: "current_uid_directory"}
+	}
+	if strings.HasPrefix(base, "tmux-") {
+		return socketClass{name: "other_uid_directory"}
+	}
+	if pathHasIsolatedAncestor(clean) {
+		return socketClass{name: "isolated_directory"}
+	}
+	info, err := os.Stat(clean)
+	if err != nil {
 		return socketClass{name: "unknown_directory"}
 	}
-	return socketClass{allowed: true, name: "current_uid_directory"}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || uint32(os.Getuid()) != stat.Uid {
+		return socketClass{name: "foreign_owner_directory"}
+	}
+	return socketClass{allowed: true, name: "explicit_uid_directory"}
 }
 
 func tmuxEnvSocket() string {
@@ -64,7 +78,7 @@ func pathHasIsolatedAncestor(path string) bool {
 	clean := filepath.Clean(path)
 	parts := strings.Split(clean, string(os.PathSeparator))
 	for i := 0; i < len(parts); i++ {
-		if base := parts[i]; strings.HasPrefix(base, "ta-") || strings.HasPrefix(base, "e2e-") || strings.HasPrefix(base, "agentmirror-tmux-test-") {
+		if base := parts[i]; (strings.HasPrefix(base, "ta-") && i < len(parts)-1) || strings.HasPrefix(base, "e2e-") || strings.HasPrefix(base, "agentmirror-tmux-test-") {
 			return true
 		}
 		if i+3 < len(parts) && parts[i] == ".team" && parts[i+1] == "nodes" && parts[i+3] == "tmp" {
@@ -80,19 +94,22 @@ func pathHasIsolatedAncestor(path string) bool {
 func classifySocket(path string) socketClass {
 	clean := filepath.Clean(path)
 	base := filepath.Base(clean)
-	if strings.HasPrefix(base, "ta-") {
-		return socketClass{name: "ta_private"}
+	// A live socket explicitly named by TMUX is a user-selected target even
+	// when tmux gives it a ta-* name. Check this before the isolated-name
+	// guard so the daemon does not discard the current user's active server.
+	if clean == tmuxEnvSocket() && tmuxEnvSocket() != "" {
+		return socketClass{allowed: true, name: "tmux_env_socket"}
 	}
 	if strings.HasPrefix(base, "test-") || strings.HasPrefix(base, "e2e-") || pathHasIsolatedAncestor(clean) {
 		return socketClass{name: "isolated_path"}
 	}
-	if clean == tmuxEnvSocket() && tmuxEnvSocket() != "" {
-		return socketClass{allowed: true, name: "tmux_env_socket"}
-	}
 	if base == "default" {
 		return socketClass{allowed: true, name: "default_socket"}
 	}
-	return socketClass{name: "unknown_socket_name"}
+	// The directory gate already restricts this to the current uid's tmux
+	// directory. Discover every other active socket there, including ta-* and
+	// operator-chosen names, while retaining the explicit test-tree exclusions.
+	return socketClass{allowed: true, name: "current_uid_socket"}
 }
 
 func logSocketDecision(logger *slog.Logger, path string, decision socketClass) {

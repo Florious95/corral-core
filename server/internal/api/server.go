@@ -10,7 +10,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -28,6 +30,17 @@ import (
 // loop is a single heartbeat that fans list_delta out to every live client.
 type Server struct {
 	log *slog.Logger
+
+	// Public host identity is separate from the private pairing token. The
+	// identity endpoints let Android validate a discovered endpoint before WS.
+	hostID          string
+	hostName        string
+	listenPort      int
+	pairingToken    string
+	identityMu      sync.RWMutex
+	tailnetIPs      []net.IP
+	addresses       func() []net.IP
+	identityLimiter *identityRateLimiter
 
 	tokenValidator TokenValidator
 	discoverer     Discoverer
@@ -137,20 +150,38 @@ func NewServer(opts Options) *Server {
 		log = slog.New(slog.DiscardHandler)
 	}
 
+	hostName := opts.HostName
+	if hostName == "" {
+		hostName, _ = os.Hostname()
+	}
+	if hostName == "" {
+		hostName = "agentmirror"
+	}
+	listenPort := opts.ListenPort
+	if listenPort <= 0 {
+		listenPort = 9900
+	}
 	s := &Server{
-		log:            log,
-		tokenValidator: opts.TokenValidator,
-		notifications:  opts.NotificationStore,
-		discoverer:     opts.Discoverer,
-		listInterval:   opts.ListInterval,
-		uploadDir:      opts.UploadDir,
-		maxUpload:      opts.MaxUploadBytes,
-		maxUploadDir:   defaultMaxUploadDirBytes,
-		maxInput:       opts.MaxInputBytes,
-		catalog:        newSessionCatalog(),
-		paneGeoms:      make(map[string]*paneGeometry),
-		trackers:       make(map[*wsConn]struct{}),
-		attachPreviews: make(map[string]attachPreviewEntry),
+		log:             log,
+		hostID:          opts.HostID,
+		hostName:        hostName,
+		listenPort:      listenPort,
+		pairingToken:    opts.Token,
+		tailnetIPs:      append([]net.IP(nil), opts.TailnetIPs...),
+		addresses:       opts.AddressProvider,
+		identityLimiter: newIdentityRateLimiter(),
+		tokenValidator:  opts.TokenValidator,
+		notifications:   opts.NotificationStore,
+		discoverer:      opts.Discoverer,
+		listInterval:    opts.ListInterval,
+		uploadDir:       opts.UploadDir,
+		maxUpload:       opts.MaxUploadBytes,
+		maxUploadDir:    defaultMaxUploadDirBytes,
+		maxInput:        opts.MaxInputBytes,
+		catalog:         newSessionCatalog(),
+		paneGeoms:       make(map[string]*paneGeometry),
+		trackers:        make(map[*wsConn]struct{}),
+		attachPreviews:  make(map[string]attachPreviewEntry),
 	}
 	if s.notifications == nil && !opts.DisableNotifications {
 		store, err := notify.New("")
@@ -242,8 +273,8 @@ func (s *Server) Close() {
 	}
 }
 
-// Handler returns the full HTTP handler: /ws (WebSocket) and /upload
-// (multipart image upload) on the same port (docs/protocol.md §8).
+// Handler returns the full HTTP handler: identity discovery, /ws (WebSocket),
+// and /upload (multipart image upload) on the same port.
 // @contract
 // @pre Server 由 NewServer 构造
 // @post 返回一个 http.Handler：/ws 升级为 WebSocket，/upload 接受 POST 图片上传；两路径共用同一端口
@@ -251,6 +282,8 @@ func (s *Server) Close() {
 // @inv 返回的 handler 持有 Server 引用；Server.Close 后不再接受新连接
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/pair/whoami", s.serveWhoami)
+	mux.HandleFunc("/pair/identify", s.serveIdentify)
 	mux.HandleFunc("/ws", s.handleWS)
 	mux.HandleFunc("/upload", s.handleUpload)
 	return mux

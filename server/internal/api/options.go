@@ -10,6 +10,7 @@ package api
 
 import (
 	"log/slog"
+	"net"
 	"time"
 
 	"github.com/agentmirror/agentmirror/internal/notify"
@@ -49,6 +50,20 @@ const (
 // Options configures the API server. Zero values mean "use the documented
 // default" so callers only set what they care about.
 type Options struct {
+	// HostID is the stable public identity returned by /pair/whoami and /pair/identify.
+	HostID string
+
+	// HostName is display-only metadata returned by /pair/whoami.
+	HostName string
+
+	// ListenPort is the daemon port advertised by /pair/whoami.
+	ListenPort int
+
+	// TailnetIPs and AddressProvider support identity binding on userspace-tsnet
+	// listeners. Nil uses the host's detected addresses.
+	TailnetIPs      []net.IP
+	AddressProvider func() []net.IP
+
 	// Token is the static pairing token every connection must present in its
 	// auth frame. It is compared constant-time and never logged or echoed
 	// (docs/protocol.md §9). Ignored when TokenValidator is set.
