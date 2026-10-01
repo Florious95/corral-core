@@ -304,9 +304,14 @@ func scanServer(ctx context.Context, socketPath string, logger *slog.Logger) ([]
 // so the caller can skip the offending pane without failing the whole scan.
 func parsePaneLine(line string) (Pane, bool) {
 	parts := strings.Split(line, "|")
-	if len(parts) != 9 {
+	// pane_title is user-controlled and may contain '|'. The dimension field
+	// is the penultimate field and remains numeric, so reconstruct the title
+	// from all fields between the fixed PID and that anchor. Keep the trailing
+	// window name strict to continue rejecting malformed extra fields.
+	if len(parts) < 9 {
 		return Pane{}, false
 	}
+	dimIndex := len(parts) - 2
 
 	win, err := strconv.Atoi(parts[1])
 	if err != nil {
@@ -319,7 +324,7 @@ func parsePaneLine(line string) (Pane, bool) {
 	if err != nil {
 		pid = 0
 	}
-	dims := strings.SplitN(parts[7], "x", 2)
+	dims := strings.SplitN(parts[dimIndex], "x", 2)
 	if len(dims) != 2 {
 		return Pane{}, false
 	}
@@ -335,8 +340,8 @@ func parsePaneLine(line string) (Pane, bool) {
 	return Pane{
 		Session:     parts[0],
 		WindowIndex: win,
-		WindowName:  parts[8],
-		PaneTitle:   parts[6],
+		WindowName:  parts[dimIndex+1],
+		PaneTitle:   strings.Join(parts[6:dimIndex], "|"),
 		PaneID:      parts[2],
 		CWD:         parts[3],
 		Command:     parts[4],

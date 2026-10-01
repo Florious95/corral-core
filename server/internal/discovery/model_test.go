@@ -35,6 +35,17 @@ func TestParsePaneLineValid(t *testing.T) {
 
 // TestParsePaneLineMalformed checks that malformed lines are rejected with
 // ok=false (and never panic), so the scan can skip them.
+func TestParsePaneLinePreservesPipeInPaneTitle(t *testing.T) {
+	line := "alpha|0|%8|/Users/alauda|node|99887|排查新加坡 VPN 82 主机代理故障 | alauda|71x67|node"
+	p, ok := parsePaneLine(line)
+	if !ok {
+		t.Fatalf("parsePaneLine(%q) unexpectedly rejected a title containing a pipe", line)
+	}
+	if p.PaneTitle != "排查新加坡 VPN 82 主机代理故障 | alauda" || p.Width != 71 || p.Height != 67 {
+		t.Fatalf("parsePaneLine(%q) = %+v, want preserved title and dimensions", line, p)
+	}
+}
+
 func TestParsePaneLineMalformed(t *testing.T) {
 	cases := []string{
 		"",                                       // empty
