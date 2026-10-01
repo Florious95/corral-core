@@ -12,6 +12,7 @@ package api
 // 常驻健康指标（「丢了多少数据」本该是这个产品的健康指标），不随取证移除。
 
 import (
+	"sync"
 	"sync/atomic"
 )
 
@@ -30,7 +31,7 @@ type SendQueueMetrics struct {
 	SnapshotsFromSubscribe atomic.Int64
 	// ConnectionsTotal 建立的 WS 连接数（serveConn 计数；连接数本身可能是重连线索）。
 	ConnectionsTotal atomic.Int64
-	// QueuePeak 单连接 sendCh 达到过的最大长度（满=256 的近似压力信号）。
+	// QueuePeak 单连接 sendCh 达到过的最大长度（满=512 的近似压力信号）。
 	QueuePeak atomic.Int64
 	// FramesSent 发出的总帧数（发送侧活动基线）。
 	FramesSent atomic.Int64
@@ -59,31 +60,121 @@ func (m *SendQueueMetrics) recordConnection() {
 }
 
 // ConnMetrics 单条连接自己的计数（P0 修复：teardown 行报本连接的数，字段前缀 conn.*）。
-// 单线程使用（连接自身的事件都在自己的读/写/relay goroutine 内），无需原子。
+// Relay、writer 与 teardown 可并发访问同一连接的指标；锁只保护这组低频
+// 诊断计数，避免 race detector 把真实溢出归因误报为日志竞态。
 type ConnMetrics struct {
+	mu sync.Mutex
+
 	DeltasDropped          int64
 	SnapshotsPushed        int64
 	SnapshotsFromResize    int64
 	SnapshotsFromSubscribe int64
 	FramesSent             int64
+
+	// Wire counters include the complete binary WebSocket message after the
+	// writer successfully writes it.
+	DeltaWireBytes    int64
+	SnapshotWireBytes int64
+
+	// Reflow counters count bytes drained from pipe-pane while the resize gate
+	// is active. They are separate from queue drops: redraw bytes are suppressed
+	// by policy, not lost to a full send queue.
+	ReflowDiscardedBytes  int64
+	ReflowDiscardedChunks int64
+	ReflowEpochs          int64
+}
+
+// ConnMetricsSnapshot is a value copy; it never copies the live metrics mutex.
+type ConnMetricsSnapshot struct {
+	DeltasDropped          int64
+	SnapshotsPushed        int64
+	SnapshotsFromResize    int64
+	SnapshotsFromSubscribe int64
+	FramesSent             int64
+	DeltaWireBytes         int64
+	SnapshotWireBytes      int64
+	ReflowDiscardedBytes   int64
+	ReflowDiscardedChunks  int64
+	ReflowEpochs           int64
 }
 
 // recordDrop 记录本连接因队列满丢弃的 delta。
-func (m *ConnMetrics) recordDrop() { m.DeltasDropped++ }
+func (m *ConnMetrics) recordDrop() {
+	m.mu.Lock()
+	m.DeltasDropped++
+	m.mu.Unlock()
+}
 
 // recordSnapshot 记录本连接发出的快照帧（含首帧订阅）。
-func (m *ConnMetrics) recordSnapshot() { m.SnapshotsPushed++ }
+func (m *ConnMetrics) recordSnapshot() {
+	m.mu.Lock()
+	m.SnapshotsPushed++
+	m.mu.Unlock()
+}
 
 // recordResizeSnapshot 记录本连接由 resize 补发的快照。
-func (m *ConnMetrics) recordResizeSnapshot() { m.SnapshotsFromResize++ }
+func (m *ConnMetrics) recordResizeSnapshot() {
+	m.mu.Lock()
+	m.SnapshotsFromResize++
+	m.mu.Unlock()
+}
 
 // recordSubscribe 记录本连接的订阅次数（含重复订阅）。
 func (m *ConnMetrics) recordSubscribe() {
+	m.mu.Lock()
 	m.SnapshotsFromSubscribe++
+	m.mu.Unlock()
 }
 
 // recordFramesSent 记录本连接发出的总帧数。
-func (m *ConnMetrics) recordFramesSent() { m.FramesSent++ }
+func (m *ConnMetrics) recordFramesSent() {
+	m.mu.Lock()
+	m.FramesSent++
+	m.mu.Unlock()
+}
+
+// recordWire records bytes after a binary frame has been written successfully.
+func (m *ConnMetrics) recordWire(snapshot bool, bytes int) {
+	m.mu.Lock()
+	if snapshot {
+		m.SnapshotWireBytes += int64(bytes)
+	} else {
+		m.DeltaWireBytes += int64(bytes)
+	}
+	m.mu.Unlock()
+}
+
+// recordReflowDiscarded records one pipe chunk drained during a reflow gate.
+func (m *ConnMetrics) recordReflowDiscarded(bytes int) {
+	m.mu.Lock()
+	m.ReflowDiscardedBytes += int64(bytes)
+	m.ReflowDiscardedChunks++
+	m.mu.Unlock()
+}
+
+// recordReflowEpoch records one resize gate coordination epoch.
+func (m *ConnMetrics) recordReflowEpoch() {
+	m.mu.Lock()
+	m.ReflowEpochs++
+	m.mu.Unlock()
+}
+
+func (m *ConnMetrics) snapshot() ConnMetricsSnapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return ConnMetricsSnapshot{
+		DeltasDropped:          m.DeltasDropped,
+		SnapshotsPushed:        m.SnapshotsPushed,
+		SnapshotsFromResize:    m.SnapshotsFromResize,
+		SnapshotsFromSubscribe: m.SnapshotsFromSubscribe,
+		FramesSent:             m.FramesSent,
+		DeltaWireBytes:         m.DeltaWireBytes,
+		SnapshotWireBytes:      m.SnapshotWireBytes,
+		ReflowDiscardedBytes:   m.ReflowDiscardedBytes,
+		ReflowDiscardedChunks:  m.ReflowDiscardedChunks,
+		ReflowEpochs:           m.ReflowEpochs,
+	}
+}
 
 // recordDrop 递增丢弃计数。
 func (m *SendQueueMetrics) recordDrop() {

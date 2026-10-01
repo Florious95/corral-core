@@ -1,6 +1,7 @@
 package protocol_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -336,5 +337,62 @@ func TestPaneModeChangedMarshal(t *testing.T) {
 	}
 	if p.Ref != "s1" || !p.InCopyMode {
 		t.Errorf("payload = %+v", p)
+	}
+}
+
+func TestSessionFourAxisJSONAndValidation(t *testing.T) {
+	name := "seat"
+	s := protocol.Session{Ref: "r", Name: "n", WindowName: "node", WindowIndex: "3", Cwd: "/w", Rows: 24, Cols: 80, Provider: "pi", Activity: "working", SessionName: &name, Health: "normal", Status: "working"}
+	frame := protocol.Level2Frame{Workspace: "/w", Seq: 1, Sessions: []protocol.Session{s}}
+	got := roundTrip(t, frame).(protocol.Level2Frame).Sessions[0]
+	if got.Provider != "pi" || got.Activity != "working" || got.Status != got.Activity || got.SessionName == nil || *got.SessionName != "seat" || got.Health != "normal" || got.WindowName != "node" || got.WindowIndex != "3" {
+		t.Fatalf("round trip=%+v", got)
+	}
+	wire, err := protocol.MarshalFrame(frame)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var envelope struct{ Payload json.RawMessage `json:"payload"` }
+	if err := json.Unmarshal(wire, &envelope); err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+	var payload struct{ Sessions []struct {
+		WindowName  string `json:"window_name"`
+		WindowIndex string `json:"window_index"`
+	} `json:"sessions"` }
+	if err := json.Unmarshal(envelope.Payload, &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if len(payload.Sessions) != 1 || payload.Sessions[0].WindowName != "node" {
+		t.Fatalf("structural JSON fields missing: %s", envelope.Payload)
+	}
+	if payload.Sessions[0].WindowIndex != "3" {
+		t.Fatalf("window_index JSON type/value = %#v, want string \"3\"", payload.Sessions[0].WindowIndex)
+	}
+	s.SessionName = nil
+	data, err := protocol.MarshalFrame(protocol.Level2Frame{Workspace: "/w", Seq: 1, Sessions: []protocol.Session{s}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(data, []byte(`"session_name"`)) {
+		t.Fatalf("nil session_name must be omitted (20260822 kotlinx non-null String): %s", data)
+	}
+	nullWire := []byte(`{"v":1,"type":"level2_frame","payload":{"workspace":"/w","seq":1,"sessions":[{"ref":"r","name":"n","window_name":"node","window_index":"3","cwd":"/w","title":"","provider":"pi","activity":"working","session_name":null,"health":"normal","status":"working","rows":24,"cols":80}]}}`)
+	decoded, err := protocol.UnmarshalFrame(nullWire)
+	if err != nil {
+		t.Fatalf("historical session_name JSON null must still decode: %v", err)
+	}
+	gotNull := decoded.(protocol.Level2Frame).Sessions[0]
+	if gotNull.SessionName != nil {
+		t.Fatalf("JSON null session_name should decode to nil pointer, got %#v", gotNull.SessionName)
+	}
+	for _, bad := range []protocol.Session{
+		{Ref: "r", Cwd: "/w", Rows: 1, Cols: 1, Provider: "pi", Activity: "busy", Health: "normal", Status: "busy"},
+		{Ref: "r", Cwd: "/w", Rows: 1, Cols: 1, Provider: "pi", Activity: "working", Health: "healthy", Status: "working"},
+		{Ref: "r", Cwd: "/w", Rows: 1, Cols: 1, Provider: "pi", Activity: "working", Health: "normal", Status: "idle"},
+	} {
+		if bad.Validate() == nil {
+			t.Fatalf("invalid session accepted: %+v", bad)
+		}
 	}
 }

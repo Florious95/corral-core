@@ -14,10 +14,15 @@ import (
 
 func (Auth) FrameType() FrameType               { return TypeAuth }
 func (AuthAck) FrameType() FrameType            { return TypeAuthAck }
+func (CreateAgent) FrameType() FrameType        { return TypeCreateAgent }
+func (CreateAgentResult) FrameType() FrameType  { return TypeCreateAgentResult }
+func (CloseSession) FrameType() FrameType       { return TypeCloseSession }
+func (CloseSessionResult) FrameType() FrameType { return TypeCloseSessionResult }
 func (List) FrameType() FrameType               { return TypeList }
 func (Listing) FrameType() FrameType            { return TypeListing }
 func (ListDelta) FrameType() FrameType          { return TypeListDelta }
 func (Subscribe) FrameType() FrameType          { return TypeSubscribe }
+func (PresenceUpdate) FrameType() FrameType     { return TypePresenceUpdate }
 func (Unsubscribe) FrameType() FrameType        { return TypeUnsubscribe }
 func (Input) FrameType() FrameType              { return TypeInput }
 func (InputAck) FrameType() FrameType           { return TypeInputAck }
@@ -62,22 +67,88 @@ func (a AuthAck) Validate() error {
 	if a.NotificationState != nil && !a.OK {
 		return fmt.Errorf("%w: rejected auth_ack must not carry notification_state", ErrInvalidField)
 	}
+	seen := make(map[string]struct{}, len(a.AgentLaunchers))
+	for _, launcher := range a.AgentLaunchers {
+		if launcher.Provider == "" || launcher.DisplayName == "" {
+			return fmt.Errorf("%w: auth_ack agent launcher provider/display_name must be non-empty", ErrInvalidField)
+		}
+		if launcher.Naming != "cli" && launcher.Naming != "tmux" {
+			return fmt.Errorf("%w: auth_ack agent launcher naming must be cli or tmux", ErrInvalidField)
+		}
+		if _, ok := seen[launcher.Provider]; ok {
+			return fmt.Errorf("%w: duplicate auth_ack agent launcher provider %q", ErrInvalidField, launcher.Provider)
+		}
+		seen[launcher.Provider] = struct{}{}
+	}
 	return nil
+}
+
+// Validate reports whether a create-agent request has a usable correlation id.
+// Empty semantic fields are left for the typed result path so clients receive
+// the controlled invalid_field reason rather than an unrelated ErrorFrame.
+func (a CreateAgent) Validate() error {
+	if a.ReqID == 0 {
+		return fmt.Errorf("%w: create_agent req_id must be >= 1", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether a close-session request has a usable correlation id
+// and a non-empty target ref.
+func (s CloseSession) Validate() error {
+	if s.ReqID == 0 {
+		return fmt.Errorf("%w: close_session req_id must be >= 1", ErrInvalidField)
+	}
+	if s.Ref == "" {
+		return fmt.Errorf("%w: close_session ref must be non-empty", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether a close-session result is unambiguous.
+func (r CloseSessionResult) Validate() error {
+	if r.ReqID == 0 {
+		return fmt.Errorf("%w: close_session_result req_id must be >= 1", ErrInvalidField)
+	}
+	if r.OK && r.Reason != "" {
+		return fmt.Errorf("%w: accepted close_session_result must not carry a reason", ErrInvalidField)
+	}
+	if !r.OK && r.Reason == "" {
+		return fmt.Errorf("%w: failed close_session_result must carry a reason", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether a create-agent result is unambiguous.
+func (r CreateAgentResult) Validate() error {
+	if r.ReqID == 0 {
+		return fmt.Errorf("%w: create_agent_result req_id must be >= 1", ErrInvalidField)
+	}
+	if r.OK {
+		if r.Ref == "" || r.Name == "" || (r.Naming != "cli" && r.Naming != "tmux") || r.Reason != "" {
+			return fmt.Errorf("%w: successful create_agent_result must carry ref/name/naming and no reason", ErrInvalidField)
+		}
+		return nil
+	}
+	if r.Reason == "" || r.Ref != "" || r.Name != "" || r.Naming != "" {
+		return fmt.Errorf("%w: failed create_agent_result must carry only a reason", ErrInvalidField)
+	}
+	switch r.Reason {
+	case string(CreateAgentInvalidField), string(CreateAgentTargetNotFound), string(CreateAgentProviderUnavailable), string(CreateAgentUnsupportedBypass), string(CreateAgentLaunchFailed):
+		return nil
+	default:
+		return fmt.Errorf("%w: unknown create_agent reason %q", ErrInvalidField, r.Reason)
+	}
 }
 
 func validateCapabilities(caps []string) error {
 	if len(caps) > 32 {
 		return fmt.Errorf("%w: capabilities must contain at most 32 entries", ErrInvalidField)
 	}
-	seen := make(map[string]struct{}, len(caps))
 	for _, cap := range caps {
 		if cap == "" || len(cap) > 64 || !isCapability(cap) {
 			return fmt.Errorf("%w: invalid capability", ErrInvalidField)
 		}
-		if _, ok := seen[cap]; ok {
-			continue
-		}
-		seen[cap] = struct{}{}
 	}
 	return nil
 }
@@ -108,6 +179,9 @@ func (w Workspace) Validate() error {
 	if w.SessionCount < 0 {
 		return fmt.Errorf("%w: workspace session_count must be >= 0", ErrInvalidField)
 	}
+	if w.WorkingCount < 0 || w.WorkingCount > w.SessionCount {
+		return fmt.Errorf("%w: workspace working_count must be between 0 and session_count", ErrInvalidField)
+	}
 	for _, s := range w.Sessions {
 		if err := s.Validate(); err != nil {
 			return err
@@ -128,8 +202,25 @@ func (s Session) Validate() error {
 	if s.Rows == 0 || s.Cols == 0 {
 		return fmt.Errorf("%w: session rows/cols must be >= 1", ErrInvalidField)
 	}
-	if s.Status != "" && s.Status != SessionStatusWorking && s.Status != SessionStatusIdle && s.Status != SessionStatusUnknown {
-		return fmt.Errorf("%w: session status %q is not working/idle/unknown", ErrInvalidField, s.Status)
+	// Pre-four-axis fixtures/peers may omit every additive field together.
+	// Candidate output never takes this branch; partial/new values are strict.
+	if s.Provider == "" && s.Activity == "" && s.Health == "" {
+		if s.Status != "" && s.Status != SessionStatusWorking && s.Status != SessionStatusIdle && s.Status != SessionStatusUnknown {
+			return fmt.Errorf("%w: legacy session status %q is not working/idle/unknown", ErrInvalidField, s.Status)
+		}
+		return nil
+	}
+	if s.Provider == "" {
+		return fmt.Errorf("%w: session provider must be non-empty", ErrInvalidField)
+	}
+	if s.Activity != SessionStatusWorking && s.Activity != SessionStatusIdle && s.Activity != SessionStatusUnknown {
+		return fmt.Errorf("%w: session activity %q is not working/idle/unknown", ErrInvalidField, s.Activity)
+	}
+	if s.Status != "" && s.Status != s.Activity {
+		return fmt.Errorf("%w: session status %q diverges from activity %q", ErrInvalidField, s.Status, s.Activity)
+	}
+	if s.Health != SessionHealthNormal && s.Health != SessionHealthAbnormal && s.Health != SessionHealthUnknown {
+		return fmt.Errorf("%w: session health %q is not normal/abnormal/unknown", ErrInvalidField, s.Health)
 	}
 	return nil
 }
@@ -180,14 +271,30 @@ func (d ListDelta) Validate() error {
 	return nil
 }
 
-// Validate reports whether the subscription is well-formed: a non-empty ref
-// and nonzero client dimensions.
+// Validate reports whether the subscription is well-formed: a non-empty ref,
+// nonzero client dimensions, and a known client type. Empty ClientType remains
+// accepted for wire compatibility with pre-presence peers; such peers are not
+// included in presence counts.
 func (s Subscribe) Validate() error {
 	if s.Ref == "" {
 		return fmt.Errorf("%w: subscribe ref must be non-empty", ErrInvalidField)
 	}
 	if s.Rows == 0 || s.Cols == 0 {
 		return fmt.Errorf("%w: subscribe rows/cols must be >= 1", ErrInvalidField)
+	}
+	if s.ClientType != "" && s.ClientType != ClientTypeMobile && s.ClientType != ClientTypeDesktop {
+		return fmt.Errorf("%w: subscribe client_type must be mobile or desktop", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether a presence update is internally consistent.
+func (p PresenceUpdate) Validate() error {
+	if p.Ref == "" {
+		return fmt.Errorf("%w: presence_update ref must be non-empty", ErrInvalidField)
+	}
+	if p.HasMobile != (p.MobileCount > 0) {
+		return fmt.Errorf("%w: presence_update has_mobile must equal mobile_count > 0", ErrInvalidField)
 	}
 	return nil
 }

@@ -603,6 +603,13 @@ class WorkspaceViewModel(
         )
     }
 
+    /** 已见过的会话的 canonical provider（二级缓存 → 当前单例）；未见过或 unknown 返回 null，不猜。 */
+    fun providerForRef(ref: String): String? =
+        (level2Cache.values.asSequence().flatMap { it.sessions.asSequence() } + _level2.value.sessions.asSequence())
+            .firstOrNull { it.ref == ref }
+            ?.provider
+            ?.takeIf { it.isNotEmpty() && it != "unknown" }
+
     /**
      * 会话页在屏：订当前会话工作区的 level2，给顶栏灯和「查看」同一份推送。
      *

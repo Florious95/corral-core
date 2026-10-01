@@ -89,8 +89,12 @@ class MainNavState(initialShowPairing: Boolean) {
     var sessionWorkspaceHint: String? = null
         private set
 
-    /** 从消息中心 / 系统通知直达终端：返回时回到消息中心。 */
+    /**
+     * 从消息中心 / 系统通知直达终端：先选中目标工作区（跨工作区也落到该会话自己的二级），
+     * 再推会话页；返回时回到消息中心，再返回落在该工作区的会话列表。
+     */
     fun openSessionFromMessages(ref: String, name: String, workspace: String?) {
+        workspace?.takeIf { it.isNotBlank() }?.let { selectedWorkspaceCwd = it }
         showMessageCenter = true
         openSession(ref, name)
         sessionWorkspaceHint = workspace

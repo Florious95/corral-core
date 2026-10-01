@@ -55,8 +55,58 @@ type Auth struct {
 type AuthAck struct {
 	OK                bool               `json:"ok"`
 	Reason            string             `json:"reason,omitempty"`
+	AgentLaunchers    []AgentLauncher    `json:"agent_launchers,omitempty"`
 	Capabilities      []string           `json:"capabilities,omitempty"`
 	NotificationState *NotificationState `json:"notification_state,omitempty"`
+}
+
+// AgentLauncher describes one provider executable the server can launch. The
+// capability list is deliberately explicit: clients may only offer providers
+// and flags that this daemon verified at startup.
+type AgentLauncher struct {
+	Provider       string `json:"provider"`
+	DisplayName    string `json:"display_name"`
+	SupportsBypass bool   `json:"supports_bypass"`
+	Naming         string `json:"naming"`
+}
+
+// CreateAgent asks the server to create a child agent from an existing pane.
+// AnchorRef is opaque to clients and resolves to the exact socket + pane;
+// Workspace is checked against that resolved pane's cwd.
+type CreateAgent struct {
+	ReqID     uint32 `json:"req_id"`
+	Workspace string `json:"workspace"`
+	AnchorRef string `json:"anchor_ref"`
+	Provider  string `json:"provider"`
+	Name      string `json:"name"`
+	Bypass    bool   `json:"bypass"`
+}
+
+// CreateAgentResult is the typed result of CreateAgent. Failed requests carry
+// only a controlled Reason; launch errors are never echoed to the client.
+type CreateAgentResult struct {
+	ReqID  uint32 `json:"req_id"`
+	OK     bool   `json:"ok"`
+	Ref    string `json:"ref,omitempty"`
+	Name   string `json:"name,omitempty"`
+	Naming string `json:"naming,omitempty"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// CloseSession asks the server to terminate exactly the pane addressed by Ref.
+// Ref is the opaque socket + pane identity emitted in Session listings; the
+// server never widens this request to a window or session operation.
+type CloseSession struct {
+	ReqID uint32 `json:"req_id"`
+	Ref   string `json:"ref"`
+}
+
+// CloseSessionResult is the typed result of CloseSession. A successful result
+// has no reason; failures carry a stable, human-safe reason string.
+type CloseSessionResult struct {
+	ReqID  uint32 `json:"req_id"`
+	OK     bool   `json:"ok"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // List requests a fresh full listing (C→S). ReqID correlates the Listing
@@ -68,44 +118,65 @@ type List struct {
 // Workspace is one first-level group of the two-level model (requirement
 // 002): it aggregates every session whose cwd equals Cwd. In a full Listing,
 // Sessions carries the group's members; in a ListDelta's ChangedWorkspaces it
-// is empty and only the session count is meaningful.
+// is empty and only the aggregate counts are meaningful. WorkingCount is the
+// number of identified panes currently classified as working.
 type Workspace struct {
 	Cwd          string    `json:"cwd"`
 	SessionCount int       `json:"session_count"`
+	WorkingCount int       `json:"working_count"`
 	Sessions     []Session `json:"sessions,omitempty"`
 }
 
 // Session is one second-level entry of the model (requirement 002): a single
 // mirrored agent CLI pane. Ref is a server-assigned opaque string that the
 // client uses to address subscribe / input / scrollback / resize; it is
-// distinct from the display-only Name. Rows/Cols are the pane's current
-// dimensions.
+// distinct from the display-only Name. WindowName and WindowIndex are the
+// structural tmux fields kept separately so a display projection can never
+// overwrite identity metadata. WindowIndex is encoded as a string to match
+// the existing App DTO contract. Rows/Cols are the pane's current dimensions.
+//
+// Name is the server-computed display label. One Provider-agnostic algorithm
+// in the serve process writes it from tmux window_name, pane_title, cwd and
+// the optional foreground command. Clients must render Name and must not
+// rebuild it from Provider, Title, WindowName, native session_name, Cwd, or
+// Ref. Title stays the verbatim OSC pane title (requirement 061).
 //
 // Title is the pane's OSC title, transmitted VERBATIM (requirement 061:
-// 不 trim、不剥前缀). It is display-only: never used for identity — Ref/Name
-// come from tmux structural fields, and the client must never derive any
+// 不 trim、不剥前缀). It is display-only: never used for identity — Ref and
+// the structural fields come from tmux, and the client must never derive any
 // addressing from Title.
 //
-// Status is the server-classified badge (requirement 061). It is only one of
-// SessionStatusWorking / SessionStatusIdle / SessionStatusUnknown. The client
-// must not re-derive status from Title.
+// Provider, Activity, SessionName, and Health are independent nodeprobe axes.
+// Status is the legacy alias and always equals Activity on current output. The
+// client must not re-derive any axis from Title.
 type Session struct {
-	Ref      string `json:"ref"`
-	Name     string `json:"name"`
-	Cwd      string `json:"cwd"`
-	Title    string `json:"title"`
-	Status   string `json:"status,omitempty"`
-	Provider string `json:"provider,omitempty"`
-	Rows     uint16 `json:"rows"`
-	Cols     uint16 `json:"cols"`
+	Ref         string `json:"ref"`
+	Name        string `json:"name"`
+	WindowName  string `json:"window_name"`
+	WindowIndex string `json:"window_index"`
+	Cwd         string `json:"cwd"`
+	Title       string `json:"title"`
+	Provider    string `json:"provider"`
+	Activity    string `json:"activity"`
+	// Native nodeprobe metadata, not display Name. omitempty: JSON null here
+	// is rejected by the 20260822 kotlinx Session.sessionName (non-null String)
+	// and drops the whole listing frame. Absent and "" both decode as empty.
+	SessionName *string `json:"session_name,omitempty"`
+	Health      string  `json:"health"`
+	Status      string  `json:"status"`
+	Rows        uint16  `json:"rows"`
+	Cols        uint16  `json:"cols"`
 }
 
 // Closed set for Session.Status (requirement 061). Unknown glyphs stay
 // unknown — never fall back to idle.
 const (
-	SessionStatusWorking = "working"
-	SessionStatusIdle    = "idle"
-	SessionStatusUnknown = "unknown"
+	SessionStatusWorking  = "working"
+	SessionStatusIdle     = "idle"
+	SessionStatusUnknown  = "unknown"
+	SessionHealthNormal   = "normal"
+	SessionHealthAbnormal = "abnormal"
+	SessionHealthUnknown  = "unknown"
 )
 
 // Listing is the full two-level workspace/session model (S→C, reply to List).
@@ -141,9 +212,21 @@ type ListDelta struct {
 // Subscribe is idempotent for the same ref: re-subscribing replays a fresh
 // snapshot and re-streams (requirement 004 reconnect semantics).
 type Subscribe struct {
-	Ref  string `json:"ref"`
-	Rows uint16 `json:"rows"`
-	Cols uint16 `json:"cols"`
+	Ref            string `json:"ref"`
+	Rows           uint16 `json:"rows"`
+	Cols           uint16 `json:"cols"`
+	ClientType     string `json:"client_type,omitempty"`
+	RetainPaneSize *bool  `json:"retain_pane_size,omitempty"`
+}
+
+// PresenceUpdate reports the currently subscribed client types for one ref.
+// Counts describe active subscriptions, not physical devices. It is sent to
+// the remaining subscribers after admission or teardown.
+type PresenceUpdate struct {
+	Ref          string `json:"ref"`
+	HasMobile    bool   `json:"has_mobile"`
+	MobileCount  uint32 `json:"mobile_count"`
+	DesktopCount uint32 `json:"desktop_count"`
 }
 
 // Unsubscribe stops mirroring a session (C→S). It is idempotent: unsubscribing
@@ -439,13 +522,13 @@ type Level2Unsubscribe struct {
 // Level2Frame is the server-pushed second-level snapshot (S→C; requirement 061).
 // It carries one workspace's sessions as a full replace, pushed only when the
 // snapshot changed. Sessions carry structural identity, verbatim Title, and
-// Status classified from the title prefix glyph.
+// the accepted nodeprobe four-axis observation.
 //
 // @contract
 // @pre Workspace 非空、Seq >= 1
 // @post 客户端以 Sessions 整体替换该工作区的二级视图
 // @err none
-// @inv Title 逐字节原样透传；Status 只来自服务端符号表
+// @inv Title 逐字节原样透传；Status 始终等于 Activity
 type Level2Frame struct {
 	Workspace string    `json:"workspace"`
 	Seq       uint64    `json:"seq"`

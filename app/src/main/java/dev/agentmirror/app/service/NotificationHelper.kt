@@ -24,8 +24,10 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -68,11 +70,30 @@ class NotificationHelper(context: Context) {
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply {
                 description = "Agent 主动推送的任务完成与提醒"
+                // 横幅弹出依赖 HIGH + 声音/振动：显式写明，不依赖 ROM 的渠道缺省值。
                 enableVibration(true)
+                vibrationPattern = TASK_VIBRATION
+                setSound(
+                    Settings.System.DEFAULT_NOTIFICATION_URI,
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
+                )
+                enableLights(true)
+                setShowBadge(true)
                 lockscreenVisibility = Notification.VISIBILITY_PRIVATE
             },
         )
     }
+
+    /**
+     * 任务渠道能否以横幅弹出：渠道被用户 / ROM 降到 HIGH 以下时只进通知栏不弹出。
+     * 渠道尚未创建视为可弹（createChannels 会按 HIGH 建）。
+     */
+    fun taskAlertsPopUp(): Boolean =
+        (nm.getNotificationChannel(CHANNEL_AGENT_TASKS)?.importance ?: NotificationManager.IMPORTANCE_HIGH) >=
+            NotificationManager.IMPORTANCE_HIGH
 
     /**
      * 发布一条 Agent 任务系统通知（正文 BigTextStyle 可展开全文）。
@@ -172,6 +193,8 @@ class NotificationHelper(context: Context) {
 
         /** Agent 任务消息渠道（HIGH，默认声音 + 振动）。 */
         const val CHANNEL_AGENT_TASKS = "agent_tasks_v1"
+
+        private val TASK_VIBRATION = longArrayOf(0, 220, 120, 220)
 
         /** 任务通知 id；每条靠 tag `task:<host_id>:<id>` 区分，不与常驻 id=1 冲突。 */
         const val ID_AGENT_TASK = 2

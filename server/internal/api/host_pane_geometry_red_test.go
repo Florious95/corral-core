@@ -16,6 +16,7 @@ package api
 //   「停在变形」——已按 leader 指示删除，只保留能真判别的两条 + 守卫。
 
 import (
+	"bytes"
 	"context"
 	"net/http/httptest"
 	"strings"
@@ -55,22 +56,102 @@ func waitPaneSize(te *tmuxEnv, want string) string {
 func subscribeAndDrain(te *tmuxEnv, rows, cols uint16) {
 	te.t.Helper()
 	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: rows, Cols: cols})
-	readBinary(te.wsEnv)
+	readBinary(te.wsEnv, te.ref())
 }
 
-// readBinary 读一条 binary 帧（snapshot/delta）。
-func readBinary(e *wsEnv) {
+// readBinary reads a bounded subscribe snapshot and pins its kind/ref so a
+// stray delta cannot make a lifecycle precondition pass.
+func readBinary(e *wsEnv, ref string) protocol.BinaryPayload {
 	e.t.Helper()
-	typ, data, err := e.conn.Read(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	typ, data, err := e.conn.Read(ctx)
 	if err != nil {
 		e.t.Fatalf("read binary: %v", err)
 	}
 	if typ != websocket.MessageBinary {
 		e.t.Fatalf("expected binary message, got %v", typ)
 	}
-	if _, err := protocol.DecodeBinary(data); err != nil {
+	payload, err := protocol.DecodeBinary(data)
+	if err != nil {
 		e.t.Fatalf("decode binary %q: %v", data, err)
 	}
+	if payload.Kind != protocol.KindSnapshot {
+		e.t.Fatalf("expected snapshot kind, got %d", payload.Kind)
+	}
+	if payload.Ref != ref {
+		e.t.Fatalf("snapshot ref = %q, want %q", payload.Ref, ref)
+	}
+	return payload
+}
+
+func waitMirrorAndInputAck(e *wsEnv, want string, reqID uint32) protocol.InputAck {
+	e.t.Helper()
+	// Reuse the existing bounded reader/ack oracle while adapting the
+	// second-client wsEnv to the tmuxEnv receiver it was written for.
+	return (&tmuxEnv{t: e.t, wsEnv: e}).waitForMirrorAndInputAck(want, reqID)
+}
+
+func waitInputFailureAck(t *testing.T, e *wsEnv, reqID uint32) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Until(deadline))
+		typ, data, err := e.conn.Read(ctx)
+		cancel()
+		if err != nil {
+			t.Fatalf("read input failure ack: %v", err)
+		}
+		if typ == websocket.MessageBinary {
+			continue
+		}
+		frame, err := protocol.UnmarshalFrame(data)
+		if err != nil {
+			t.Fatalf("decode input failure ack: %v", err)
+		}
+		if ack, ok := frame.(protocol.InputAck); ok && ack.ReqID == reqID {
+			if ack.OK {
+				t.Fatalf("input req_id=%d unexpectedly succeeded after unsubscribe", reqID)
+			}
+			return
+		}
+	}
+	t.Fatalf("input failure ack timeout req_id=%d", reqID)
+}
+
+// waitResizeSnapshot waits for the snapshot produced by one real geometry
+// change and checks its ref, live content, and cursor re-anchor. Binary deltas
+// and control frames may interleave on either subscriber's connection.
+func waitResizeSnapshot(t *testing.T, te *tmuxEnv, e *wsEnv, marker string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Until(deadline))
+		typ, data, err := e.conn.Read(ctx)
+		cancel()
+		if err != nil {
+			t.Fatalf("read resize snapshot: %v", err)
+		}
+		if typ != websocket.MessageBinary {
+			continue
+		}
+		payload, err := protocol.DecodeBinary(data)
+		if err != nil {
+			t.Fatalf("decode resize binary: %v", err)
+		}
+		if payload.Kind != protocol.KindSnapshot {
+			continue
+		}
+		if payload.Ref != te.ref() {
+			t.Fatalf("resize snapshot ref = %q, want %q", payload.Ref, te.ref())
+		}
+		if marker != "" && !bytes.Contains(payload.Data, []byte(marker)) {
+			t.Fatalf("resize snapshot misses live marker %q: %q", marker, payload.Data)
+		}
+		assertSnapshotCursorSuffix(t, te, payload.Data)
+		return
+	}
+	t.Fatalf("resize snapshot timeout for ref %q", te.ref())
 }
 
 // secondClient 复用同一个 Server 建第二个客户端（同一 discovery model 指向同一 pane）。
@@ -103,6 +184,8 @@ func TestFirstEntryResizesPane(t *testing.T) {
 	if got, want := paneSize(te), "108x96"; got != want {
 		t.Fatalf("首次进会话必须 resize pane：期望 108x96，实际 %s", got)
 	}
+	markPerf17Stage(t, "done")
+	finishPerf17Error(t, te, 1711)
 }
 
 // --- 核心红测 1：异常断连必须恢复 pane 几何 ---
@@ -138,12 +221,12 @@ func TestSecondSubscriberDoesNotRebase(t *testing.T) {
 	// 客户端 A：订阅 108x96。
 	a := te.wsEnv
 	a.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 96, Cols: 108})
-	readBinary(a)
+	readBinary(a, te.ref())
 
 	// 客户端 B：订阅 60x40（同 pane，不同尺寸）。
 	b := secondClient(t, a.srv)
 	b.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 40, Cols: 60})
-	readBinary(b)
+	readBinary(b, te.ref())
 
 	// A 异常断连（teardown 不恢复，当前代码）。
 	_ = a.conn.CloseNow()
@@ -156,5 +239,89 @@ func TestSecondSubscriberDoesNotRebase(t *testing.T) {
 	got := waitPaneSize(te, "80x24")
 	if got != "80x24" {
 		t.Fatalf("全部退订后 pane 必须恢复到 pane 级原始基线 80x24，实际 %s（当前代码红：B 把 A 改后的 108x96 当基线）", got)
+	}
+}
+
+// TestMultipleSubscribersAlternateResizeRestoresOriginalPaneSize exercises
+// both last-subscriber exit orders after alternating real resizes. Each fresh
+// snapshot must retain the pane ref, live marker, and cursor anchor; only the
+// final release may restore the independently recorded 80x24 baseline.
+func TestMultipleSubscribersAlternateResizeRestoresOriginalPaneSize(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		firstA bool
+	}{
+		{name: "A-exits-first", firstA: true},
+		{name: "B-exits-first", firstA: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			te := startTmuxEnv(t, "cat")
+			original := paneSize(te)
+			if original != "80x24" {
+				t.Fatalf("independent original pane size = %s, want 80x24", original)
+			}
+			a := te.wsEnv
+			a.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 96, Cols: 108})
+			first := readBinary(a, te.ref())
+			if first.Ref != te.ref() {
+				t.Fatalf("first snapshot ref = %q, want %q", first.Ref, te.ref())
+			}
+			assertSnapshotCursorSuffix(t, te, first.Data)
+			if got := paneSize(te); got != "108x96" {
+				t.Fatalf("A subscribe pane size = %s, want 108x96", got)
+			}
+
+			const marker = "PERF17_LIFECYCLE_MARK"
+			a.sendFrame(&protocol.Input{ReqID: 1800, Ref: te.ref(), Text: marker})
+			te.waitForMirror(marker)
+
+			a.sendFrame(&protocol.Resize{Ref: te.ref(), Rows: 40, Cols: 100})
+			waitResizeSnapshot(t, te, a, marker)
+			if got := paneSize(te); got != "100x40" {
+				t.Fatalf("A resize pane size = %s, want 100x40", got)
+			}
+
+			b := secondClient(t, a.srv)
+			b.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 30, Cols: 70})
+			second := readBinary(b, te.ref())
+			if second.Ref != te.ref() || !bytes.Contains(second.Data, []byte(marker)) {
+				t.Fatalf("B snapshot ref/content mismatch: ref=%q data=%q", second.Ref, second.Data)
+			}
+			assertSnapshotCursorSuffix(t, te, second.Data)
+			if got := paneSize(te); got != "70x30" {
+				t.Fatalf("B subscribe pane size = %s, want 70x30", got)
+			}
+
+			b.sendFrame(&protocol.Resize{Ref: te.ref(), Rows: 20, Cols: 60})
+			waitResizeSnapshot(t, te, b, marker)
+			if got := paneSize(te); got != "60x20" {
+				t.Fatalf("B resize pane size = %s, want 60x20", got)
+			}
+
+			a.sendFrame(&protocol.Resize{Ref: te.ref(), Rows: 35, Cols: 90})
+			waitResizeSnapshot(t, te, a, marker)
+			if got := paneSize(te); got != "90x35" {
+				t.Fatalf("A second resize pane size = %s, want 90x35", got)
+			}
+
+			if tc.firstA {
+				_ = a.conn.CloseNow()
+				b.sendFrame(&protocol.Input{ReqID: 1801, Ref: te.ref(), Text: "PERF17_A_FIRST_B_LIVE"})
+				if ack := waitMirrorAndInputAck(b, "PERF17_A_FIRST_B_LIVE", 1801); !ack.OK {
+					t.Fatalf("B input after A exit failed: %s", ack.Reason)
+				}
+				b.sendFrame(&protocol.Unsubscribe{Ref: te.ref()})
+				b.sendFrame(&protocol.Input{ReqID: 1802, Ref: te.ref(), Text: "PERF17_B_EXIT_BARRIER"})
+				waitInputFailureAck(t, b, 1802)
+			} else {
+				b.sendFrame(&protocol.Unsubscribe{Ref: te.ref()})
+				b.sendFrame(&protocol.Input{ReqID: 1802, Ref: te.ref(), Text: "PERF17_B_EXIT_BARRIER"})
+				waitInputFailureAck(t, b, 1802)
+				_ = a.conn.CloseNow()
+			}
+			if got := waitPaneSize(te, original); got != original {
+				t.Fatalf("last subscriber exit did not restore original %s: %s", original, got)
+			}
+		})
 	}
 }

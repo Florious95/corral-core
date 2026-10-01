@@ -24,6 +24,7 @@ import android.content.Context
 import dev.agentmirror.app.notify.NotificationRepositoryTest.Companion.record
 import dev.agentmirror.app.service.NotificationHelper
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -50,7 +51,10 @@ class NotificationSystemAlertTest {
         assertEquals("Agent 任务消息", task.name)
         assertEquals(NotificationManager.IMPORTANCE_HIGH, task.importance)
         assertTrue(task.shouldVibrate())
+        assertNotNull("explicit vibration pattern", task.vibrationPattern)
         assertNotNull("default notification sound", task.sound)
+        assertEquals(android.media.AudioAttributes.USAGE_NOTIFICATION, task.audioAttributes.usage)
+        assertTrue("heads-up capable", NotificationHelper(app).taskAlertsPopUp())
         assertEquals(NotificationManager.IMPORTANCE_LOW, nm.getNotificationChannel(NotificationHelper.CHANNEL_PERSISTENT).importance)
     }
 
@@ -68,6 +72,9 @@ class NotificationSystemAlertTest {
         assertEquals("标题 7", posted.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
         assertEquals("BigTextStyle carries the full body", body, posted.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString())
         assertEquals(Notification.VISIBILITY_PRIVATE, posted.visibility)
+        assertEquals(Notification.CATEGORY_MESSAGE, posted.category)
+        @Suppress("DEPRECATION")
+        assertEquals("pre-O heads-up priority", Notification.PRIORITY_HIGH, posted.priority)
         assertNotNull("lock screen shows a redacted public version", posted.publicVersion)
         assertTrue(posted.flags and Notification.FLAG_AUTO_CANCEL != 0)
 
@@ -76,6 +83,14 @@ class NotificationSystemAlertTest {
         assertEquals("corral://notification/h/id-7", intent.dataString)
         assertEquals(r.sessionRef, intent.getStringExtra(NotificationHelper.EXTRA_SESSION_REF))
         assertEquals(NotificationTarget("h", "id-7", r.sessionRef), NotificationTarget.fromIntent(intent))
+    }
+
+    @Test
+    fun loweredTaskChannel_isReportedAsNotPoppingUp() {
+        nm.createNotificationChannel(
+            android.app.NotificationChannel(NotificationHelper.CHANNEL_AGENT_TASKS, "Agent 任务消息", NotificationManager.IMPORTANCE_DEFAULT),
+        )
+        assertFalse(NotificationHelper(app).taskAlertsPopUp())
     }
 
     @Test

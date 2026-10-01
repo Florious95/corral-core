@@ -55,7 +55,8 @@ func (s *Server) PublishNotification(ctx context.Context, req notify.Request) (p
 				req.Workspace = e.pane.CWD
 			}
 			if req.AgentName == "" {
-				req.AgentName = e.pane.WindowName
+				// Same display label the client renders for this pane in L2.
+				req.AgentName = displayName(e.pane)
 				if req.AgentName == "" {
 					req.AgentName = e.pane.Session
 				}

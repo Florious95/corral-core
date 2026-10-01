@@ -83,6 +83,14 @@ func decodePayload(env Envelope) (Typed, error) {
 		return decodeTyped[Auth](env)
 	case TypeAuthAck:
 		return decodeTyped[AuthAck](env)
+	case TypeCreateAgent:
+		return decodeTyped[CreateAgent](env)
+	case TypeCreateAgentResult:
+		return decodeTyped[CreateAgentResult](env)
+	case TypeCloseSession:
+		return decodeTyped[CloseSession](env)
+	case TypeCloseSessionResult:
+		return decodeTyped[CloseSessionResult](env)
 	case TypeList:
 		return decodeTyped[List](env)
 	case TypeListing:
@@ -91,6 +99,8 @@ func decodePayload(env Envelope) (Typed, error) {
 		return decodeTyped[ListDelta](env)
 	case TypeSubscribe:
 		return decodeTyped[Subscribe](env)
+	case TypePresenceUpdate:
+		return decodeTyped[PresenceUpdate](env)
 	case TypeUnsubscribe:
 		return decodeTyped[Unsubscribe](env)
 	case TypeInput:

@@ -1,14 +1,14 @@
 package api
 
-// server.go wires the WebSocket API server together: the HTTP handler set
-// (WS at /ws, image upload at /upload), the shared session catalog, the
+// server.go wires the HTTP API server together: the HTTP handler set
+// (discovery at /pair/whoami and /pair/identify, WS at /ws, image upload at
+// /upload), the shared session catalog, the
 // periodic discovery loop that pushes listing/list_delta, and the per-connection
 // frame router. The wire contract is docs/protocol.md v1; the machine-verifiable
 // codec is internal/protocol.
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
+	"github.com/agentmirror/agentmirror/internal/discovery"
+	"github.com/agentmirror/agentmirror/internal/nodeprobe"
 	"github.com/agentmirror/agentmirror/internal/notify"
 	"github.com/agentmirror/agentmirror/internal/overlay"
 	"github.com/agentmirror/agentmirror/internal/protocol"
@@ -29,10 +31,12 @@ import (
 // table (never shared, so one client cannot see another's), and the discovery
 // loop is a single heartbeat that fans list_delta out to every live client.
 type Server struct {
-	log *slog.Logger
+	// Test boundary initialized under trackersMu before reader/writer startup.
+	connInit func(*wsConn)
+	log      *slog.Logger
 
-	// Public host identity is separate from the private pairing token. The
-	// identity endpoints let Android validate a discovered endpoint before WS.
+	// Discovery identity is public metadata only. pairingToken remains private
+	// and is used solely to compute identify HMAC responses.
 	hostID          string
 	hostName        string
 	listenPort      int
@@ -60,11 +64,21 @@ type Server struct {
 	// They are connection-independent: a reconnecting client lists and
 	// continues from the same sequence the previous connection saw
 	// (requirement 004 stateless replay).
-	snapMu   sync.RWMutex
-	snapshot *modelSnapshot
-	seq      uint64
+	snapMu           sync.RWMutex
+	snapshot         *modelSnapshot
+	seq              uint64
+	scanGeneration   uint64
+	level2Projection map[string][]protocol.Session
 
+	// catalog and snapshot are one immutable publication under snapMu.
 	catalog *sessionCatalog
+	scans   *scanCoordinator
+
+	// Scoped subscriptions have their own bounded queue. Routing overlays are
+	// guarded by snapMu and never advance the global listing sequence.
+	workspaceScans    *workspaceCoordinator
+	catalogStarted    time.Time
+	workspaceCatalogs map[string]workspaceCatalog
 
 	// paneGeoms holds the pane-level original-geometry singleton per ref
 	// (fix-host-pane-geometry-accounting). The original geometry is recorded by
@@ -73,8 +87,15 @@ type Server struct {
 	// shrank/grew for the phone always returns to its pre-phone geometry
 	// regardless of who subscribed in between. This is the shared, connection-
 	// independent counterpart to the per-connection subscription table.
-	paneGeomsMu sync.Mutex
-	paneGeoms   map[string]*paneGeometry
+	paneGeomsMu    sync.Mutex
+	paneGeoms      map[string]*paneGeometry
+	retainPaneSize bool
+
+	// presenceSubs is the active, successfully admitted mirror set grouped by
+	// pane ref. It is derived from subscriptions so teardown races remain
+	// idempotent without a second set of counters.
+	presenceMu   sync.Mutex
+	presenceSubs map[string]map[*subscription]struct{}
 
 	// trackers is the list_delta fan-out: every live client's send channel.
 	trackersMu sync.Mutex
@@ -98,18 +119,10 @@ type Server struct {
 	// by teardown). The listing loop polls only while authed > 0; with zero
 	// clients it parks and spawns no scan subprocesses (taskbook
 	// #fix-daemon-idle-cpu: unconditional ticks burned 17.5% CPU per orphan).
-	// wakeCh is a capacity-1 signal that the count just went 0→1, so the loop
-	// runs a fresh full scan immediately instead of waiting for the next tick.
 	authed atomic.Int64
-	wakeCh chan struct{}
 
-	// level2Subscribers counts connections currently viewing the second-level
-	// menu (requirement 061). The level2Loop polls only while this is > 0; at
-	// zero it parks and spawns no scan subprocesses (idle CPU ≈ 0). level2WakeCh
-	// is a capacity-1 signal that the count just went 0→1, so the first
-	// subscriber's stream is fresh immediately.
+	// The coordinator owns both existing cadences and parks with no demand.
 	level2Subscribers atomic.Int64
-	level2WakeCh      chan struct{}
 
 	// level2Interval is how often the level2 loop scans while subscribers exist.
 	// level2Heartbeat is how long an unchanged snapshot may sit before a
@@ -131,9 +144,22 @@ type Server struct {
 	overlay            overlay.Capturer
 	overlayLastHash    map[string]string
 
-	providerFinder ProviderFinder
+	nodeprobe        nodeprobe.Sampler
+	inventorySamples *inventorySampler
+	filterAgents     bool
+
+	// agentLaunchers is the explicit provider capability set advertised in
+	// AuthAck and used by create_agent. It is computed once so a client cannot
+	// request arbitrary executables or unverified flags.
+	agentLaunchers []agentLauncher
 
 	notifications *notify.Store
+}
+
+type unknownNodeprobe struct{}
+
+func (unknownNodeprobe) Sample(_ context.Context, socket string) (nodeprobe.Report, error) {
+	return nodeprobe.Report{SchemaVersion: 1, Socket: socket}, nil
 }
 
 // NewServer constructs the API server from Options. Zero values use the
@@ -150,6 +176,11 @@ func NewServer(opts Options) *Server {
 		log = slog.New(slog.DiscardHandler)
 	}
 
+	filterAgents := opts.Nodeprobe != nil
+	port := opts.ListenPort
+	if port <= 0 {
+		port = 9900
+	}
 	hostName := opts.HostName
 	if hostName == "" {
 		hostName, _ = os.Hostname()
@@ -157,31 +188,29 @@ func NewServer(opts Options) *Server {
 	if hostName == "" {
 		hostName = "agentmirror"
 	}
-	listenPort := opts.ListenPort
-	if listenPort <= 0 {
-		listenPort = 9900
-	}
 	s := &Server{
 		log:             log,
 		hostID:          opts.HostID,
 		hostName:        hostName,
-		listenPort:      listenPort,
+		listenPort:      port,
 		pairingToken:    opts.Token,
 		tailnetIPs:      append([]net.IP(nil), opts.TailnetIPs...),
 		addresses:       opts.AddressProvider,
 		identityLimiter: newIdentityRateLimiter(),
 		tokenValidator:  opts.TokenValidator,
-		notifications:   opts.NotificationStore,
 		discoverer:      opts.Discoverer,
 		listInterval:    opts.ListInterval,
 		uploadDir:       opts.UploadDir,
 		maxUpload:       opts.MaxUploadBytes,
 		maxUploadDir:    defaultMaxUploadDirBytes,
 		maxInput:        opts.MaxInputBytes,
+		retainPaneSize:  opts.RetainPaneSize,
 		catalog:         newSessionCatalog(),
 		paneGeoms:       make(map[string]*paneGeometry),
+		presenceSubs:    make(map[string]map[*subscription]struct{}),
 		trackers:        make(map[*wsConn]struct{}),
 		attachPreviews:  make(map[string]attachPreviewEntry),
+		notifications:   opts.NotificationStore,
 	}
 	if s.notifications == nil && !opts.DisableNotifications {
 		store, err := notify.New("")
@@ -196,7 +225,10 @@ func NewServer(opts Options) *Server {
 		// Copy the explicit scope (or the e2e-only env bridge) so a later
 		// mutation cannot widen a running server's isolation boundary.
 		socketDirs := resolvedDiscoverySocketDirs(opts.DiscoverySocketDirs)
-		s.discoverer = tmuxDiscoverer{logger: log, socketDirs: socketDirs}
+		s.discoverer = &indexedDiscoverer{
+			tmuxDiscoverer: tmuxDiscoverer{logger: log, socketDirs: socketDirs},
+			index:          discovery.NewWorkspaceIndex(),
+		}
 	}
 	if s.listInterval <= 0 {
 		s.listInterval = defaultListInterval
@@ -208,13 +240,6 @@ func NewServer(opts Options) *Server {
 		s.maxInput = defaultMaxInputBytes
 	}
 
-	// wakeCh is created before the loop so a 0→1 auth can never send on a nil
-	// channel. Capacity 1: a wake that finds the slot occupied is dropped —
-	// the loop is already about to run, so one scan covers both clients.
-	s.wakeCh = make(chan struct{}, 1)
-	// Same reasoning for the level2 live stream: the 0→1 subscriber wake must
-	// never send on a nil channel, and a dropped wake is fine (a scan is coming).
-	s.level2WakeCh = make(chan struct{}, 1)
 	s.level2Interval = opts.Level2Interval
 	if s.level2Interval <= 0 {
 		s.level2Interval = defaultLevel2Interval
@@ -229,16 +254,23 @@ func NewServer(opts Options) *Server {
 	if s.overlayInterval <= 0 {
 		s.overlayInterval = defaultOverlayInterval
 	}
-	s.providerFinder = opts.ProviderFinder
-	if s.providerFinder == nil {
-		s.providerFinder = newProcFinder()
+	s.nodeprobe = opts.Nodeprobe
+	s.filterAgents = filterAgents
+	s.agentLaunchers = availableAgentLaunchers()
+	if s.nodeprobe == nil {
+		s.nodeprobe = unknownNodeprobe{}
 	}
 	// 072 / 2026-08-19：抓屏 overlay 已归档，主流程不再构造 scratch 客户端、
 	// 不再启动 overlayLoop。opts.OverlayCapturer 若注入也只保留字段，不被调用。
 	s.overlay = opts.OverlayCapturer
 	s.loopCtx, s.loopStop = context.WithCancel(context.Background())
-	go s.listingLoop(s.loopCtx)
-	go s.level2Loop(s.loopCtx)
+	if _, production := s.nodeprobe.(*nodeprobe.Runner); production {
+		s.inventorySamples = newInventorySampler(s.loopCtx, s.nodeprobe)
+	}
+	if scoped, ok := s.discoverer.(WorkspaceDiscoverer); ok {
+		s.workspaceScans = newWorkspaceCoordinator(s, scoped)
+	}
+	s.scans = newScanCoordinator(s)
 	return s
 }
 
@@ -246,16 +278,22 @@ func NewServer(opts Options) *Server {
 // tracked connection so no pipe-pane cat is left attached to a pane when the
 // daemon exits (the graceful-shutdown half of the crash-residue fix, root-cause
 // chain step 2; a SIGKILL path still relies on bridge subscribe's detach-first
-// self-healing — graceful close is never the only line of defense). It does not
-// close live connections; the daemon calls it on shutdown after its listeners
-// stop accepting.
+// self-healing — graceful close is never the only line of defense). Connections with outstanding catalog requests are terminated;
+// other live connections retain the existing subscription-drain behavior. The
+// daemon calls Close after its listeners stop accepting.
 // @contract
 // @pre Server 由 NewServer 构造
-// @post discovery loop 已停止；每个 tracked 连接的订阅被排空（relay 已取消、pipe 已 detach）；连接本身保持开放
+// @post discovery loop 已停止；每个 tracked 连接的订阅被排空（relay 已取消、pipe 已 detach）；有目录等待者的连接真实终结，其他连接保持开放
 // @err none
-// @inv 幂等：重复调用安全；不 close 任何 WebSocket 连接
+// @inv 幂等：重复调用安全；只终结仍等待目录结果的连接
 func (s *Server) Close() {
-	s.loopStop()
+	s.scans.close()
+	if s.inventorySamples != nil {
+		s.inventorySamples.workers.Wait()
+	}
+	if s.workspaceScans != nil {
+		<-s.workspaceScans.done
+	}
 	if s.overlay != nil {
 		s.overlay.Stop()
 	}
@@ -273,8 +311,8 @@ func (s *Server) Close() {
 	}
 }
 
-// Handler returns the full HTTP handler: identity discovery, /ws (WebSocket),
-// and /upload (multipart image upload) on the same port.
+// Handler returns the full HTTP handler: token-free discovery/identify,
+// /ws (WebSocket), and /upload (multipart image upload) on the same port.
 // @contract
 // @pre Server 由 NewServer 构造
 // @post 返回一个 http.Handler：/ws 升级为 WebSocket，/upload 接受 POST 图片上传；两路径共用同一端口
@@ -282,11 +320,20 @@ func (s *Server) Close() {
 // @inv 返回的 handler 持有 Server 引用；Server.Close 后不再接受新连接
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/pair/whoami", s.serveWhoami)
-	mux.HandleFunc("/pair/identify", s.serveIdentify)
 	mux.HandleFunc("/ws", s.handleWS)
 	mux.HandleFunc("/upload", s.handleUpload)
+	mux.HandleFunc("/pair/whoami", s.serveWhoami)
+	mux.HandleFunc("/pair/identify", s.serveIdentify)
 	return mux
+}
+
+// SetTailnetIPs updates userspace-tsnet addresses after asynchronous Up. It
+// does not alter listeners or trigger a reconnect; it only completes the
+// fallback address set used by identify.
+func (s *Server) SetTailnetIPs(ips []net.IP) {
+	s.identityMu.Lock()
+	s.tailnetIPs = append([]net.IP(nil), ips...)
+	s.identityMu.Unlock()
 }
 
 // --- listing sequence & snapshot ------------------------------------------
@@ -321,62 +368,10 @@ func (s *Server) currentSnapshot() (*modelSnapshot, uint64) {
 	return s.snapshot, s.seq
 }
 
-// setSnapshot publishes a new model version under lock.
-func (s *Server) setSnapshot(snap *modelSnapshot) {
-	s.snapMu.Lock()
-	s.snapshot = snap
-	s.snapMu.Unlock()
-}
-
-// rebuildCatalog scans tmux once, swaps the catalog to the fresh snapshot,
-// and publishes the new model. On discovery failure the previous model is
-// retained unchanged and an error is returned for the caller to log.
+// rebuildCatalog is the synchronous initialization/test seam. The same worker
+// owns this refresh; callers cannot create a concurrent discovery pass.
 func (s *Server) rebuildCatalog(ctx context.Context) error {
-	model, err := s.discoverer.Discover(ctx)
-	if err != nil {
-		return fmt.Errorf("api: discover: %w", err)
-	}
-	s.catalog.rebuild(filterModel(s, model))
-	snap := buildSnapshot(s.catalog)
-	s.setSnapshot(snap)
-	return nil
-}
-
-// listingLoop is the idle-gated periodic scan heartbeat (taskbook
-// #fix-daemon-idle-cpu). Every ListInterval while at least one connection is
-// authenticated it scans tmux and pushes a list_delta to every live client;
-// with zero authenticated connections it parks and spawns no scan subprocesses
-// (the fix for the 17.5%-per-orphan idle burn). The 0→1 transition wakes the
-// loop immediately so the first client's listing is fresh, not up to one
-// interval old. The first scan establishes the baseline (seq 1); later scans
-// diff and emit only real changes. A discovery error is logged and skipped —
-// the last good snapshot stays current and the loop keeps going (a dead tmux
-// must never take the API down).
-func (s *Server) listingLoop(ctx context.Context) {
-	s.log.Debug("listing loop started", "interval", s.listInterval)
-	for {
-		if s.countAuthed() == 0 {
-			// Zero clients: park and spawn no scan subprocesses (the idle-burn
-			// red line). A 0→1 wake breaks the park and scans immediately below.
-			select {
-			case <-ctx.Done():
-				s.log.Debug("listing loop stopped")
-				return
-			case <-s.wakeCh:
-			}
-		} else {
-			// Clients connected: scan on the regular cadence, or sooner when a
-			// wake arrives (a re-auth while already active gets a fresh scan).
-			select {
-			case <-ctx.Done():
-				s.log.Debug("listing loop stopped")
-				return
-			case <-s.wakeCh:
-			case <-time.After(s.listInterval):
-			}
-		}
-		s.publishListing(ctx)
-	}
+	return s.scans.wait(ctx, false)
 }
 
 // --- idle-gate accounting (taskbook #fix-daemon-idle-cpu) -------------------
@@ -386,10 +381,7 @@ func (s *Server) listingLoop(ctx context.Context) {
 // is fresh immediately instead of after one interval.
 func (s *Server) markAuthed() {
 	if s.authed.Add(1) == 1 {
-		select {
-		case s.wakeCh <- struct{}{}:
-		default:
-		}
+		s.scans.cadence()
 	}
 }
 
@@ -399,6 +391,7 @@ func (s *Server) markAuthed() {
 func (s *Server) unmarkAuthed() {
 	if s.authed.Add(-1) <= 0 {
 		s.authed.Store(0) // never negative: teardown is idempotent-guarded by wsConn
+		s.scans.wake()
 	}
 }
 
@@ -407,71 +400,15 @@ func (s *Server) countAuthed() int64 {
 	return s.authed.Load()
 }
 
-// publishListing performs one scan-and-diff cycle. The first scan (no previous
-// model or sequence) just establishes the baseline at seq 1; each later scan
-// with changes bumps the seq and fans out one list_delta.
-func (s *Server) publishListing(ctx context.Context) {
-	_ = s.refreshListing(ctx)
-}
-
-// refreshListing runs one real discovery pass and updates the shared snapshot.
-// On failure the previous snapshot is left untouched (069: never wipe the
-// list because a refresh failed). Callers that must answer the client (list)
-// send that retained snapshot.
-func (s *Server) refreshListing(ctx context.Context) error {
-	prev, prevSeq := s.currentSnapshot()
-	if err := s.rebuildCatalog(ctx); err != nil {
-		s.log.Warn("listing: discovery failed",
-			"err", err,
-			"had_cache", prev != nil,
-			"prev_seq", prevSeq,
-			"prev_sessions", snapshotSessionCount(prev),
-		)
-		return err
-	}
-	cur, _ := s.currentSnapshot()
-
-	if prev == nil && prevSeq == 0 {
-		s.snapMu.Lock()
-		if s.seq == 0 {
-			s.seq = 1
-		}
-		s.snapMu.Unlock()
-		s.log.Debug("listing: first snapshot", "seq", s.currentSeq())
-		return nil
-	}
-	if prev == nil {
-		prev = &modelSnapshot{}
-	}
-
-	d := cur.diff(prev)
-	if len(d.AddedSessions)+len(d.RemovedRefs)+len(d.ChangedSessions)+len(d.ChangedWorkspaces) == 0 {
-		s.log.Debug("listing: no changes")
-		return nil
-	}
-	d.Seq = s.nextSeq()
-	s.fanout(d)
-	return nil
-}
-
-// ensureInitialScan forces the first scan synchronously so a client that lists
-// before the loop's first tick still gets a seq >= 1. It is a no-op once a
-// snapshot exists.
+// ensureInitialScan shares the first active generation and has a 30s bound.
+// An already published catalog never waits for an in-flight refresh.
 func (s *Server) ensureInitialScan(ctx context.Context) {
-	s.snapMu.RLock()
-	done := s.snapshot != nil
-	s.snapMu.RUnlock()
-	if done {
+	if snap, _ := s.currentSnapshot(); snap != nil {
 		return
 	}
-	if err := s.rebuildCatalog(ctx); err != nil {
+	if err := s.scans.wait(ctx, true); err != nil {
 		s.log.Warn("listing: initial scan failed", "err", err)
 	}
-	s.snapMu.Lock()
-	if s.seq == 0 {
-		s.seq = 1
-	}
-	s.snapMu.Unlock()
 }
 
 // --- tracker fan-out --------------------------------------------------------
@@ -490,33 +427,12 @@ func (s *Server) unregisterTracker(c *wsConn) {
 	s.trackersMu.Unlock()
 }
 
-// fanout sends one list_delta to every live client. A slow client whose send
-// channel is full drops the delta; the client re-lists on seq discontinuity
-// (docs/protocol.md §4.2), so a slow client heals itself without stalling the
-// heartbeat.
-func (s *Server) fanout(d *protocol.ListDelta) {
-	body, err := protocol.MarshalFrame(d)
-	if err != nil {
-		s.log.Error("listing: marshal delta", "err", err)
-		return
-	}
-	s.trackersMu.Lock()
-	defer s.trackersMu.Unlock()
-	for c := range s.trackers {
-		select {
-		case c.sendCh <- wsMsg{typ: wsText, data: body}:
-		default:
-			s.log.Debug("listing: dropping delta for slow connection")
-		}
-	}
-}
-
 // --- server-level seams -----------------------------------------------------
 
 // resolveBridge looks up the bridge bound to a client-facing ref. ok=false
 // means the ref is unknown (the caller replies session_not_found).
 func (s *Server) resolveBridge(ref string) (*bridge.Pane, bool) {
-	e := s.catalog.entry(ref)
+	e := s.catalogEntry(ref)
 	if e == nil {
 		return nil, false
 	}
@@ -542,4 +458,14 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 // handleUpload serves POST /upload (docs/protocol.md §8). See upload.go.
 func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	s.serveUpload(w, r)
+}
+
+// catalogEntry resolves fresh scoped refs before falling back to the host catalog.
+func (s *Server) catalogEntry(ref string) *sessionEntry {
+	s.snapMu.RLock()
+	defer s.snapMu.RUnlock()
+	if entry, authoritative := s.scopedCatalogEntryLocked(ref); authoritative {
+		return entry
+	}
+	return s.catalog.entry(ref)
 }

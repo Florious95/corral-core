@@ -115,6 +115,23 @@ class NotificationNavigationTest {
         assertTrue(nav.onSystemBack())
         assertFalse(nav.showMessageCenter)
         assertFalse(nav.showPairing)
+        assertEquals("message center back lands in the session's own workspace", "/work/project", nav.selectedWorkspaceCwd)
+
+        assertTrue(nav.onSystemBack())
+        assertNull(nav.selectedWorkspaceCwd)
+    }
+
+    @Test
+    fun crossWorkspaceOpen_selectsTargetWorkspaceBeforeSession() {
+        val nav = MainNavState(initialShowPairing = false)
+        nav.selectedWorkspaceCwd = "/work/other"
+        nav.openSessionFromMessages("%3", "Sol", "/work/project")
+        assertEquals("/work/project", nav.selectedWorkspaceCwd)
+        assertEquals("%3" to "Sol", nav.activeSession)
+
+        // 没有工作区快照的旧记录不改动当前选择。
+        nav.openSessionFromMessages("%4", "Luna", null)
+        assertEquals("/work/project", nav.selectedWorkspaceCwd)
     }
 
     @Test

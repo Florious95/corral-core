@@ -16,7 +16,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
+	"unicode/utf8"
 )
 
 // serveUpload handles POST /upload.
@@ -70,8 +72,8 @@ func (s *Server) serveUpload(w http.ResponseWriter, r *http.Request) {
 
 	dir, err := s.resolveUploadDir()
 	if err != nil {
-		s.log.Error("upload: resolve dir", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		s.log.Error("upload: resolve dir", "code", "upload_dir_unavailable", "errno", uploadErrno(err))
+		writeUploadDirError(w, err)
 		return
 	}
 
@@ -81,9 +83,19 @@ func (s *Server) serveUpload(w http.ResponseWriter, r *http.Request) {
 	defer s.uploadMu.Unlock()
 	used, err := uploadDirSize(dir)
 	if err != nil {
-		s.log.Error("upload: measure dir", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+		// Last-good wrote to ~/Downloads/agentmirror-uploads. A later TCC /
+		// unlistable-but-writable directory made ReadDir fail and the same
+		// handler returned HTTP 500 before write. Permission on measure is
+		// skipped so the last-good write path still runs; quota cannot be
+		// enforced without listing.
+		if isPermission(err) {
+			s.log.Error("upload: measure dir skipped", "code", "upload_dir_unreadable", "errno", uploadErrno(err))
+			used = 0
+		} else {
+			s.log.Error("upload: measure dir", "code", "upload_dir_unreadable", "errno", uploadErrno(err))
+			writeUploadError(w, http.StatusInsufficientStorage, "upload_dir_unreadable", "upload directory could not be measured")
+			return
+		}
 	}
 	if used > s.maxUploadDir-int64(len(data)) {
 		writeUploadError(w, http.StatusInsufficientStorage, "storage_limit_exceeded", "upload directory size limit exceeded")
@@ -91,8 +103,8 @@ func (s *Server) serveUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	path, err := writeUpload(dir, part.FileName(), data)
 	if err != nil {
-		s.log.Error("upload: write file", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		s.log.Error("upload: write file", "code", "upload_write_failed", "errno", uploadErrno(err))
+		writeUploadError(w, http.StatusInsufficientStorage, "upload_write_failed", "upload write failed")
 		return
 	}
 
@@ -137,6 +149,55 @@ func writeUploadError(w http.ResponseWriter, status int, code, reason string) {
 	_ = json.NewEncoder(w).Encode(uploadError{Code: code, Reason: reason})
 }
 
+// writeUploadDirError converts resolveUploadDir failures to JSON without
+// directory locations. A configured path that exists but is not a directory
+// is a configuration error (400); permission and create failures are storage
+// unavailability (507). None of these are HTTP 500: the historical 500 hid
+// the branch.
+func writeUploadDirError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errUploadDirInvalid) || isNotDir(err) {
+		writeUploadError(w, http.StatusBadRequest, "upload_dir_invalid", "upload directory is not a directory")
+		return
+	}
+	writeUploadError(w, http.StatusInsufficientStorage, "upload_dir_unavailable", "upload directory unavailable")
+}
+
+// uploadErrno returns an errno class for logs without directory locations.
+// os.PathError.Error includes the absolute location; the inner Err does not.
+func uploadErrno(err error) string {
+	if err == nil {
+		return ""
+	}
+	var pe *os.PathError
+	if errors.As(err, &pe) && pe.Err != nil {
+		return pe.Err.Error()
+	}
+	var le *os.LinkError
+	if errors.As(err, &le) && le.Err != nil {
+		return le.Err.Error()
+	}
+	if msg := err.Error(); !strings.Contains(msg, string(os.PathSeparator)) {
+		return msg
+	}
+	return "error"
+}
+
+func isNotDir(err error) bool {
+	return errors.Is(err, syscall.ENOTDIR)
+}
+
+func isPermission(err error) bool {
+	return errors.Is(err, os.ErrPermission) || errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM)
+}
+
+// errUploadDirInvalid is returned when the configured upload path exists
+// but is not a directory (for example a regular file).
+var errUploadDirInvalid = errors.New("upload directory is not a directory")
+
+// errTooManyUploadEntries is returned when measuring the upload directory
+// would enumerate more names than the bounded scan allows.
+var errTooManyUploadEntries = errors.New("upload directory has too many entries")
+
 // protocolUploadResp mirrors protocol.UploadResp as an HTTP JSON body. It is
 // not a control frame, so it is marshaled directly rather than through
 // MarshalFrame (which would wrap it in a version envelope).
@@ -166,38 +227,86 @@ func findFilePart(reader *multipart.Reader) (*multipart.Part, error) {
 }
 
 // resolveUploadDir returns the configured upload directory, defaulting to
-// $HOME/Downloads/agentmirror-uploads and creating it on demand.
+// the last-good location $HOME/Downloads/agentmirror-uploads and creating
+// it on demand.
+// @contract
+// @pre none — empty uploadDir selects the last-good default
+// @post 返回已存在且为目录的路径；空配置为 $HOME/Downloads/agentmirror-uploads
+// @err 无法解析 home、MkdirAll 失败、路径存在但不是目录
+// @inv HTTP 层不得把绝对路径放进响应
 func (s *Server) resolveUploadDir() (string, error) {
-	dir := s.uploadDir
+	dir := strings.TrimSpace(s.uploadDir)
 	if dir == "" {
-		home, err := os.UserHomeDir()
+		var err error
+		dir, err = defaultUploadDir()
 		if err != nil {
-			return "", fmt.Errorf("resolve home dir: %w", err)
+			return "", err
 		}
-		dir = filepath.Join(home, "Downloads", defaultUploadSubdir)
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
+		if isNotDir(err) {
+			return "", errUploadDirInvalid
+		}
 		return "", err
 	}
+	st, err := os.Stat(dir)
+	if err != nil {
+		return "", err
+	}
+	if !st.IsDir() {
+		return "", errUploadDirInvalid
+	}
 	return dir, nil
+}
+
+// defaultUploadDir is the last-good empty-config location.
+func defaultUploadDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "Downloads", defaultUploadSubdir), nil
 }
 
 // uploadDirSize measures the regular files in the flat directory used by the
 // uploader. Symlinks and subdirectories are ignored: the endpoint creates
 // neither, and following them could escape a user-configured directory.
+// Enumeration is batched and capped so a hostile directory cannot hang the
+// handler.
 func uploadDirSize(dir string) (int64, error) {
-	entries, err := os.ReadDir(dir)
+	f, err := os.Open(dir)
 	if err != nil {
 		return 0, err
 	}
+	defer f.Close()
 	var total int64
-	for _, entry := range entries {
-		info, err := entry.Info()
+	seen := 0
+	for {
+		entries, err := f.ReadDir(uploadDirMeasureBatch)
+		for _, entry := range entries {
+			seen++
+			if seen > maxUploadDirEntries {
+				return 0, errTooManyUploadEntries
+			}
+			info, ierr := entry.Info()
+			if ierr != nil {
+				if errors.Is(ierr, os.ErrNotExist) {
+					continue
+				}
+				return 0, ierr
+			}
+			if info.Mode().IsRegular() {
+				total += info.Size()
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
 		if err != nil {
 			return 0, err
 		}
-		if info.Mode().IsRegular() {
-			total += info.Size()
+		if len(entries) == 0 {
+			break
 		}
 	}
 	return total, nil
@@ -206,14 +315,18 @@ func uploadDirSize(dir string) (int64, error) {
 // writeUpload writes data to dir under a safe unique filename and returns the
 // absolute path. The client-supplied name is sanitized to its basename (so a
 // path cannot be smuggled in) and prefixed with a timestamp + sequence so
-// concurrent uploads never collide.
+// concurrent uploads never collide. The final component is clipped to the
+// platform filename length so a long client name cannot 500 with ENAMETOOLONG.
 func writeUpload(dir, clientName string, data []byte) (string, error) {
 	base := sanitizeBaseName(clientName)
-	path := filepath.Join(dir, fmt.Sprintf("upload-%s-%s", time.Now().UTC().Format("20060102T150405"), base))
+	path := filepath.Join(dir, clipUploadFileName("upload-"+time.Now().UTC().Format("20060102T150405")+"-", base))
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		// Extremely unlikely collision; retry once with a different name.
-		path = filepath.Join(dir, fmt.Sprintf("upload-%s-%d-%s", time.Now().UTC().Format("20060102T150405000"), time.Now().Nanosecond(), base))
+		path = filepath.Join(dir, clipUploadFileName(
+			fmt.Sprintf("upload-%s-%d-", time.Now().UTC().Format("20060102T150405000"), time.Now().Nanosecond()),
+			base,
+		))
 		f, err = os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if err != nil {
 			return "", err
@@ -230,6 +343,68 @@ func writeUpload(dir, clientName string, data []byte) (string, error) {
 		return "", err
 	}
 	return abs, nil
+}
+
+// clipUploadFileName keeps prefix+stem+ext within one filename component
+// (255 bytes). The uniqueness prefix and a short sanitized extension (e.g.
+// ".jpg") are reserved; only the stem is cut, on a UTF-8 boundary, so a long
+// "….jpg" name cannot lose its suffix.
+func clipUploadFileName(prefix, base string) string {
+	stem, ext := splitSanitizedExt(base)
+	if stem == "" {
+		stem = "file"
+	}
+	budget := maxUploadFileNameBytes - len(prefix) - len(ext)
+	if budget < 1 {
+		keep := maxUploadFileNameBytes - len(ext)
+		if keep < 1 {
+			return clipUTF8(ext, maxUploadFileNameBytes)
+		}
+		return clipUTF8(prefix, keep) + ext
+	}
+	stem = clipUTF8(stem, budget)
+	if stem == "" {
+		stem = clipUTF8("file", budget)
+	}
+	return prefix + stem + ext
+}
+
+// splitSanitizedExt returns stem and a short safe extension (".jpg"). A
+// leading-dot name or a non-alnum / overlong suffix is treated as stem-only
+// so a hostile "extension" cannot eat the uniqueness prefix.
+func splitSanitizedExt(base string) (stem, ext string) {
+	i := strings.LastIndex(base, ".")
+	if i <= 0 {
+		return base, ""
+	}
+	rest := base[i+1:]
+	if rest == "" || len(rest) > maxSanitizedExtLetters {
+		return base, ""
+	}
+	for _, r := range rest {
+		alnum := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
+		if !alnum {
+			return base, ""
+		}
+	}
+	stem = base[:i]
+	if stem == "" {
+		stem = "file"
+	}
+	return stem, base[i:]
+}
+
+func clipUTF8(s string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }
 
 // sanitizeBaseName reduces a client-supplied filename to a safe basename:

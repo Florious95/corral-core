@@ -12,6 +12,26 @@ func isControlByte(b byte) bool {
 	return b < 0x20 || b == 0x7F
 }
 
+// InjectRawAtomic injects raw bytes in one tmux send-keys -H invocation.
+// Keeping an escape sequence in one PTY write is essential for terminal UIs:
+// if ESC is sent separately, readline/TUI parsers may commit it as a standalone
+// Escape key before the remaining CSI bytes arrive.
+func (p *Pane) InjectRawAtomic(ctx context.Context, raw []byte) error {
+	if err := p.requirePane(ctx); err != nil {
+		return err
+	}
+	if len(raw) == 0 {
+		return nil
+	}
+	args := make([]string, 0, 5+len(raw))
+	args = append(args, "send-keys", "-t", p.target, "-H", "--")
+	for _, b := range raw {
+		args = append(args, fmt.Sprintf("%02x", b))
+	}
+	_, err := runTmux(ctx, p.socket, p.timeout, args...)
+	return err
+}
+
 // InjectRaw injects an arbitrary byte sequence into the pane PTY.
 // Printable runs (including UTF-8 中文) share one `send-keys -l` invocation;
 // consecutive control bytes (C0 / DEL) share one `send-keys -H` invocation

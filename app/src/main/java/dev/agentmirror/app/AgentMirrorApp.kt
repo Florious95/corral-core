@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
 import dev.agentmirror.app.notify.NotificationCenter
 import dev.agentmirror.app.notify.NotificationHub
+import dev.agentmirror.app.notify.NotificationRecord
 import dev.agentmirror.app.notify.consumePendingNotification
 import dev.agentmirror.app.notify.sessionDisplayName
 import dev.agentmirror.app.pairing.PairingRoute
@@ -286,7 +287,7 @@ fun AgentMirrorApp(
                                     targetOffsetX = { (it * 0.2f).toInt() },
                                 ) + fadeOut(tween(Motion.popEnter / 2, easing = Motion.emphasized)),
                             ) {
-                                MessageCenterRoute(hub = notificationHub, navState = navState)
+                                MessageCenterRoute(hub = notificationHub, navState = navState, workspaceViewModel = workspaceViewModel)
                             }
                         }
                     }
@@ -299,11 +300,16 @@ fun AgentMirrorApp(
 
 /** 消息中心接线：列表 / 已读 / 来源都来自进程级通知库；进入终端返回时回到这里。 */
 @Composable
-private fun MessageCenterRoute(hub: NotificationHub, navState: MainNavState) {
+private fun MessageCenterRoute(hub: NotificationHub, navState: MainNavState, workspaceViewModel: WorkspaceViewModel) {
     val repository = hub.repository
     val items by repository.items.collectAsState()
     val sourceHostId by repository.sourceHostId.collectAsState()
     val support by hub.support.collectAsState()
+    // 二级推送到达后重算：品牌标以会话自身的 provider 为准。
+    val level2 by workspaceViewModel.level2.collectAsState()
+    val providerOf = remember(level2) {
+        { record: NotificationRecord -> record.sessionRef?.let(workspaceViewModel::providerForRef) }
+    }
     MessageCenterScreen(
         items = items,
         sourceHostId = sourceHostId,
@@ -316,6 +322,7 @@ private fun MessageCenterRoute(hub: NotificationHub, navState: MainNavState) {
         },
         onMarkRead = repository::markRead,
         onMarkAllRead = repository::markAllRead,
+        providerOf = providerOf,
     )
 }
 

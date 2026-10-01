@@ -9,11 +9,31 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/agentmirror/agentmirror/internal/protocol"
 )
+
+// Network-handler logging continues during teardown; bytes.Buffer alone is
+// not safe for the test goroutine to inspect while that writer is still alive.
+type perfSubscribeLogBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *perfSubscribeLogBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *perfSubscribeLogBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
 
 func TestLogPerfSubscribeQueueIsStartMinusRecv(t *testing.T) {
 	var buf bytes.Buffer
@@ -52,7 +72,7 @@ func TestLogPerfSubscribeDisabledSkipsLine(t *testing.T) {
 }
 
 func TestPerfSubscribeUnknownRefLogsOperands(t *testing.T) {
-	var buf bytes.Buffer
+	var buf perfSubscribeLogBuffer
 	lg := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	e := startWS(t, Options{
 		Token:        "test-token",
@@ -65,6 +85,12 @@ func TestPerfSubscribeUnknownRefLogsOperands(t *testing.T) {
 	got := e.readControl()
 	if got.FrameType() != protocol.TypeError {
 		t.Fatalf("expected error frame, got %v", got.FrameType())
+	}
+	// The error may reach the client before handleSubscribe's deferred log.
+	// A subsequent reader-loop acknowledgement is a causal fence, not a sleep.
+	e.sendFrame(&protocol.Input{ReqID: 901, Ref: "no-such-ref", Text: ""})
+	if ack := e.readControl(); ack.FrameType() != protocol.TypeInputAck {
+		t.Fatalf("expected reader-loop fence acknowledgement, got %v", ack.FrameType())
 	}
 	logs := buf.String()
 	if !strings.Contains(logs, "msg=perf_subscribe") {
@@ -83,7 +109,7 @@ func TestPerfSubscribeUnknownRefLogsOperands(t *testing.T) {
 }
 
 func TestPerfSubscribeNotEmittedForList(t *testing.T) {
-	var buf bytes.Buffer
+	var buf perfSubscribeLogBuffer
 	lg := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	e := startWS(t, Options{
 		Token:        "test-token",

@@ -10,7 +10,6 @@ package api
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"strings"
 	"testing"
@@ -19,6 +18,20 @@ import (
 	"github.com/agentmirror/agentmirror/internal/protocol"
 	"github.com/coder/websocket"
 )
+
+// TestSubscribeSnapshotPrefixesActiveMouseMode protects the reconnect path:
+// capture-pane omits DECSET state, so a subscriber must receive the pane's
+// active tracking mode before replaying the visible bytes.
+func TestSubscribeSnapshotPrefixesActiveMouseMode(t *testing.T) {
+	te := startTmuxEnv(t, `sh -c "printf '\\033[?1002h\\033[?1006h'; sleep 300"`)
+	time.Sleep(100 * time.Millisecond)
+	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
+	snap := te.readBinaryFrame()
+	want := "\x1b[?1000h\x1b[?1002h\x1b[?1006h"
+	if !strings.HasPrefix(string(snap.Data), want) {
+		t.Fatalf("snapshot prefix = %q, want %q", snap.Data[:min(len(snap.Data), len(want)+16)], want)
+	}
+}
 
 // TestSubscribeSnapshotThenDelta is the core mirroring red test: subscribing
 // must deliver a snapshot first, then incremental deltas of the pane's new
@@ -260,133 +273,14 @@ func TestUnsubscribeRestoresOriginalPaneSize(t *testing.T) {
 // header (docs/protocol.md §6.3). The protocol addresses 0 = screen top,
 // negative = history; tmux semantics match this directly.
 func TestScrollbackConvergedRange(t *testing.T) {
-	// A 10-row screen with plenty of history.
-	te := startTmuxEnv(t, "bash")
-	// Make the window small so history accumulates quickly.
-	runTmuxCmd(te.env, te.sock, "resize-window", "-t", "0", "-x", "40", "-y", "10")
-	time.Sleep(200 * time.Millisecond)
-
-	// Mirroring paths require an active subscription (input applies to a
-	// subscribed session). Subscribe first, then inject to build history.
-	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
-	_ = te.readBinaryFrame() // snapshot
-	// 直通（059）：文本先键入（不回车），再裸 Enter 提交执行。
-	te.wsEnv.sendFrame(&protocol.Input{ReqID: 1, Ref: te.ref(), Text: "for i in $(seq 1 60); do echo SCBK_$i; done"})
-	te.wsEnv.sendFrame(&protocol.Input{ReqID: 2, Ref: te.ref(), Text: ""})
-	// Wait for the tail on screen.
-	te.waitForMirror("SCBK_60")
-
-	// Request far more history than exists: from_line=-500, count=100.
-	te.wsEnv.sendFrame(&protocol.Scrollback{ReqID: 9, Ref: te.ref(), FromLine: -500, Count: 100})
-
-	// Read the scrollback binary reply, draining any mirror deltas that arrive
-	// first (the injected loop's echo is still streaming). The scrollback reply
-	// is the frame whose kind is KindScrollback.
-	var payload protocol.BinaryPayload
-	found := false
-	for i := 0; i < 50 && !found; i++ {
-		typ, data, err := te.wsEnv.conn.Read(context.Background())
-		if err != nil {
-			t.Fatalf("read scrollback: %v", err)
-		}
-		if typ != websocket.MessageBinary {
-			t.Fatalf("scrollback reply must be binary, got %v", typ)
-		}
-		p, err := protocol.DecodeBinary(data)
-		if err != nil {
-			t.Fatalf("decode binary: %v", err)
-		}
-		if p.Kind == protocol.KindScrollback {
-			payload = p
-			found = true
-		}
-	}
-	if !found {
-		t.Fatal("scrollback reply never arrived")
-	}
-	if payload.ReqID != 9 {
-		t.Errorf("scrollback req_id = %d, want 9", payload.ReqID)
-	}
-	if payload.LineCount == 0 {
-		t.Error("scrollback line_count must be >= 1")
-	}
-	// The server must report the ACTUAL range it returned: with -500 requested
-	// and only a bounded history, from_line must be clamped to the oldest
-	// available (not left at -500).
-	if payload.FromLine < -1000 {
-		t.Errorf("from_line = %d, not clamped to available history", payload.FromLine)
-	}
-	if payload.LineCount > 100 {
-		t.Errorf("line_count = %d, exceeds requested count 100", payload.LineCount)
-	}
-	// The payload must contain the oldest history lines, not the newest.
-	if bytes.Contains(payload.Data, []byte("SCBK_60")) {
-		t.Error("scrollback page must not contain on-screen tail SCBK_60")
-	}
+	testScrollbackConvergedRangeStrong(t)
 }
 
 // TestScrollbackExactHeaderBytes verifies the raw 12-byte header layout on the
 // wire: req_id (4 BE), from_line (4 BE signed), line_count (4 BE unsigned),
 // then the ANSI bytes (docs/protocol.md §6.3).
 func TestScrollbackExactHeaderBytes(t *testing.T) {
-	te := startTmuxEnv(t, "bash")
-	runTmuxCmd(te.env, te.sock, "resize-window", "-t", "0", "-x", "40", "-y", "10")
-	time.Sleep(200 * time.Millisecond)
-	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
-	_ = te.readBinaryFrame() // snapshot
-	// 直通（059）：文本先键入（不回车），再裸 Enter 提交执行。
-	te.wsEnv.sendFrame(&protocol.Input{ReqID: 1, Ref: te.ref(), Text: "for i in $(seq 1 30); do echo SCBKX_$i; done"})
-	te.wsEnv.sendFrame(&protocol.Input{ReqID: 2, Ref: te.ref(), Text: ""})
-	te.waitForMirror("SCBKX_30")
-
-	te.wsEnv.sendFrame(&protocol.Scrollback{ReqID: 5, Ref: te.ref(), FromLine: -20, Count: 10})
-
-	// Drain mirror deltas until the scrollback reply arrives.
-	var payload protocol.BinaryPayload
-	var frame []byte
-	found := false
-	for i := 0; i < 50 && !found; i++ {
-		typ, data, err := te.wsEnv.conn.Read(context.Background())
-		if err != nil {
-			t.Fatalf("read: %v", err)
-		}
-		if typ != websocket.MessageBinary {
-			continue
-		}
-		p, err := protocol.DecodeBinary(data)
-		if err != nil {
-			t.Fatalf("decode: %v", err)
-		}
-		if p.Kind == protocol.KindScrollback {
-			payload = p
-			frame = data
-			found = true
-		}
-	}
-	if !found {
-		t.Fatal("scrollback reply never arrived")
-	}
-	// Reconstruct the 12-byte header from the frame layout:
-	// magic(2) version(1) kind(1) reflen(1) ref(reflen) [12-byte header] data.
-	off := 5 + len(payload.Ref)
-	if len(frame) < off+12 {
-		t.Fatalf("frame too short for 12-byte header: %d bytes", len(frame))
-	}
-	reqID := binary.BigEndian.Uint32(frame[off : off+4])
-	fromLine := int32(binary.BigEndian.Uint32(frame[off+4 : off+8]))
-	lineCount := binary.BigEndian.Uint32(frame[off+8 : off+12])
-	if reqID != 5 {
-		t.Errorf("header req_id = %d, want 5", reqID)
-	}
-	if fromLine != payload.FromLine {
-		t.Errorf("header from_line = %d, payload %d", fromLine, payload.FromLine)
-	}
-	if lineCount != payload.LineCount {
-		t.Errorf("header line_count = %d, payload %d", lineCount, payload.LineCount)
-	}
-	if lineCount == 0 {
-		t.Error("header line_count must be >= 1")
-	}
+	testScrollbackExactHeaderBytesStrong(t)
 }
 
 // TestResizeChangesPane verifies a resize frame changes the underlying pane's
@@ -406,6 +300,8 @@ func TestResizeChangesPane(t *testing.T) {
 	if strings.TrimSpace(out) != "120x30" {
 		t.Errorf("pane size = %q, want 120x30 (resize applied to subscribed pane)", out)
 	}
+	markPerf17Stage(t, "done")
+	finishPerf17Error(t, te, 1709)
 }
 
 // TestResizeRepushesSnapshot is the fix-term-residuals red test: after a
@@ -454,6 +350,11 @@ func TestResizeRepushesSnapshot(t *testing.T) {
 			t.Errorf("re-pushed snapshot misses on-screen marker; got %q", p.Data)
 		}
 		assertSnapshotCursorSuffix(t, te, p.Data)
+		// This test injected a marker, so its relay may have just updated
+		// ConnMetrics. Establish the same deterministic relay-deletion barrier
+		// as the controlled error paths before the harness closes the connection.
+		markPerf17Stage(t, "done")
+		finishPerf17Error(t, te, 1708)
 		return
 	}
 	t.Fatal("resize did not re-push a snapshot (client residuals would survive)")
@@ -561,12 +462,13 @@ func TestRealResizeStillRepushesSnapshot(t *testing.T) {
 		}
 		if p.Kind == protocol.KindSnapshot {
 			assertSnapshotCursorSuffix(t, te, p.Data)
+			markPerf17Stage(t, "done")
+			finishPerf17Error(t, te, 1710)
 			return // snapshot arrived: positive control green
 		}
 	}
 	t.Fatal("real resize did not re-push a snapshot (convergence would be lost)")
 }
-
 
 // TestPassthroughNoEnter is the wire-level red test for requirement 059
 // passthrough: a non-empty Input.Text is TYPED into the pane WITHOUT appending
@@ -577,13 +479,13 @@ func TestRealResizeStillRepushesSnapshot(t *testing.T) {
 // EXECUTE immediately, producing its output before any separate submit.
 //
 // Proof in two phases against a `bash` pane:
-//   1. Send Text="echo NOENTER_MARK_059" (the keystroke). With passthrough the
-//      command lands on the prompt line as a draft; the `echo` output must NOT
-//      appear yet (a bare Enter from the old Inject path would run it and the
-//      marker would show).
-//   2. Send Text="" (bare-Enter submit). Now the command executes and the
-//      marker appears — proving the submit is what triggered it, not the
-//      keystroke frame.
+//  1. Send Text="echo NOENTER_MARK_059" (the keystroke). With passthrough the
+//     command lands on the prompt line as a draft; the `echo` output must NOT
+//     appear yet (a bare Enter from the old Inject path would run it and the
+//     marker would show).
+//  2. Send Text="" (bare-Enter submit). Now the command executes and the
+//     marker appears — proving the submit is what triggered it, not the
+//     keystroke frame.
 func TestPassthroughNoEnter(t *testing.T) {
 	te := startTmuxEnv(t, "bash")
 	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
@@ -625,7 +527,7 @@ func TestPassthroughNoEnter(t *testing.T) {
 			t.Fatalf("decode mirror frame: %v", err)
 		}
 		acc.Write(p.Data)
-		if bytes.Contains(acc.Bytes(), []byte("\n"+marker)) {
+		if mirrorContains(acc.Bytes(), "\n"+marker) {
 			ran = true // executed output present
 			break
 		}
@@ -641,10 +543,11 @@ func TestPassthroughNoEnter(t *testing.T) {
 	}
 
 	// Phase 2: submit (bare Enter). The command runs and the output line appears.
+	// PTY output may frame the line with CR, and input_ack may be queued before
+	// the mirror delta; the helper preserves both original assertions without
+	// assuming either wire ordering.
 	te.wsEnv.sendFrame(&protocol.Input{ReqID: 2, Ref: te.ref(), Text: ""})
-	te.waitForMirror("\n" + marker)
-	ack := te.wsEnv.readControlDraining()
-	ia := ack.(protocol.InputAck)
+	ia := te.waitForMirrorAndInputAck("\n"+marker, 2)
 	if !ia.OK {
 		t.Fatalf("submit input_ack not ok: %s", ia.Reason)
 	}

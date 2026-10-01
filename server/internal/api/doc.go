@@ -29,4 +29,8 @@ package api
 
 // @consumes internal/discovery
 
+// @consumes internal/nodeprobe
+
 // @consumes internal/protocol
+
+// @consumes internal/sessionname

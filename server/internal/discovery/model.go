@@ -24,11 +24,9 @@ type Pane struct {
 	WindowIndex int
 
 	// WindowName is the tmux window name (#{window_name}) the pane lives in.
-	// It is the display label the client renders for a session (fix-session-
-	// alias): window names carry the meaningful per-window labels in the fleet
-	// (e.g. "wiki-r5-acceptance-tester"), while the session name is a whole-team
-	// name. It may be empty when the scan could not parse it; the listing layer
-	// falls back to Session. Never a grouping key (grouping is CWD, 002).
+	// It is one input to the serve-side display-name projection, not the
+	// client-facing label by itself. It may be empty when the scan could not
+	// parse it. Never a grouping key (grouping is CWD, 002).
 	WindowName string
 
 	// PaneTitle is the pane's OSC title (#{pane_title}). It is carried as

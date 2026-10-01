@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -33,19 +34,27 @@ func TestParsePaneLineValid(t *testing.T) {
 	}
 }
 
-// TestParsePaneLineMalformed checks that malformed lines are rejected with
-// ok=false (and never panic), so the scan can skip them.
-func TestParsePaneLinePreservesPipeInPaneTitle(t *testing.T) {
-	line := "alpha|0|%8|/Users/alauda|node|99887|排查新加坡 VPN 82 主机代理故障 | alauda|71x67|node"
+// TestParsePaneLineLinuxTmuxOctalUS checks that tmux 3.4/3.5's `\037` rendering
+// of the unit-separator still yields a pane whose title may contain `|`.
+func TestParsePaneLineLinuxTmuxOctalUS(t *testing.T) {
+	line := strings.Join([]string{
+		"agent-codex", "0", "%0", "/tmp/snlab", "codex", "4242",
+		"编码甲 | 远程Agent安卓", "120x32", "node",
+	}, `\037`)
 	p, ok := parsePaneLine(line)
 	if !ok {
-		t.Fatalf("parsePaneLine(%q) unexpectedly rejected a title containing a pipe", line)
+		t.Fatalf("linux tmux \\037 line rejected: %q", line)
 	}
-	if p.PaneTitle != "排查新加坡 VPN 82 主机代理故障 | alauda" || p.Width != 71 || p.Height != 67 {
-		t.Fatalf("parsePaneLine(%q) = %+v, want preserved title and dimensions", line, p)
+	if p.Session != "agent-codex" || p.Command != "codex" || p.WindowName != "node" {
+		t.Fatalf("structural fields: %+v", p)
+	}
+	if p.PaneTitle != "编码甲 | 远程Agent安卓" {
+		t.Fatalf("title=%q, pipe title was split", p.PaneTitle)
 	}
 }
 
+// TestParsePaneLineMalformed checks that malformed lines are rejected with
+// ok=false (and never panic), so the scan can skip them.
 func TestParsePaneLineMalformed(t *testing.T) {
 	cases := []string{
 		"",                                       // empty

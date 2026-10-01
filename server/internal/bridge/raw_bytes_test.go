@@ -38,6 +38,41 @@ func TestRawBytesControlByteReachesPty(t *testing.T) {
 	}
 }
 
+// TestRawBytesAtomicSgrStaysOneTmuxInvocation protects terminal parsers from
+// seeing ESC as a standalone key before the rest of a mouse CSI sequence.
+func TestRawBytesAtomicSgrStaysOneTmuxInvocation(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "argv.log")
+	script := filepath.Join(dir, "fake-tmux")
+	if err := os.WriteFile(script, []byte(`#!/bin/sh
+case "$3" in
+  list-panes) echo "%0"; exit 0;;
+  send-keys) shift 2; echo "$@" >> "$ARGS_LOG"; exit 0;;
+  *) exit 1;;
+esac
+`), 0o755); err != nil {
+		t.Fatalf("write fake tmux: %v", err)
+	}
+	old := tmuxBin
+	tmuxBin = script
+	defer func() { tmuxBin = old }()
+	t.Setenv("ARGS_LOG", logPath)
+
+	p := NewPane("/sock/x", "%0")
+	if err := p.InjectRawAtomic(context.Background(), []byte("\x1b[<0;24;9M")); err != nil {
+		t.Fatalf("InjectRawAtomic SGR: %v", err)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read argv log: %v", err)
+	}
+	got := strings.TrimSpace(string(data))
+	want := "send-keys -t %0 -H -- 1b 5b 3c 30 3b 32 34 3b 39 4d"
+	if got != want {
+		t.Fatalf("atomic SGR argv = %q, want %q", got, want)
+	}
+}
+
 // TestMixedInputBoundedTmuxInvocations is R2: printable+control mixed payload
 // keeps order, and send-keys invocations are a bounded few (合并), not one
 // per byte. 调用次数 is counted from the fake-tmux argv log.

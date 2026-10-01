@@ -5,6 +5,10 @@ package api
 import (
 	"bytes"
 	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -80,6 +84,46 @@ func TestMixedInputOrderOnWire(t *testing.T) {
 	raw := []byte{'X', 0x1b, 'Y'}
 	te.wsEnv.sendFrame(&protocol.Input{ReqID: 92, Ref: te.ref(), Bytes: raw})
 	waitAckAndMirror(t, te, 92, "X^[Y")
+}
+
+// TestDesktopSgrWheelInputIsOneAtomicSendKeys guards contract 02 rule 4: a
+// desktop SGR-1006 wheel report arriving as Input.Bytes must reach tmux as a
+// single `send-keys -H` carrying every byte, never ESC split from the CSI tail.
+func TestDesktopSgrWheelInputIsOneAtomicSendKeys(t *testing.T) {
+	te := startTmuxEnv(t, "cat")
+	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
+	_ = te.readBinaryFrame()
+
+	realTmux, err := exec.LookPath("tmux")
+	if err != nil {
+		t.Fatalf("tmux: %v", err)
+	}
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "send-keys.log")
+	wrapper := "#!/bin/sh\nfor a; do [ \"$a\" = send-keys ] && echo \"$@\" >> \"$SENDKEYS_LOG\" && break; done\nexec " + realTmux + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "tmux"), []byte(wrapper), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SENDKEYS_LOG", logPath)
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	te.wsEnv.sendFrame(&protocol.Input{ReqID: 94, Ref: te.ref(), Bytes: []byte("\x1b[<64;1;1M")})
+	for {
+		if ack, ok := te.wsEnv.readControlDraining().(protocol.InputAck); ok {
+			if ack.ReqID != 94 || !ack.OK {
+				t.Fatalf("input_ack = %#v", ack)
+			}
+			break
+		}
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read send-keys log: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 1 || !strings.HasSuffix(lines[0], "-H -- 1b 5b 3c 36 34 3b 31 3b 31 4d") {
+		t.Fatalf("SGR wheel must be one atomic send-keys -H; got %q", lines)
+	}
 }
 
 // TestPassthroughCompatTextStillAcks is R3 on the wire: 老 Text 路径兼容.

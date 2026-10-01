@@ -6,5 +6,6 @@ claude	claude_code	Claude Code
 codex	codex	Codex
 copilot	copilot	Copilot
 grok	grok	Grok
+agent	cursor	Cursor
 cursor-agent	cursor	Cursor	path-segment
 pi	pi	Pi

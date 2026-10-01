@@ -264,8 +264,7 @@ func buildCandidates(primary, port string, addrs []Address) []string {
 // URL plus the host's full candidate set. Extracted as a seam so tests can
 // assert the QR carries candidates without scanning the half-block art.
 func onboardingPayload(o Onboarding, addrs []Address, primary string) Payload {
-	p := NewPayload(WSURL(primary, o.Port), o.Token)
-	p.Candidates = buildCandidates(primary, o.Port, addrs)
+	p := NewPayloadWithIdentity(WSURL(primary, o.Port), o.Token, o.HostID, o.Port, o.TSNodeID, o.Name, buildCandidates(primary, o.Port, addrs))
 	// feat-ts-wire（011 预授权分发）：配置的 TS authkey 原样上 QR——扫码即同时
 	// 完成配对+入网。QR 是 authkey 唯一合法出口（§2.1）；guide 明文区绝不打印。
 	p.TSAuthKey = o.TSAuthKey
@@ -317,6 +316,13 @@ type Onboarding struct {
 	Token string
 	// Port is the listen port number (e.g. "9900"), shared by every URL.
 	Port string
+	// HostID is the stable public identity of this daemon. Current daemon QR
+	// always fills it; an empty value is retained for old test/helper callers.
+	HostID string
+	// TSNodeID is optional and is emitted only after a successful TS Up.
+	TSNodeID string
+	// Name is display-only host metadata; it is never used for identity.
+	Name string
 	// TailnetEnabled reports whether a tailnet listener is up, so the guide
 	// can surface the tailnet address.
 	TailnetEnabled bool

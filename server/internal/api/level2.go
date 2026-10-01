@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -10,11 +9,10 @@ import (
 )
 
 // level2.go implements the second-level menu stream (requirement 061/062).
-// Identity comes from tmux structural fields (session_name / window_name /
-// socket / pane_id / cwd). A pane is listed only after comm-basename
-// whitelist identity (068). Status is then dispatched to that family's
-// detector; unclaimed titles are unknown and the log records provider,
-// codepoint, and the full original title.
+// Identity/routing comes from tmux structural fields. Status identity and the
+// independent four axes come only from one accepted nodeprobe sample per
+// allowed socket; production keeps only rows with a known provider while
+// activity and health remain independent axes.
 //
 // The loop scans only while ≥1 subscriber exists (zero subscribers ⇒ zero
 // tmux calls). It pushes a Level2Frame only when that connection's snapshot
@@ -43,197 +41,58 @@ type level2Entry struct {
 	cols     uint16
 }
 
-// level2Loop is the idle-gated scan for the second-level stream. While ≥1
-// subscriber exists it scans on the 2s cadence; at zero it parks (idle CPU ≈ 0).
-// The 0→1 wake (markLevel2) breaks the park immediately.
-func (s *Server) level2Loop(ctx context.Context) {
-	s.log.Debug("level2 loop started",
-		"interval", s.level2Interval,
-		"heartbeat", s.level2Heartbeat,
-	)
-	for {
-		if s.countLevel2() == 0 {
-			select {
-			case <-ctx.Done():
-				s.log.Debug("level2 loop stopped")
-				return
-			case <-s.level2WakeCh:
-			}
-		} else {
-			select {
-			case <-ctx.Done():
-				s.log.Debug("level2 loop stopped")
-				return
-			case <-s.level2WakeCh:
-			case <-time.After(s.level2Interval):
-			}
-		}
-		// Re-check after the wait: unsubscribe during the interval must not
-		// produce a tmux call (requirement 061: zero subscribers ⇒ zero poll).
-		if s.countLevel2() == 0 {
-			continue
-		}
-		s.publishLevel2(ctx)
-	}
-}
-
-// markLevel2 is called when a connection subscribes to the level-2 stream: it
-// bumps the subscriber count and wakes the loop (0→1) so the first subscriber's
-// stream is fresh immediately.
-func (s *Server) markLevel2() {
-	if s.level2Subscribers.Add(1) == 1 {
-		s.wakeLevel2()
-	}
-}
-
-// wakeLevel2 is the 069 enter-menu signal. It must fire on every subscribe
-// (including re-subscribe on an already-active connection), not only 0→1.
-func (s *Server) wakeLevel2() {
-	select {
-	case s.level2WakeCh <- struct{}{}:
-	default:
-	}
-}
-
-// unmarkLevel2 is called when a connection unsubscribes or tears down: it drops
-// the subscriber count. At zero the loop parks after the in-flight scan.
 func (s *Server) unmarkLevel2() {
 	if s.level2Subscribers.Add(-1) <= 0 {
 		s.level2Subscribers.Store(0)
 	}
+	s.scans.wake()
 }
 
-func (s *Server) countLevel2() int64 {
-	return s.level2Subscribers.Load()
-}
+func (s *Server) countLevel2() int64 { return s.level2Subscribers.Load() }
 
 func level2SnapKey(sessions []protocol.Session) string {
 	var b strings.Builder
 	for _, sess := range sessions {
-		fmt.Fprintf(&b, "%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%d\x1e%d\x1f",
-			sess.Ref, sess.Name, sess.Cwd, sess.Title, sess.Status, sess.Provider, sess.Rows, sess.Cols)
+		sessionName := "<null>"
+		if sess.SessionName != nil {
+			sessionName = *sess.SessionName
+		}
+		fmt.Fprintf(&b, "%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%d\x1e%d\x1f",
+			sess.Ref, sess.Name, sess.WindowName, sess.WindowIndex, sess.Cwd, sess.Title, sess.Provider, sess.Activity, sessionName, sess.Health, sess.Status, sess.Rows, sess.Cols)
 	}
 	return b.String()
 }
 
-// publishLevel2 performs one scan-and-push cycle. It is the loop's only scan
-// point. Each subscribed connection gets a Level2Frame on snapshot change, or
-// a Level2Heartbeat when the snapshot is unchanged past the heartbeat interval.
-func (s *Server) publishLevel2(ctx context.Context) {
-	if s.countLevel2() == 0 {
-		return
-	}
-	model, err := s.discoverer.Discover(ctx)
-	if err != nil {
-		s.log.Warn("level2: discover failed", "err", err)
-		return
-	}
-	byPID := identifyModel(s, model)
-
-	byCWD := make(map[string][]level2Entry)
-	for _, ws := range model.Workspaces {
-		for _, p := range ws.Panes {
-			prov := byPID[p.PanePID]
-			if prov == "" {
-				continue
-			}
-			name := p.WindowName
-			if name == "" {
-				name = p.Session
-			}
-			status, first, known := classifyForProvider(prov, p.PaneTitle)
-			if !known {
-				s.logUnknownForProvider(prov, p.PaneTitle, first)
-			}
-			byCWD[ws.CWD] = append(byCWD[ws.CWD], level2Entry{
-				ref:      sessionRef(p),
-				name:     name,
-				cwd:      p.CWD,
-				title:    p.PaneTitle, // verbatim; status is a separate field
-				status:   status,
-				provider: prov,
-				rows:     uint16(p.Height),
-				cols:     uint16(p.Width),
-			})
-		}
-	}
-
-	s.trackersMu.Lock()
-	conns := make([]*wsConn, 0, len(s.trackers))
-	for c := range s.trackers {
-		if c.level2Active() {
-			conns = append(conns, c)
-		}
-	}
-	s.trackersMu.Unlock()
-
-	now := time.Now()
-	for _, c := range conns {
-		ws := c.level2Workspace()
-		entries := byCWD[ws] // missing cwd ⇒ honest empty list
-		sessions := make([]protocol.Session, 0, len(entries))
-		for _, e := range entries {
-			sessions = append(sessions, protocol.Session{
-				Ref:      e.ref,
-				Name:     e.name,
-				Cwd:      e.cwd,
-				Title:    e.title,
-				Status:   e.status,
-				Provider: e.provider,
-				Rows:     e.rows,
-				Cols:     e.cols,
-			})
-		}
-		key := level2SnapKey(sessions)
-		kind := c.noteLevel2Push(key, now, s.level2Heartbeat)
-		if kind == "" {
-			continue
-		}
-		seq := s.nextLevel2Seq()
-		if kind == "heartbeat" {
-			c.send(protocol.Level2Heartbeat{Workspace: ws, Seq: seq})
-			continue
-		}
-		c.send(protocol.Level2Frame{
-			Workspace: ws,
-			Seq:       seq,
-			Sessions:  sessions,
-		})
-	}
-}
-
-// handleLevel2Subscribe starts this connection's second-level stream.
-//
-// @contract
-// @pre 连接已认证
-// @post 连接计入 level2 订阅者并绑定 workspace；服务端开始按 cadence 推 Level2Frame
-// @err none
+// handleLevel2Subscribe changes the epoch before admission. A repeat subscribe
+// is a new refresh intent even when its workspace string is unchanged.
 func (c *wsConn) handleLevel2Subscribe(f protocol.Level2Subscribe) {
-	already := c.level2Active()
-	c.setLevel2(true, f.Workspace)
-	c.resetLevel2PushState()
-	if already {
-		c.s.wakeLevel2()
-	} else {
-		c.s.markLevel2()
+	c.level2Mu.Lock()
+	if !c.level2On {
+		c.s.level2Subscribers.Add(1)
 	}
-	// Event-driven one-shot (069): do not wait for the 2s cadence.
-	// publishLevel2 no-ops on discover failure and does not send an empty wipe.
-	c.s.publishLevel2(c.ctx)
+	c.level2On = true
+	c.level2WS = f.Workspace
+	c.level2Epoch++
+	epoch := c.level2Epoch
+	c.level2Snap = ""
+	c.level2PushedAt = time.Time{}
+	c.level2Mu.Unlock()
+	c.s.scans.level2(c, epoch)
 }
 
-// handleLevel2Unsubscribe stops this connection's second-level stream.
-//
-// @contract
-// @pre 连接已认证
-// @post 连接移出 level2 订阅者；最后一名订阅者退出后 level2Loop park
-// @err none
 func (c *wsConn) handleLevel2Unsubscribe(protocol.Level2Unsubscribe) {
-	if c.level2Active() {
-		c.setLevel2(false, "")
-		c.resetLevel2PushState()
+	c.level2Mu.Lock()
+	wasOn := c.level2On
+	c.level2On = false
+	c.level2Epoch++
+	c.level2WS = ""
+	c.level2Snap = ""
+	c.level2PushedAt = time.Time{}
+	c.level2Mu.Unlock()
+	if wasOn {
 		c.s.unmarkLevel2()
 	}
+	c.s.scans.removeLevel2(c)
 }
 
 func (c *wsConn) level2Active() bool {
@@ -242,42 +101,36 @@ func (c *wsConn) level2Active() bool {
 	return c.level2On
 }
 
-func (c *wsConn) level2Workspace() string {
+// level2Output checks workspace, epoch and last-push state in one critical
+// section. No network or queue operation occurs while level2Mu is held.
+func (c *wsConn) level2Output(epoch uint64, projection map[string][]protocol.Session, scanErr error) (protocol.Typed, uint64) {
 	c.level2Mu.Lock()
 	defer c.level2Mu.Unlock()
-	return c.level2WS
+	if !c.level2On || c.level2Epoch != epoch {
+		return nil, 0
+	}
+	if scanErr != nil {
+		return &protocol.ErrorFrame{Code: protocol.ErrCodeInternal, Reason: "catalog refresh failed"}, epoch
+	}
+	sessions := projection[c.level2WS]
+	key := level2SnapKey(sessions)
+	now := time.Now()
+	if c.level2PushedAt.IsZero() || c.level2Snap != key {
+		c.level2Snap, c.level2PushedAt = key, now
+		return protocol.Level2Frame{Workspace: c.level2WS, Seq: c.s.nextLevel2Seq(), Sessions: sessions}, epoch
+	}
+	if now.Sub(c.level2PushedAt) >= c.s.level2Heartbeat {
+		c.level2PushedAt = now
+		return protocol.Level2Heartbeat{Workspace: c.level2WS, Seq: c.s.nextLevel2Seq()}, epoch
+	}
+	return nil, 0
 }
 
-func (c *wsConn) setLevel2(on bool, workspace string) {
-	c.level2Mu.Lock()
-	defer c.level2Mu.Unlock()
-	c.level2On = on
-	c.level2WS = workspace
-}
-
-func (c *wsConn) resetLevel2PushState() {
-	c.level2Mu.Lock()
-	defer c.level2Mu.Unlock()
-	c.level2Snap = ""
-	c.level2PushedAt = time.Time{}
-}
-
-// noteLevel2Push records the latest snapshot and returns "frame", "heartbeat",
-// or "" (skip). First snapshot after subscribe always yields "frame".
-func (c *wsConn) noteLevel2Push(key string, now time.Time, hb time.Duration) string {
+func (c *wsConn) currentLevel2Epoch() uint64 {
 	c.level2Mu.Lock()
 	defer c.level2Mu.Unlock()
 	if !c.level2On {
-		return ""
+		return 0
 	}
-	if c.level2PushedAt.IsZero() || c.level2Snap != key {
-		c.level2Snap = key
-		c.level2PushedAt = now
-		return "frame"
-	}
-	if hb > 0 && now.Sub(c.level2PushedAt) >= hb {
-		c.level2PushedAt = now
-		return "heartbeat"
-	}
-	return ""
+	return c.level2Epoch
 }

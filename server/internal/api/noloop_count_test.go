@@ -55,7 +55,6 @@ func measureEnterLevel2(t *testing.T, jitterHeight bool) {
 		ListInterval:    2 * time.Second,
 		Level2Interval:  2 * time.Second,
 		Level2Heartbeat: 8 * time.Second,
-		ProviderFinder:  staticProvider("claude_code"),
 	})
 	e.auth()
 

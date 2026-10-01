@@ -155,6 +155,31 @@ func waitForStream(t *testing.T, ch <-chan []byte, want string) bool {
 	}
 }
 
+func TestMouseModeReadsActiveTmuxFlags(t *testing.T) {
+	tt := newTestTMUX(t)
+	p := tt.newPane(t, `sh -c "printf '\\033[?1002h\\033[?1006h'; sleep 300"`)
+	time.Sleep(100 * time.Millisecond)
+	mode, err := p.MouseMode(context.Background())
+	if err != nil {
+		t.Fatalf("MouseMode: %v", err)
+	}
+	if !mode.Any || !mode.Button || !mode.SGR || mode.Standard || mode.All {
+		t.Fatalf("MouseMode = %+v, want button+SGR only", mode)
+	}
+}
+
+func TestMouseModeBareShellIsDisabled(t *testing.T) {
+	tt := newTestTMUX(t)
+	p := tt.newPane(t, "sh")
+	mode, err := p.MouseMode(context.Background())
+	if err != nil {
+		t.Fatalf("MouseMode: %v", err)
+	}
+	if mode.Any || mode.Standard || mode.Button || mode.All || mode.SGR {
+		t.Fatalf("MouseMode = %+v, want all flags disabled", mode)
+	}
+}
+
 func TestSnapshotContainsPrintedOutput(t *testing.T) {
 	tt := newTestTMUX(t)
 	p := tt.newPane(t, `printf 'SNAP_MARK_12345\n'; sleep 300`)
@@ -276,45 +301,62 @@ func TestResizeChangesActualSize(t *testing.T) {
 	}
 }
 
+func TestResizeSkipsWindowCommandWhenPaneAlreadyMatches(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "tmux.log")
+	script := filepath.Join(dir, "fake-tmux")
+	if err := os.WriteFile(script, []byte(`#!/bin/sh
+printf '%s\n' "$3" >> "$ARGS_LOG"
+case "$3" in
+  display-message)
+    case "$*" in
+      *"#{window_id}"*) printf '@1\n' ;;
+      *"#{pane_width}x#{pane_height}"*) printf '120x30\n' ;;
+      *) exit 1 ;;
+    esac
+    ;;
+  set-option) ;;
+  resize-window) ;;
+  *) exit 1 ;;
+esac
+`), 0o755); err != nil {
+		t.Fatalf("write fake tmux: %v", err)
+	}
+	old := tmuxBin
+	tmuxBin = script
+	defer func() { tmuxBin = old }()
+	t.Setenv("ARGS_LOG", logPath)
+
+	p := NewPane("/sock/x", "%0")
+	w, h, err := p.Resize(context.Background(), 120, 30)
+	if err != nil {
+		t.Fatalf("same-size Resize: %v", err)
+	}
+	if w != 120 || h != 30 {
+		t.Fatalf("same-size Resize read-back: got %dx%d", w, h)
+	}
+	first, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read same-size tmux log: %v", err)
+	}
+	if strings.Contains(string(first), "resize-window") {
+		t.Fatalf("same-size Resize invoked resize-window: %q", first)
+	}
+
+	if _, _, err := p.Resize(context.Background(), 100, 20); err != nil {
+		t.Fatalf("changed Resize: %v", err)
+	}
+	all, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read changed tmux log: %v", err)
+	}
+	if got := strings.Count(string(all), "resize-window"); got != 1 {
+		t.Fatalf("changed Resize resize-window count = %d, want 1; log %q", got, all)
+	}
+}
+
 func TestScrollbackPagingRange(t *testing.T) {
-	tt := newTestTMUX(t)
-	name := fmt.Sprintf("tbscbk%d", atomic.AddUint64(&testSeq, 1))
-	if _, err := tt.run("new-session", "-d", "-x", "40", "-y", "10", "-s", name, "-c", t.TempDir(), "bash"); err != nil {
-		t.Fatalf("new-session: %v", err)
-	}
-	out, err := tt.run("list-panes", "-t", name, "-F", "#{pane_id}")
-	if err != nil {
-		t.Fatalf("resolve pane: %v", err)
-	}
-	p := NewPane(tt.sock, strings.TrimSpace(out))
-
-	// Push 60 lines so history far exceeds the 10-row screen.
-	if err := p.Inject(context.Background(), `for i in $(seq 1 60); do echo "SCBK_$i"; done`); err != nil {
-		t.Fatalf("Inject loop: %v", err)
-	}
-	// Wait until the tail line is on screen before paging history.
-	deadline := time.Now().Add(5 * time.Second)
-	for !bytes.Contains(mustSnapshot(t, p), []byte("SCBK_60")) {
-		if time.Now().After(deadline) {
-			t.Fatal("loop output never reached the screen")
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	page, err := p.Scrollback(context.Background(), -30, -21)
-	if err != nil {
-		t.Fatalf("Scrollback: %v", err)
-	}
-	lines := strings.Split(strings.TrimRight(string(page), "\n"), "\n")
-	if len(lines) != 10 {
-		t.Errorf("page -30..-21 should be exactly 10 lines, got %d: %q", len(lines), page)
-	}
-	if !bytes.Contains(page, []byte("SCBK_22")) {
-		t.Errorf("page should contain SCBK_22 (older history), got %q", page)
-	}
-	if bytes.Contains(page, []byte("SCBK_60")) {
-		t.Errorf("page should NOT contain on-screen tail SCBK_60, got %q", page)
-	}
+	testScrollbackPagingRangeStrong(t)
 }
 
 // mustSnapshot snapshots a pane and fails the test on error (helper for

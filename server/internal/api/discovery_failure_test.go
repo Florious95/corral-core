@@ -47,7 +47,7 @@ func (d *flipDiscoverer) setErr(err error) {
 // (server.go publishListing's error path).
 func TestDiscoveryFailureRetainsLastGoodSnapshot(t *testing.T) {
 	fd := &flipDiscoverer{model: testModel()}
-	e := startWS(t, Options{Token: "test-token", Discoverer: fd, ProviderFinder: staticProvider("claude_code")})
+	e := startWS(t, Options{Token: "test-token", Discoverer: fd})
 	e.auth()
 
 	// Let the baseline scan land (the 50ms test loop), then fail every scan.
@@ -106,7 +106,7 @@ func TestDiscoveryFailureFromStartReturnsEmptyListing(t *testing.T) {
 // timing out (no frame) is the positive control.
 func TestDiscoveryFailureDoesNotPushBogusDelta(t *testing.T) {
 	fd := &flipDiscoverer{model: testModel()}
-	e := startWS(t, Options{Token: "test-token", Discoverer: fd, ProviderFinder: staticProvider("claude_code")})
+	e := startWS(t, Options{Token: "test-token", Discoverer: fd})
 	e.auth()
 
 	// Baseline scan lands (the first snapshot is a baseline, so no delta is
@@ -130,8 +130,11 @@ func TestDiscoveryFailureDoesNotPushBogusDelta(t *testing.T) {
 // stuck stale.
 func TestDiscoveryRecoveryResumesDelta(t *testing.T) {
 	fd := &flipDiscoverer{model: testModel()}
-	e := startWS(t, Options{Token: "test-token", Discoverer: fd, ProviderFinder: staticProvider("claude_code")})
+	e := startWS(t, Options{Token: "test-token", Discoverer: fd})
 	e.auth()
+	// A server-side scan is not this connection's wire baseline.
+	e.sendFrame(&protocol.List{ReqID: 1})
+	mustListing(t, e, 1)
 
 	// Baseline with the original model, then fail a couple of scans.
 	time.Sleep(150 * time.Millisecond)
@@ -195,7 +198,7 @@ func TestDiscoveryRecoveryResumesDelta(t *testing.T) {
 // baseline. The assertions below guard that recovery path.
 func TestDiscoveryRecoveryReachesConnectedClientFromStartFailure(t *testing.T) {
 	fd := &flipDiscoverer{model: nil, err: errors.New("tmux down")}
-	e := startWS(t, Options{Token: "test-token", Discoverer: fd, ProviderFinder: staticProvider("claude_code")})
+	e := startWS(t, Options{Token: "test-token", Discoverer: fd})
 	e.auth()
 
 	// During the outage the client lists and gets a well-formed empty listing.

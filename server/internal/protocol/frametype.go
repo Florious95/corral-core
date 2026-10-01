@@ -16,6 +16,18 @@ const (
 	// rejection.
 	TypeAuthAck FrameType = "auth_ack"
 
+	// TypeCreateAgent starts a provider agent from an existing pane (C→S).
+	TypeCreateAgent FrameType = "create_agent"
+
+	// TypeCreateAgentResult is the typed result of TypeCreateAgent (S→C).
+	TypeCreateAgentResult FrameType = "create_agent_result"
+
+	// TypeCloseSession closes exactly one discovered pane (C→S).
+	TypeCloseSession FrameType = "close_session"
+
+	// TypeCloseSessionResult is the typed result of TypeCloseSession (S→C).
+	TypeCloseSessionResult FrameType = "close_session_result"
+
 	// TypeList requests a fresh full workspace/session listing (C→S).
 	TypeList FrameType = "list"
 
@@ -29,6 +41,9 @@ const (
 	// TypeSubscribe starts mirroring a session (C→S): the server answers with
 	// a binary Snapshot frame, then a Delta stream.
 	TypeSubscribe FrameType = "subscribe"
+
+	// TypePresenceUpdate reports active client types for one subscribed ref.
+	TypePresenceUpdate FrameType = "presence_update"
 
 	// TypeUnsubscribe stops mirroring a session (C→S). Idempotent.
 	TypeUnsubscribe FrameType = "unsubscribe"
@@ -112,4 +127,10 @@ const (
 
 	// TypeNotificationsPage is one page of the frozen historical view (S→C).
 	TypeNotificationsPage FrameType = "notifications_page"
+)
+
+// Client types identify the subscribing surface, not a physical device.
+const (
+	ClientTypeMobile  = "mobile"
+	ClientTypeDesktop = "desktop"
 )

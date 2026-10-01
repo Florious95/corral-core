@@ -16,16 +16,16 @@ import (
 )
 
 // paneFormat is the tmux format string used to enumerate every pane of a
-// server in one query. Fields are "|"-separated; the penultimate field is
-// "<width>x<height>" and the last is #{window_name}. The chosen fields are the
-// two-level model inputs: session name (label only), window index, pane id,
-// cwd (grouping key), foreground command, pane pid (state-wiring additive
-// input, task fix-state-wiring), pane title (OSC-title state signal, task
-// fix-state-detection), dimensions, and window name (display label task
-// fix-session-alias: tmux window names carry the meaningful per-window labels
-// — e.g. "wiki-r5-acceptance-tester" — where the session name is a whole-team
-// name like "team-refactor-maintainability").
-const paneFormat = "#{session_name}|#{window_index}|#{pane_id}|#{pane_current_path}|#{pane_current_command}|#{pane_pid}|#{pane_title}|#{pane_width}x#{pane_height}|#{window_name}"
+// server in one query. Fields use the unit-separator byte so values containing
+// "|" remain opaque; the penultimate field is "<width>x<height>" and the last
+// is #{window_name}. The chosen fields are the two-level model inputs: session
+// name (label only), window index, pane id, cwd (grouping key), foreground
+// command, pane pid (state-wiring additive input, task fix-state-wiring), pane
+// title (OSC-title state signal, task fix-state-detection), dimensions, and
+// window name (display label task fix-session-alias: tmux window names carry
+// the meaningful per-window labels — e.g. "wiki-r5-acceptance-tester" — where
+// the session name is a whole-team name like "team-refactor-maintainability").
+const paneFormat = "#{session_name}\x1f#{window_index}\x1f#{pane_id}\x1f#{pane_current_path}\x1f#{pane_current_command}\x1f#{pane_pid}\x1f#{pane_title}\x1f#{pane_width}x#{pane_height}\x1f#{window_name}"
 
 // socketTimeout bounds a single tmux query against a single socket so a hung
 // server cannot stall the whole scan. A server that does not answer within
@@ -39,31 +39,17 @@ type socketClass struct {
 
 // classifySocketDirectory is intentionally evaluated before ReadDir. A
 // tmux-<other uid> directory is outside this daemon's discovery object and
-// must not even have its entries considered for a tmux child process. Explicit
-// nonstandard directories are accepted only when owned by this uid; this is
-// the seam used by isolated deployments and tests.
+// must not even have its entries considered for a tmux child process.
 func classifySocketDirectory(dir string) socketClass {
-	clean := filepath.Clean(dir)
-	base := filepath.Base(clean)
+	base := filepath.Base(filepath.Clean(dir))
 	current := "tmux-" + strconv.Itoa(os.Getuid())
-	if base == current {
-		return socketClass{allowed: true, name: "current_uid_directory"}
-	}
-	if strings.HasPrefix(base, "tmux-") {
-		return socketClass{name: "other_uid_directory"}
-	}
-	if pathHasIsolatedAncestor(clean) {
-		return socketClass{name: "isolated_directory"}
-	}
-	info, err := os.Stat(clean)
-	if err != nil {
+	if base != current {
+		if strings.HasPrefix(base, "tmux-") {
+			return socketClass{name: "other_uid_directory"}
+		}
 		return socketClass{name: "unknown_directory"}
 	}
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || uint32(os.Getuid()) != stat.Uid {
-		return socketClass{name: "foreign_owner_directory"}
-	}
-	return socketClass{allowed: true, name: "explicit_uid_directory"}
+	return socketClass{allowed: true, name: "current_uid_directory"}
 }
 
 func tmuxEnvSocket() string {
@@ -78,7 +64,7 @@ func pathHasIsolatedAncestor(path string) bool {
 	clean := filepath.Clean(path)
 	parts := strings.Split(clean, string(os.PathSeparator))
 	for i := 0; i < len(parts); i++ {
-		if base := parts[i]; (strings.HasPrefix(base, "ta-") && i < len(parts)-1) || strings.HasPrefix(base, "e2e-") || strings.HasPrefix(base, "agentmirror-tmux-test-") {
+		if base := parts[i]; strings.HasPrefix(base, "e2e-") || strings.HasPrefix(base, "agentmirror-tmux-test-") {
 			return true
 		}
 		if i+3 < len(parts) && parts[i] == ".team" && parts[i+1] == "nodes" && parts[i+3] == "tmp" {
@@ -94,22 +80,19 @@ func pathHasIsolatedAncestor(path string) bool {
 func classifySocket(path string) socketClass {
 	clean := filepath.Clean(path)
 	base := filepath.Base(clean)
-	// A live socket explicitly named by TMUX is a user-selected target even
-	// when tmux gives it a ta-* name. Check this before the isolated-name
-	// guard so the daemon does not discard the current user's active server.
-	if clean == tmuxEnvSocket() && tmuxEnvSocket() != "" {
-		return socketClass{allowed: true, name: "tmux_env_socket"}
-	}
 	if strings.HasPrefix(base, "test-") || strings.HasPrefix(base, "e2e-") || pathHasIsolatedAncestor(clean) {
 		return socketClass{name: "isolated_path"}
+	}
+	if clean == tmuxEnvSocket() && tmuxEnvSocket() != "" {
+		return socketClass{allowed: true, name: "tmux_env_socket"}
 	}
 	if base == "default" {
 		return socketClass{allowed: true, name: "default_socket"}
 	}
-	// The directory gate already restricts this to the current uid's tmux
-	// directory. Discover every other active socket there, including ta-* and
-	// operator-chosen names, while retaining the explicit test-tree exclusions.
-	return socketClass{allowed: true, name: "current_uid_socket"}
+	// The parent directory is already restricted to this uid's tmux directory;
+	// a user-created server may use any socket basename, not only "default" or
+	// the socket selected by TMUX. Keep isolated fixture names excluded above.
+	return socketClass{allowed: true, name: "user_socket"}
 }
 
 func logSocketDecision(logger *slog.Logger, path string, decision socketClass) {
@@ -185,6 +168,11 @@ func DiscoverWithDirs(ctx context.Context, logger *slog.Logger, socketDirs []str
 			}
 			ps, err := scanServer(ctx, sock, logger)
 			if err != nil {
+				// A canceled caller says nothing about socket health. Do not
+				// poison later scans or return a partially discovered model.
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
 				// Probe succeeded but tmux still failed (raced to death, or
 				// hung past socketTimeout). Remember it so the next tick does
 				// not pay another fork.
@@ -269,6 +257,9 @@ func scanServer(ctx context.Context, socketPath string, logger *slog.Logger) ([]
 	logger.Debug("discovery: invoking tmux", "socket", socketPath, "path", socketPath,
 		"classification", "allowed", "action", "list-panes", "argv", argv)
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	// tmux passes output descriptors to its server. Killing a client does not
+	// close copies retained by a stopped server; bound os/exec's pipe drain too.
+	cmd.WaitDelay = 250 * time.Millisecond
 	// Strip TMUX so tmux never trips the nested-session guard and refuses to
 	// run (this daemon legitimately runs attached to tmux itself).
 	cmd.Env = envWithout(os.Environ(), "TMUX")
@@ -299,19 +290,17 @@ func scanServer(ctx context.Context, socketPath string, logger *slog.Logger) ([]
 	return panes, nil
 }
 
-// parsePaneLine parses one line of paneFormat output into a Pane. It returns
-// ok=false for malformed lines (wrong field count or a non-integer dimension)
-// so the caller can skip the offending pane without failing the whole scan.
+// parsePaneLine parses one line of paneFormat output into a Pane. Production
+// framing uses the unit-separator byte; the pipe fallback preserves old test
+// and fixture output while callers transition to paneFormat. Empty fields are
+// retained by strings.Split. It returns ok=false for malformed lines (wrong
+// field count or a non-integer dimension) so the caller can skip the offending
+// pane without failing the whole scan.
 func parsePaneLine(line string) (Pane, bool) {
-	parts := strings.Split(line, "|")
-	// pane_title is user-controlled and may contain '|'. The dimension field
-	// is the penultimate field and remains numeric, so reconstruct the title
-	// from all fields between the fixed PID and that anchor. Keep the trailing
-	// window name strict to continue rejecting malformed extra fields.
-	if len(parts) < 9 {
+	parts := splitPaneFields(line)
+	if len(parts) != 9 {
 		return Pane{}, false
 	}
-	dimIndex := len(parts) - 2
 
 	win, err := strconv.Atoi(parts[1])
 	if err != nil {
@@ -324,7 +313,7 @@ func parsePaneLine(line string) (Pane, bool) {
 	if err != nil {
 		pid = 0
 	}
-	dims := strings.SplitN(parts[dimIndex], "x", 2)
+	dims := strings.SplitN(parts[7], "x", 2)
 	if len(dims) != 2 {
 		return Pane{}, false
 	}
@@ -340,8 +329,8 @@ func parsePaneLine(line string) (Pane, bool) {
 	return Pane{
 		Session:     parts[0],
 		WindowIndex: win,
-		WindowName:  parts[dimIndex+1],
-		PaneTitle:   strings.Join(parts[6:dimIndex], "|"),
+		WindowName:  parts[8],
+		PaneTitle:   parts[6],
 		PaneID:      parts[2],
 		CWD:         parts[3],
 		Command:     parts[4],
@@ -349,6 +338,21 @@ func parsePaneLine(line string) (Pane, bool) {
 		Width:       width,
 		Height:      height,
 	}, true
+}
+
+// splitPaneFields prefers the real unit-separator byte used on macOS tmux.
+// Linux tmux 3.4/3.5 prints that control byte as a literal \037 octal escape,
+// which must be split before the pipe fallback: Codex/Pi titles contain `|`
+// and would otherwise be discarded as the wrong field count.
+func splitPaneFields(line string) []string {
+	switch {
+	case strings.Contains(line, "\x1f"):
+		return strings.Split(line, "\x1f")
+	case strings.Contains(line, `\037`):
+		return strings.Split(line, `\037`)
+	default:
+		return strings.Split(line, "|")
+	}
 }
 
 // envWithout returns the process environment with the named variable removed.

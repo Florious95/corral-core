@@ -16,20 +16,25 @@
 
 package dev.agentmirror.app.ui.screens
 
+import androidx.compose.ui.test.assertContentDescriptionEquals
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.agentmirror.app.notify.NotificationItem
 import dev.agentmirror.app.notify.NotificationKey
 import dev.agentmirror.app.notify.NotificationLevel
+import dev.agentmirror.app.notify.NotificationRecord
 import dev.agentmirror.app.notify.NotificationRepositoryTest.Companion.record
 import dev.agentmirror.app.notify.NotificationSupport
 import dev.agentmirror.app.ui.theme.AppTheme
 import dev.agentmirror.app.ui.theme.Appearance
 import dev.agentmirror.app.ui.theme.ThemeId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -39,7 +44,7 @@ import java.time.ZoneOffset
 
 /** 消息中心：全文零截断、级别、进入终端 / 标已读回调，两套风格都能渲染。 */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [34], qualifiers = "w411dp-h891dp")
 class MessageCenterScreenTest {
 
     @get:Rule
@@ -55,6 +60,7 @@ class MessageCenterScreenTest {
         onOpen: (NotificationItem) -> Unit = {},
         onRead: (NotificationKey) -> Unit = {},
         onAllRead: () -> Unit = {},
+        providerOf: (NotificationRecord) -> String? = { null },
     ) {
         compose.setContent {
             AppTheme(appearance = Appearance.Light, themeId = themeId) {
@@ -66,6 +72,7 @@ class MessageCenterScreenTest {
                     onOpenSession = onOpen,
                     onMarkRead = onRead,
                     onMarkAllRead = onAllRead,
+                    providerOf = providerOf,
                 )
             }
         }
@@ -83,7 +90,7 @@ class MessageCenterScreenTest {
     }
 
     @Test
-    fun enterTerminal_invokesOpenSession_cardTap_marksRead() {
+    fun linkedCard_wholeCardTapAndEnterTerminal_bothOpenSession() {
         val opened = mutableListOf<String>()
         val read = mutableListOf<NotificationKey>()
         render(
@@ -93,8 +100,52 @@ class MessageCenterScreenTest {
         )
         compose.onNodeWithText("进入终端").performClick()
         assertEquals(listOf("id-1"), opened)
+        // 整卡可点：点标题 / 正文都直达该 Agent 终端（标已读由打开回调负责）。
         compose.onNodeWithText("标题 1").performClick()
+        compose.onNodeWithText("正文 1").performClick()
+        assertEquals(listOf("id-1", "id-1", "id-1"), opened)
+        assertEquals(emptyList<NotificationKey>(), read)
+    }
+
+    @Test
+    fun unlinkedCardTap_onlyMarksRead() {
+        val opened = mutableListOf<String>()
+        val read = mutableListOf<NotificationKey>()
+        render(
+            listOf(NotificationItem(record("1", sessionRef = null), read = false)),
+            onOpen = { opened += it.record.id },
+            onRead = { read += it },
+        )
+        compose.onNodeWithText("标题 1").performClick()
+        assertEquals(emptyList<String>(), opened)
         assertEquals(listOf(NotificationKey("h", "id-1")), read)
+    }
+
+    @Test
+    fun agentTile_brandMarkForKnownProvider_terminalGlyphOtherwise_withWorkspaceChip() {
+        render(
+            listOf(
+                NotificationItem(record("1"), read = false),
+                NotificationItem(record("2", agentName = "Sol"), read = true),
+            ),
+            providerOf = { if (it.id == "id-1") "codex" else null },
+        )
+        compose.onNodeWithTag("message-agent-icon-id-1", useUnmergedTree = true).assertContentDescriptionEquals("Codex")
+        compose.onNodeWithTag("message-agent-icon-id-2", useUnmergedTree = true).assertContentDescriptionEquals("Agent")
+        compose.onNodeWithTag("message-workspace-id-1", useUnmergedTree = true).assertExists()
+        compose.onAllNodesWithText("/work/project", useUnmergedTree = true).assertCountEquals(2)
+        // 首字白方块已移除：卡头不再出现 Agent 名首字单独成块。
+        compose.onAllNodesWithText("S", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun providerInference_matchesWholeWordsOnly() {
+        assertEquals("codex", inferProvider("Codex · 验收"))
+        assertEquals("claude_code", inferProvider("Claude Code"))
+        assertEquals("pi", inferProvider("pi-dev"))
+        assertNull(inferProvider("pipeline"))
+        assertNull(inferProvider("Sol"))
+        assertNull(inferProvider(null))
     }
 
     @Test
@@ -152,7 +203,7 @@ class MessageCenterScreenTest {
 
     @Test
     fun levelLabelsAndColorsAreDistinct() {
-        assertEquals(listOf("信息", "完成", "注意", "错误"), NotificationLevel.entries.map(::levelLabel))
+        assertEquals(listOf("信息", "完成", "警告", "错误"), NotificationLevel.entries.map(::levelLabel))
         assertEquals(4, NotificationLevel.entries.map(::levelColor).toSet().size)
     }
 
