@@ -1,20 +1,22 @@
 # Leader 权威交接与基线报告（2026-10-02）
 
 ## 1. 交付与黄金基线确认
-- **全流程验收完成**：在 9902 隔离实例上完成移动端 App E2E 全链路实测验证（底层 WS 保活层 PASS：旧物理连接在 Listing hold 期间不再被超时误掐死，持续收发 1051 个业务帧零断开，常驻通知状态全程准确稳定；极端夹具全屏占位画面前置不可判，不夸大宣称整场景绿），所有代码已正式合入 main 主线并推送到 GitHub 远端！
-- **最新黄金基线**：**Commit `f8896d020ac3ec9fe47d1eabe8dd1fad52ee69f3`**（PR #44，钉死不可变 Core `20261002.background-liveness1`）
-- **提交说明**：`fix(conn): recognize decoded business frames to avoid liveness timeout and align notification bootstrap state`
+- **全流程验收完成**：在 9902/9914 隔离实例上完成移动端 App E2E 全链路实测验证（真实 AVD 模拟器测试全 PASS：超长文本大段粘贴自动打包为 UTF-8 文件上传并安全注入路径引用、上传失败完整保留用户草稿、短文本实时直通保持 100% 完好；底层 WS 保活层 PASS），服务端相关契约完全体（01/02/03及protocol.md §8）已全量正式落盘合流！
+- **最新黄金基线**：**Commit `5cfab6f0f7c398a74b06d7b7d99d03c0c54fdca0`**（合入权威契约完全体：03 号超长文本与文件上传及路径引用契约、主协议 §8 与 §9 升级校准；App 依赖与新阈值冻结 `cae23b0b` / `2b6d5ce`）
+- **提交说明**：`docs: specify file references and unified long-text threshold`
 - **关联已合入/跟进 PR**：
   * PR #41（前后台即刻重连与假活快速探活） -> MERGED
   * PR #43（Agent 任务通知体系、消息中心与会话跳转） -> MERGED
-  * PR #44（切前台会话首帧快照自愈 + 前台服务配置自愈 + 探活防误掐死 + 通知状态对齐） -> 最终候选 `f8896d0`
-  * corral-core PR #107（Commit `028030795`） / PR #108（Commit `656819f43`，版本 `20261002.background-liveness1`）
-- **权威交付 APK 凭证（最终终极版本）**：
-  * 本地路径：`/Users/alauda/Downloads/corral-app-keepalive-final-f8896d0.apk`
-  * 精确 SHA-256：`1a6d5cdf732be83168cc52bdc29cfaedeef55289c77d1f20115537bb77a7d51c`
+  * PR #44（切前台会话首帧快照自愈 + 前台服务配置自愈 + 探活防误掐死 + 通知状态对齐） -> 已验证
+  * PR #46（Issue #45 超长文本自动打包上传为文件并注入路径引用） -> 新阈值（2,000 字符 / 100 行）全绿已验证（Commit `cae23b0b` / 冻结 `2b6d5ce`）
+  * corral-core PR #107（Commit `028030795`） / PR #108（版本 `20261002.background-liveness1`）
+- **权威交付 APK 凭证（超长文本文件化最终正式版）**：
+  * 本地路径：`/Users/alauda/Downloads/corral-app-longtext-upload-2b6d5ce.apk`
+  * 精确 SHA-256：`de118546589535a7a11a27c7043ba6d1e7e2783958d0466ee0bc567a4c0c57d2`
   * 大小：41,074,779 bytes
-  * 115 专属提取码：**`d1g1o0qie4158x2so`**
-  * 115 通用覆盖包：**`e5d5prgpdqpbezw2p`**
+  * 115 专属提取码：**`cs7owa3ctyvxcdmv0`**
+  * 115 通用覆盖包：**`biq0bmg1jx2mm83ar`**
+  * 新阈值升级版（2000字门槛）：`.team/fixed-workflow/evidence/issue45-long-text-upload-tester/candidate-cae23b0b/app-debug-cae23b0b.apk`（SHA: `dfe1f62ccaf952b4530f50c7261f47313f74b354dbc2f0045deaacbbdb74fb09`）
 
 ## 2. 本次基线核心内容总结
 1. **服务端 `/pair/whoami` 与 `/pair/identify` 身份路由补齐（已实证）**：
@@ -38,6 +40,11 @@
    - **前台服务配置自愈**：在没有 Activity 时，Service 独立被系统拉起自动从 `SharedPreferences` 读配置拉起长连接，真机 kill -9 重启实测 100% 连通（`accept-000006`）；
    - **彻底消除 5 秒探活误掐死**：解码任意有效业务帧（快照/DELTA/level2/heartbeat）立即清除探活守卫，模拟器实测持续收发 1051 个真实 binary 帧零断开，永不换代；
    - **常驻通知状态对齐**：`onStartCommand` 读取真实连接状态，处于 READY 保持“已连接”，彻底消除“正在连接…”无端闪烁。
+6. **超长文本自动打包上传与文件引用（Issue #45 / PR #46 方案 A）**：
+   - **单次大批量粘贴自动锁定**：当单次插入/粘贴字符增量超过 100 字符时，立刻锁定为大文本草稿模式，彻底掐死向终端的实时击键泄漏（模拟器剪贴板实测 pane diff 严格为 0）；
+   - **无感文件打包上传**：点击发送时，自动将超长文本转换为带有时间戳的 UTF-8 文本文件（如 `upload-text-*.txt`），通过 `POST /upload` 管道上传至宿主机；
+   - **安全路径引用注入**：上传成功后，向终端 CLI 注入带引号的绝对路径（如 `"/path/to/upload-text-*.txt"`），输入框安全清空；
+   - **草稿保护与短文兼容**：上传失败时完整保留用户草稿并轻量提示；短文本（<100字符）依然享受 100% 极速实时直通体验，两者互不干扰。
 4. **前后台切换即刻重连与探活（Issue #40 / PR #41）**。
 5. **现代主义浅色模式 Provider 金属反色与质感精修**。
 6. **输入框多行展开动效时序重构**。
