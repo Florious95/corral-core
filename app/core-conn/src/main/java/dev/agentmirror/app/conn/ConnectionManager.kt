@@ -321,6 +321,8 @@ class ConnectionManager(
             val elapsed = nowMs - wait.startedAtMs
             // Check the original hard deadline first, even if this is the first late pump.
             if (elapsed >= SNAPSHOT_TIMEOUT_MS) {
+                // The WS thread may have acknowledged this entry after the pump read it.
+                if (!pendingSnapshots.remove(ref, wait)) continue
                 ConnDiag.record("ws", "snapshot_timeout ref=$ref elapsed_ms=$elapsed retried=${wait.retried}")
                 foregroundRecoveryArmed = true
                 clearForegroundLiveness()
@@ -328,10 +330,11 @@ class ConnectionManager(
                 conn.closeForReconnect("subscription snapshot timeout: $ref")
                 return
             }
-            if (!wait.retried && elapsed >= SNAPSHOT_RETRY_AFTER_MS) {
+            if (!wait.retried && elapsed >= SNAPSHOT_RETRY_AFTER_MS && pendingSnapshots[ref] === wait) {
                 wait.retried = true
                 val dims = activeSubscriptions[ref] ?: continue
-                val ok = sendSubscription(conn, ref, dims)
+                // Do not arm again if a concurrent matching snapshot already completed the wait.
+                val ok = conn.send(subscriptionFrame(ref, dims))
                 ConnDiag.record("ws", "snapshot_retry ref=$ref elapsed_ms=$elapsed sent=$ok")
                 traceSubscribe(ref, dims.first, dims.second, sent = ok, replay = false, ready = true, hasConn = true, reason = "snapshot_retry")
             }
@@ -582,16 +585,16 @@ class ConnectionManager(
         // Arm before sending: a transport may deliver the snapshot synchronously in tests.
         // Repeated geometry subscribes on the same socket must not extend the original budget.
         pendingSnapshots.computeIfAbsent(ref) { SnapshotWait(conn, clock.nowMs()) }
-        return conn.send(
-            SubscribeFrame(
-                ref = ref,
-                rows = dims.first,
-                cols = dims.second,
-                clientType = "mobile",
-                retainPaneSize = activeRetainPaneSizes[ref],
-            ),
-        )
+        return conn.send(subscriptionFrame(ref, dims))
     }
+
+    private fun subscriptionFrame(ref: String, dims: Pair<Int, Int>) = SubscribeFrame(
+        ref = ref,
+        rows = dims.first,
+        cols = dims.second,
+        clientType = "mobile",
+        retainPaneSize = activeRetainPaneSizes[ref],
+    )
 
     /**
      * 退订（幂等）；同时移出重放簿记。
