@@ -28,6 +28,8 @@ import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
+import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
+import dev.agentmirror.app.pairing.startPersistentConnection
 
 /**
  * 常驻连接前台服务（004/011 Android 前台服务路线；fg-service 知识基底 §1）。
@@ -60,8 +62,8 @@ import dev.agentmirror.app.conn.FramePayload
  * 后 conn 层自动重新 list + 重放订阅（无状态免疫，004）。
  *
  * @contract
- * @pre 未注入配置（[ServiceWire.manager] 所需）时 [onStartCommand] 的 manager() 调用被
- *      runCatching 兜住（服务可启动但连接不建，不抛给系统）
+ * @pre 内存配置未初始化时从保存的配对配置恢复；未配对时不猜配置、不建立连接
+ *      （恢复/启动异常由 runCatching 兜住，不抛给系统）
  * @post [onStartCommand] 返回 START_STICKY；[onDestroy] 停泵、解绑 serviceListener、释放连接（幂等）
  * @err 连接启动失败由 conn 层退避重连消化，不在此抛
  * @inv 本服务不缓存 [ConnectionManager] 引用，每次经 [ServiceWire.managerOrNull] 读取；
@@ -103,10 +105,18 @@ class MirrorForegroundService : Service() {
             startForeground(NotificationHelper.ID_PERSISTENT, notification)
         }
         notifications.notifyPersistent(connectionText(ServiceWire.managerOrNull()?.state() ?: ConnectionState.CONNECTING))
-        // 确保共享连接启动（幂等：manager 已存在则复用、start 非 STOPPED 不重复拨号）。
-        // 配置未注入（START_STICKY 重建但 prefs 已清）时不建连接不崩，靠冷启动路径恢复。
-        runCatching { ServiceWire.manager(NoopManagerListener).start() }
-            .onFailure { Log.w(TAG, "start persistent connection from service: ${it.message}") }
+        // START_STICKY 可只重建Service：从prefs复用完整配对启动序列，不依赖Activity。
+        // 不传context，避免该序列递归启动本服务；已有内存配置/manager保持原幂等路径。
+        runCatching {
+            if (ServiceWire.currentConfig() == null) {
+                SharedPreferencesPairingConfigStore(this).load()?.let { config ->
+                    TsnetBootstrap.install(this)
+                    startPersistentConnection(config)
+                }
+            } else {
+                ServiceWire.manager(NoopManagerListener).start()
+            }
+        }.onFailure { Log.w(TAG, "start persistent connection from service: ${it.message}") }
         handler.removeCallbacks(pumpRunnable)
         handler.post(pumpRunnable)
         // 泵归属标记置位（fix-app-runtime-sa）：在屏兜底泵据此让出，避免双泵重复拍。
