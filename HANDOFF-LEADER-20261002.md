@@ -1,22 +1,21 @@
 # Leader 权威交接与基线报告（2026-10-02）
 
 ## 1. 交付与黄金基线确认
-- **全流程验收完成**：在 9902/9914 隔离实例上完成移动端 App E2E 全链路实测验证（真实 AVD 模拟器测试全 PASS：超长文本大段粘贴自动打包为 UTF-8 文件上传并安全注入路径引用、上传失败完整保留用户草稿、短文本实时直通保持 100% 完好；底层 WS 保活层 PASS），服务端相关契约完全体（01/02/03及protocol.md §8）已全量正式落盘合流！
-- **最新黄金基线**：**Commit `5cfab6f0f7c398a74b06d7b7d99d03c0c54fdca0`**（合入权威契约完全体：03 号超长文本与文件上传及路径引用契约、主协议 §8 与 §9 升级校准；App 依赖与新阈值冻结 `cae23b0b` / `2b6d5ce`）
-- **提交说明**：`docs: specify file references and unified long-text threshold`
+- **全流程验收完成**：在 9902/9914 隔离实例上完成移动端 App E2E 全链路实测验证（真实 AVD 模拟器测试全 PASS：超长文本大段粘贴自动打包为 UTF-8 文件上传并安全注入路径引用、上传失败完整保留用户草稿、短文本实时直通保持 100% 完好；底层 WS 保活层 PASS），服务端相关契约完全体（01/02/03及protocol.md §8/§9）已全量正式落盘合流，终端底部 1:1 现代主义 Dock 与 2,000 字符长文本文件化已完成终极官方合流出包！
+- **最新黄金基线**：**Commit `1b4b28f31cdfaf67ae1b0523f477c57b27dceaa9`**（PR #46，完美合并 Terminal Modernist Dock 1:1 与 2,000 字符长文本文件化，叠加在保活黄金基线 `f8896d0` 之上）
+- **提交说明**：`feat(session): unify modernist dock 1:1 with relaxed 2000-unit file upload threshold`
 - **关联已合入/跟进 PR**：
   * PR #41（前后台即刻重连与假活快速探活） -> MERGED
   * PR #43（Agent 任务通知体系、消息中心与会话跳转） -> MERGED
   * PR #44（切前台会话首帧快照自愈 + 前台服务配置自愈 + 探活防误掐死 + 通知状态对齐） -> 已验证
-  * PR #46（Issue #45 超长文本自动打包上传为文件并注入路径引用） -> 新阈值（2,000 字符 / 100 行）全绿已验证（Commit `cae23b0b` / 冻结 `2b6d5ce`）
+  * PR #46（Issue #45 超长文本自动打包上传为文件 + 终端底部 Modernist Dock 1:1） -> 终极合流官方候选 `1b4b28f31`
   * corral-core PR #107（Commit `028030795`） / PR #108（版本 `20261002.background-liveness1`）
-- **权威交付 APK 凭证（超长文本文件化最终正式版）**：
-  * 本地路径：`/Users/alauda/Downloads/corral-app-longtext-upload-2b6d5ce.apk`
-  * 精确 SHA-256：`de118546589535a7a11a27c7043ba6d1e7e2783958d0466ee0bc567a4c0c57d2`
-  * 大小：41,074,779 bytes
-  * 115 专属提取码：**`cs7owa3ctyvxcdmv0`**
-  * 115 通用覆盖包：**`biq0bmg1jx2mm83ar`**
-  * 新阈值升级版（2000字门槛）：`.team/fixed-workflow/evidence/issue45-long-text-upload-tester/candidate-cae23b0b/app-debug-cae23b0b.apk`（SHA: `dfe1f62ccaf952b4530f50c7261f47313f74b354dbc2f0045deaacbbdb74fb09`）
+- **权威交付 APK 凭证（终极双合流正式版）**：
+  * 本地路径：`/Users/alauda/Downloads/corral-app-final-dock-1b4b28f.apk`
+  * 精确 SHA-256：`96a6f571a580266ad2faa36c364e0eb7d72c1c1b37097f7766a27f9b05f56cd3`
+  * 大小：41,140,315 bytes
+  * 115 专属提取码：**`e5dd6425m7sodzw2p`**
+  * 115 通用覆盖包：**`ak66q0zstp223htb5`**
 
 ## 2. 本次基线核心内容总结
 1. **服务端 `/pair/whoami` 与 `/pair/identify` 身份路由补齐（已实证）**：
