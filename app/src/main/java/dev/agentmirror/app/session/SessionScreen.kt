@@ -290,6 +290,7 @@ fun SessionScreen(
     }
 
     var mirror by remember { mutableStateOf(TextFieldValue("")) }
+    var textUploadInProgress by remember { mutableStateOf(false) }
     var shortcutCommands by remember {
         mutableStateOf(SharedPreferencesShortcutCommandStore(context).load())
     }
@@ -449,9 +450,24 @@ fun SessionScreen(
                         viewModel.onPassthroughInput(mirror, it)
                         mirror = it
                     },
-                    onSendText = { text ->
-                        viewModel.sendDraft(text.ifEmpty { mirror.text })
-                        mirror = TextFieldValue("")
+                    onSendText = send@{ text ->
+                        if (textUploadInProgress) return@send
+                        val draft = text.ifEmpty { mirror.text }
+                        if (needsTextUpload(draft)) {
+                            textUploadInProgress = true
+                            scope.launch {
+                                try {
+                                    val sent = withContext(Dispatchers.IO) { viewModel.sendDraft(draft) }
+                                    // Keep failed uploads and edits made during IO; never erase a newer draft.
+                                    if (sent && mirror.text == draft) mirror = TextFieldValue("")
+                                } finally {
+                                    textUploadInProgress = false
+                                }
+                            }
+                        } else {
+                            viewModel.sendDraft(draft)
+                            mirror = TextFieldValue("")
+                        }
                     },
                     onPickAttachment = { attachMenu = true },
                     onKeyToken = { viewModel.sendKey(it.toInputKey()) },
@@ -595,8 +611,7 @@ private val KEY_BAR_ENTRIES = listOf(
 )
 
 /**
- * 只展示错误。成功/在途（已发送、发送中、已附加、上传中）不再上屏，
- * 避免输入框上方浮一层科技蓝提示字。
+ * 展示错误及轻量上传状态；成功、发送中不额外上屏。
  */
 @Composable
 private fun StatusArea(viewModel: SessionViewModel) {
@@ -605,6 +620,7 @@ private fun StatusArea(viewModel: SessionViewModel) {
         else -> null
     } ?: when (val u = viewModel.uploadStatus) {
         is UploadStatus.Failed -> u.message
+        UploadStatus.Uploading -> "正在上传…"
         else -> null
     } ?: viewModel.transientError
 
@@ -612,7 +628,7 @@ private fun StatusArea(viewModel: SessionViewModel) {
     Text(
         text = message,
         style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.error,
+        color = if (viewModel.uploadStatus is UploadStatus.Uploading) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier

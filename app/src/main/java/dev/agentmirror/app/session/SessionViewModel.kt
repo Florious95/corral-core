@@ -526,7 +526,11 @@ class SessionViewModel(
      * - [inputSyncEnabled] == false（关闭）：输入期不向 CLI 注入按键；发送时将 [text] 一次性
      *   发给 CLI 并附带 CR（`\r` / 0x0D）提交。Raw 模式下 LF 只是插入换行，不是回车。
      *
-     * @param text 本地待发送草稿文本；开启实时同步时忽略此参数（发送裸 Enter 避免重复内容）
+     * - 超长草稿（≥4000 UTF-16 单位或 ≥100 行）：上传原文 UTF-8 文件，仅注入引用路径；
+     *   不使用图片预贴，不向终端灌入原文。调用方在 IO 线程执行，失败时保留本地草稿。
+     *
+     * @param text 本地待发送草稿；短文同步开启时只补未同步差异，再发裸 Enter
+     * @return true 表示提交已入连接发送队列；false 时调用方不得清除文件草稿
      * @contract
      * @pre connectionState 为 READY，且 inputStatus 非 Sending
      * @post 提交成功置 [InputStatus.Sending]，回执后由 [onInputResult] 转 [InputStatus.Sent]
@@ -535,12 +539,16 @@ class SessionViewModel(
      * @inv 在途不回发（发送闸）
      */
     @JvmOverloads
-    fun sendDraft(text: String = "") {
-        if (inputStatus is InputStatus.Sending) return // 在途不回发
+    fun sendDraft(text: String = ""): Boolean {
+        if (inputStatus is InputStatus.Sending) return false
         // 本地先判定可发送性：未就绪立即明确报错（静默失效猎杀）。
         if (connectionState != ConnectionState.READY) {
             inputStatus = InputStatus.Failed("连接未就绪，无法发送")
-            return
+            return false
+        }
+        if (needsTextUpload(text)) {
+            if (uploadStatus is UploadStatus.Uploading) return false
+            return sendTextFileDraft(text)
         }
         val attachmentPath = pendingAttachmentPaths.lastOrNull().orEmpty()
 
@@ -566,9 +574,44 @@ class SessionViewModel(
             inputStatus = InputStatus.Sending
             // Enter 提交后 CLI 行空；本地框跟着清。不同步会把下一轮当成「删掉上一条」。
             syncedText = ""
-        } else {
-            inputStatus = InputStatus.Failed("发送失败：连接不可用")
+            return true
         }
+        inputStatus = InputStatus.Failed("发送失败：连接不可用")
+        return false
+    }
+
+    /** Blocking upload; the screen uses the existing attachment IO dispatcher for large drafts. */
+    private fun sendTextFileDraft(text: String): Boolean {
+        val base = liveBaseUrl()
+        if (base == null) {
+            uploadStatus = UploadStatus.Failed("未配置上传地址")
+            return false
+        }
+        inputStatus = InputStatus.Idle
+        uploadStatus = UploadStatus.Uploading
+        val outcome = uploader.upload(base, uploadToken, textFileAttachment(text))
+        if (outcome is UploadOutcome.Failure) {
+            uploadStatus = UploadStatus.Failed(outcome.reason)
+            return false
+        }
+        val path = (outcome as UploadOutcome.Success).path
+        if (!path.startsWith("/") || path.any { it == '\r' || it == '\n' }) {
+            uploadStatus = UploadStatus.Failed("上传返回的文件路径无效")
+            return false
+        }
+        uploadStatus = UploadStatus.Success(path)
+        if (disposed || connectionState != ConnectionState.READY) {
+            inputStatus = InputStatus.Failed("连接未就绪，文件已上传，草稿已保留")
+            return false
+        }
+        // A short prefix may already be mirrored before this edit crossed the threshold.
+        // Only remove that known prefix, and only after the upload has succeeded.
+        if (syncedText.isNotEmpty()) applyDiffSync("")
+        val attachmentPath = pendingAttachmentPaths.lastOrNull().orEmpty()
+        val reference = textFileReference(path)
+        val submitted = manager.sendInput(ref, if (attachmentPath.isEmpty()) "$reference\r" else reference, attachmentPath)
+        inputStatus = if (submitted) InputStatus.Sending else InputStatus.Failed("发送失败：草稿已保留")
+        return submitted
     }
 
     /**
@@ -609,7 +652,7 @@ class SessionViewModel(
      * @inv 同步后光标约定在行尾；不改本地草稿；不引入额外延迟
      */
     fun onPassthroughInput(oldValue: TextFieldValue, newValue: TextFieldValue) {
-        if (!inputSyncEnabled) return
+        if (!inputSyncEnabled || needsTextUpload(newValue.text)) return
         val wasComposing = oldValue.composition != null
         val isComposing = newValue.composition != null
         val composition = newValue.composition

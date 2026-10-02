@@ -59,15 +59,27 @@ class SessionViewModelTest {
     ) : AttachmentUploader {
         var lastBaseUrl: String? = null
         var lastAttachment: Attachment? = null
+        var lastToken: String? = null
+        var uploadCount = 0
+        var onUpload: (() -> Unit)? = null
+        override fun upload(baseUrl: String, token: String?, attachment: Attachment): UploadOutcome {
+            lastToken = token
+            return upload(baseUrl, attachment)
+        }
         override fun upload(baseUrl: String, attachment: Attachment): UploadOutcome {
             lastBaseUrl = baseUrl
             lastAttachment = attachment
+            uploadCount++
+            onUpload?.invoke()
             return result
         }
     }
 
     /** 测试夹具：READY 的 ConnectionManager + 已构造的 VM（首订待首次有效视口）。 */
-    private class Harness(ref: String = "s1", rows: Int = 5, cols: Int = 10, warm: Boolean = false) {
+    private class Harness(
+        ref: String = "s1", rows: Int = 5, cols: Int = 10, warm: Boolean = false,
+        uploadToken: String? = null, uploadBaseUrl: () -> String? = { "http://host:0" },
+    ) {
         val clock = FakeClock()
         val transport = FakeWebSocketTransport()
         val uploader = FakeUploader()
@@ -83,7 +95,10 @@ class SessionViewModelTest {
             manager.start()
             // 假传输同步 onOpen ⇒ auth 已发出；auth_ack ok ⇒ READY。
             transport.deliverText("""{"v":1,"type":"auth_ack","payload":{"ok":true}}""")
-            vm = SessionViewModel(manager, uploader, "http://host:0", ref, rows, cols, warmSubscribe = warm)
+            vm = SessionViewModel(
+                manager, uploader, "http://host:0", ref, rows, cols,
+                uploadToken = uploadToken, liveBaseUrl = uploadBaseUrl, warmSubscribe = warm,
+            )
             // 测试自建 manager：显式把 VM 挂为监听（生产经接线层 uiConnector 扇出路由，见 VM KDoc）。
             manager.setListener(vm)
             emulator = vm.emulator
@@ -136,6 +151,139 @@ class SessionViewModelTest {
     /** 屏幕第 [row] 行的可见文本（去尾部空白）。 */
     private fun text(row: List<dev.agentmirror.terminal.Cell>): String =
         row.joinToString("") { it.text }.trimEnd()
+
+    // ---- Issue45: large drafts are files, never terminal text payloads ----
+
+    @Test fun longPasteDoesNotReachTerminalBeforeSend() {
+        val h = Harness()
+        val draft = "x".repeat(4_000)
+        h.vm.onPassthroughInput(tv(""), tv(draft))
+        assertTrue("长草稿必须留在本地，不能发送前已全量注入", h.inputFrames().isEmpty())
+    }
+
+    @Test fun longDraftUploadsExactUtf8AndSendsOnlyQuotedFileReference() {
+        for (sync in listOf(true, false)) {
+            val h = Harness()
+            h.vm.inputSyncEnabled = sync
+            h.uploader.result = UploadOutcome.Success("/host/log files/user's.txt")
+            val draft = "日志🙂\r\n".repeat(1_000) + "end\n"
+            h.vm.sendDraft(draft)
+            val attachment = h.uploader.lastAttachment
+            assertTrue("超长文本必须上传", attachment != null)
+            assertTrue(attachment!!.name.matches(Regex("upload-text-[A-Za-z0-9-]+\\.txt")))
+            assertEquals("text/plain", attachment.mimeType)
+            assertEquals(draft, attachment.bytes.toString(Charsets.UTF_8))
+            assertEquals("http://host:0", h.uploader.lastBaseUrl)
+            val sent = h.inputFrames().last()
+            assertEquals("'/host/log files/user'\\''s.txt'\r", sent.text)
+            assertTrue(h.inputFrames().none { it.text.contains("日志") })
+            assertTrue(h.attachPreviewFrames().isEmpty())
+        }
+    }
+
+    @Test fun textThresholdIsInclusiveAndShortTextRetainsDirectSend() {
+        val short = Harness()
+        short.vm.inputSyncEnabled = false
+        short.vm.sendDraft("x".repeat(3_999))
+        assertEquals(null, short.uploader.lastAttachment)
+        assertEquals("x".repeat(3_999) + "\r", short.inputFrames().single().text)
+        val long = Harness()
+        long.vm.sendDraft("x".repeat(4_000))
+        assertTrue(long.uploader.lastAttachment != null)
+    }
+
+    @Test fun hundredLinesUploadsWithoutPassthroughEvenBelowCharacterThreshold() {
+        val h = Harness()
+        val draft = List(100) { "a" }.joinToString("\n")
+        h.vm.onPassthroughInput(tv(""), tv(draft))
+        assertTrue(h.inputFrames().isEmpty())
+        h.vm.sendDraft(draft)
+        assertEquals(draft, h.uploader.lastAttachment!!.bytes.toString(Charsets.UTF_8))
+    }
+
+    @Test fun longDraftUploadFailureSendsNothingAndShowsFailure() {
+        val h = Harness()
+        h.uploader.result = UploadOutcome.Failure("网络不可用")
+        h.vm.sendDraft("x".repeat(4_000))
+        assertTrue(h.inputFrames().isEmpty())
+        assertTrue(h.vm.uploadStatus is UploadStatus.Failed)
+        assertTrue((h.vm.uploadStatus as UploadStatus.Failed).message.contains("网络不可用"))
+    }
+
+    @Test fun longDraftRemovesOnlyPreviouslyMirroredShortPrefix() {
+        val h = Harness()
+        h.vm.onPassthroughInput(tv(""), tv("ab"))
+        val draft = "ab" + "x".repeat(4_000)
+        h.vm.onPassthroughInput(tv("ab"), tv(draft))
+        h.vm.sendDraft(draft)
+        assertEquals(2, h.keyFrames().count { it.keys == listOf(InputKey.BACKSPACE) })
+        assertTrue(h.inputFrames().none { it.text.contains("xxx") })
+    }
+
+    @Test fun longDraftUploadFailureKeepsMirroredPrefixUntouched() {
+        val h = Harness()
+        h.vm.onPassthroughInput(tv(""), tv("ab"))
+        h.uploader.result = UploadOutcome.Failure("HTTP 507")
+        h.vm.sendDraft("ab" + "x".repeat(4_000))
+        assertEquals(1, h.inputFrames().size)
+        assertEquals("ab", h.inputFrames().single().text)
+    }
+
+    @Test fun longDraftUsesPairedCredentialAndCurrentUploadEndpoint() {
+        val h = Harness(uploadToken = "fixture-token", uploadBaseUrl = { "http://current:0" })
+        assertTrue(h.vm.sendDraft("x".repeat(4_000)))
+        assertEquals("http://current:0", h.uploader.lastBaseUrl)
+        assertEquals("fixture-token", h.uploader.lastToken)
+    }
+
+    @Test fun longDraftKeepsExistingImagePreviewAndDoesNotPreviewTextAsImage() {
+        val h = Harness()
+        h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1)))
+        h.uploader.result = UploadOutcome.Success("/host/upload-text-fixture.txt")
+        h.vm.sendDraft("x".repeat(4_000))
+        val sent = h.inputFrames().last()
+        assertEquals("'/host/upload-text-fixture.txt'", sent.text)
+        assertEquals("/host/img.png", sent.attachmentPath)
+        assertEquals(listOf("/host/img.png"), h.vm.pendingAttachmentPaths)
+        assertEquals(1, h.attachPreviewFrames().size)
+    }
+
+    @Test fun longDraftDoesNotUploadAgainWhileUploadIsInProgress() {
+        val h = Harness()
+        val draft = "x".repeat(4_000)
+        h.uploader.onUpload = { assertFalse(h.vm.sendDraft(draft)) }
+        assertTrue(h.vm.sendDraft(draft))
+        assertEquals(1, h.uploader.uploadCount)
+    }
+
+    @Test fun longDraftDisconnectedDuringUploadDoesNotSubmitAndReturnsFailure() {
+        val h = Harness()
+        h.uploader.onUpload = { h.transport.peerClose(1006, "dropped") }
+        assertFalse(h.vm.sendDraft("x".repeat(4_000)))
+        assertTrue(h.inputFrames().isEmpty())
+        assertTrue(h.vm.inputStatus is InputStatus.Failed)
+    }
+
+    @Test fun longDraftUploadFailureCanRetryWithoutSendingOriginalText() {
+        val h = Harness()
+        val draft = "x".repeat(4_000)
+        h.uploader.result = UploadOutcome.Failure("HTTP 507")
+        assertFalse(h.vm.sendDraft(draft))
+        h.uploader.result = UploadOutcome.Success("/host/retry.txt")
+        assertTrue(h.vm.sendDraft(draft))
+        assertEquals(2, h.uploader.uploadCount)
+        assertEquals("'/host/retry.txt'\r", h.inputFrames().single().text)
+    }
+
+    @Test fun longDraftRejectsNonAbsoluteOrMultilineReturnedPath() {
+        for (path in listOf("relative.txt", "/host/bad\npath.txt", "/host/bad\rpath.txt")) {
+            val h = Harness()
+            h.uploader.result = UploadOutcome.Success(path)
+            assertFalse(h.vm.sendDraft("x".repeat(4_000)))
+            assertTrue(h.vm.uploadStatus is UploadStatus.Failed)
+            assertTrue(h.inputFrames().isEmpty())
+        }
+    }
 
     // ---- 镜像流：snapshot 重放 / delta 追加 / scrollback 头插 ----
 
