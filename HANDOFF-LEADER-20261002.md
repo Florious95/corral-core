@@ -2,17 +2,19 @@
 
 ## 1. 交付与黄金基线确认
 - **全流程验收完成**：在 9902 隔离实例上完成移动端 App E2E 全链路实测验证（真实 AVD 模拟器测试全 PASS），所有代码已正式合入 main 主线并推送到 GitHub 远端！
-- **最新黄金基线**：**Commit `008c90187311d0a51c91104e12c1451f28b7e732`**
-- **提交说明**：`docs(contracts): add 02-desktop-mouse-wheel-and-raw-input-contract`（合入 `5530953e3` 与 `d4181a3ed`）
-- **关联已合入 PR**：
+- **最新黄金基线**：**Commit `dc65207065f4bb3f9b9b2026320c310be9747d90`**（PR #44，钉死不可变 Core `20261002.snapshot-recovery2`）
+- **提交说明**：`fix(conn): recover on snapshot deadline in foreground session open`
+- **关联已合入/跟进 PR**：
   * PR #41（前后台即刻重连与假活快速探活） -> MERGED
   * PR #43（Agent 任务通知体系、消息中心与会话跳转） -> MERGED
+  * PR #44（切前台打开会话首帧快照有界超时与立即快速自愈） -> OPEN / 待合并
+  * corral-core PR #107（首帧快照守卫与异步关闭防卡死） / PR #108（不可变 Maven 产物发布）
 - **权威交付 APK 凭证**：
-  * 本地路径：`/Users/alauda/Downloads/corral-app-final-5530953.apk`
-  * 精确 SHA-256：`c982bcec68e0aec9a090b7959031d80a057dac51316eb97798d8492e085295b1`
-  * 大小：45,231,629 bytes
-  * 115 专属提取码：**`e5dc26mq9oorkzw2p`**
-  * 115 通用覆盖包：**`biq1a94zjkpy183ar`**
+  * 本地路径：`/Users/alauda/Downloads/corral-app-snapshot-recovery2-a1d8db0.apk`
+  * 精确 SHA-256：`a1d8db0e56e82dfb532ceeeae492d6f3601afc1e1d2e704c4ec68688b4a9f6f0`
+  * 大小：41,074,779 bytes
+  * 115 专属提取码：**`biqzi22x1iy9g83ar`**
+  * 115 通用覆盖包：**`cs7gsr9le87hndmv0`**
 
 ## 2. 本次基线核心内容总结
 1. **服务端 `/pair/whoami` 与 `/pair/identify` 身份路由补齐（已实证）**：
@@ -28,6 +30,10 @@
    - 桌面端防碎割契约：`docs/contracts/02-desktop-mouse-wheel-and-raw-input-contract.md`，服务端恢复 `InjectRawAtomic`，彻底消除桌面原生滚轮 SGR-1006 碎割失效；
    - Android 系统通知：`agent_tasks_v1` 高优先级通道、Heads-up 横幅、BigTextStyle、PendingIntent 深度链接直达终端；
    - 消息中心 UI：`MessageCenterScreen`，顶栏未读角标铃铛、卡片去除首字大白块改为精致 Agent 徽章与工作区路径展示、整卡点击一键直达终端 CLI、双主题自适应。
+4. **切前台会话首帧快照有界超时与快速自愈（彻底根治切前台加载长等待）**：
+   - 建立首帧快照守护状态机（2s 轻量重发 + 4s 硬限熔断），绝不因 Listing/DELTA 延长期限；
+   - 绕开 OkHttp 异步关闭握手 30s 挂死陷阱，主动提前 finish 并立即复用快速重拨通道拉起新连接重放订阅；
+   - 线程安全加固：`@Volatile` + `@Synchronized` 彻底消除 UI 线程时钟泵与网络收件线程的并发双终结竞态。
 4. **前后台切换即刻重连与探活（Issue #40 / PR #41）**。
 5. **现代主义浅色模式 Provider 金属反色与质感精修**。
 6. **输入框多行展开动效时序重构**。
