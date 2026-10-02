@@ -2,19 +2,19 @@
 
 ## 1. 交付与黄金基线确认
 - **全流程验收完成**：在 9902 隔离实例上完成移动端 App E2E 全链路实测验证（真实 AVD 模拟器测试全 PASS），所有代码已正式合入 main 主线并推送到 GitHub 远端！
-- **最新黄金基线**：**Commit `75c67c4dd29a0722e687542fcc7ca7311cf448a6`**（PR #44，钉死不可变 Core `20261002.snapshot-recovery3`）
-- **提交说明**：`fix(conn): recover on snapshot deadline with atomic winner race defense`
+- **最新黄金基线**：**Commit `f8896d020ac3ec9fe47d1eabe8dd1fad52ee69f3`**（PR #44，钉死不可变 Core `20261002.background-liveness1`）
+- **提交说明**：`fix(conn): recognize decoded business frames to avoid liveness timeout and align notification bootstrap state`
 - **关联已合入/跟进 PR**：
   * PR #41（前后台即刻重连与假活快速探活） -> MERGED
   * PR #43（Agent 任务通知体系、消息中心与会话跳转） -> MERGED
-  * PR #44（切前台打开会话首帧快照有界超时与立即快速自愈） -> 最终冻结 recovery3
-  * corral-core PR #107（首帧快照守卫与原子竞态消除） / PR #108（不可变 Maven 产物发布 recovery3）
-- **权威交付 APK 凭证（仅此候选有效）**：
-  * 本地路径：`/Users/alauda/Downloads/corral-app-snapshot-recovery3-0efb225.apk`
-  * 精确 SHA-256：`0efb2251cedf618feb67592e65557cb231e04d7cd0ae7bcad3221310501b51fd`
+  * PR #44（切前台会话首帧快照自愈 + 前台服务配置自愈 + 探活防误掐死 + 通知状态对齐） -> 最终候选 `f8896d0`
+  * corral-core PR #107（Commit `028030795`） / PR #108（Commit `656819f43`，版本 `20261002.background-liveness1`）
+- **权威交付 APK 凭证（最终终极版本）**：
+  * 本地路径：`/Users/alauda/Downloads/corral-app-keepalive-final-f8896d0.apk`
+  * 精确 SHA-256：`1a6d5cdf732be83168cc52bdc29cfaedeef55289c77d1f20115537bb77a7d51c`
   * 大小：41,074,779 bytes
-  * 115 专属提取码：**`e5dyvdt2iy60uzw2p`**
-  * 115 通用覆盖包：**`e5dyvm2d15lrwzw2p`**
+  * 115 专属提取码：**`d1g1o0qie4158x2so`**
+  * 115 通用覆盖包：**`e5d5prgpdqpbezw2p`**
 
 ## 2. 本次基线核心内容总结
 1. **服务端 `/pair/whoami` 与 `/pair/identify` 身份路由补齐（已实证）**：
@@ -34,6 +34,10 @@
    - 建立首帧快照守护状态机（2s 轻量重发 + 4s 硬限熔断），绝不因 Listing/DELTA 延长期限；
    - 绕开 OkHttp 异步关闭握手 30s 挂死陷阱，主动提前 finish 并立即复用快速重拨通道拉起新连接重放订阅；
    - 线程安全加固：`@Volatile` + `@Synchronized` 彻底消除 UI 线程时钟泵与网络收件线程的并发双终结竞态。
+5. **后台保活、前台服务配置自愈与防误掐死（彻底消除常驻通知卡连接与无端重拨）**：
+   - **前台服务配置自愈**：在没有 Activity 时，Service 独立被系统拉起自动从 `SharedPreferences` 读配置拉起长连接，真机 kill -9 重启实测 100% 连通（`accept-000006`）；
+   - **彻底消除 5 秒探活误掐死**：解码任意有效业务帧（快照/DELTA/level2/heartbeat）立即清除探活守卫，模拟器实测持续收发 1051 个真实 binary 帧零断开，永不换代；
+   - **常驻通知状态对齐**：`onStartCommand` 读取真实连接状态，处于 READY 保持“已连接”，彻底消除“正在连接…”无端闪烁。
 4. **前后台切换即刻重连与探活（Issue #40 / PR #41）**。
 5. **现代主义浅色模式 Provider 金属反色与质感精修**。
 6. **输入框多行展开动效时序重构**。
