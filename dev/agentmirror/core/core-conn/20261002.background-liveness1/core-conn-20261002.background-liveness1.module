@@ -1,0 +1,96 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "dev.agentmirror.core",
+    "module": "core-conn",
+    "version": "20261002.background-liveness1",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.14.5"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "dev.agentmirror.core",
+          "module": "core-protocol",
+          "version": {
+            "requires": "20260915.close"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "core-conn-20261002.background-liveness1.jar",
+          "url": "core-conn-20261002.background-liveness1.jar",
+          "size": 53509,
+          "sha512": "f327f0d06bc152bf0f18d0fb7beb743f181c5b58656d7ea53b5779df08174ba9e428fa7c477805b3cb420786372b5a8114a6f11c98af09e3dd2318adf5385c95",
+          "sha256": "148f8d96a3bb99beb9f84b212f64e70e2e139e170405348ccff20a3d055cea6c",
+          "sha1": "854e386e8fddb3b15c124c0bbe8a54ac9e4a6fc0",
+          "md5": "5aa24d286bd63b27c27780d4b3787ca9"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "dev.agentmirror.core",
+          "module": "core-protocol",
+          "version": {
+            "requires": "20260915.close"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "core-conn-20261002.background-liveness1.jar",
+          "url": "core-conn-20261002.background-liveness1.jar",
+          "size": 53509,
+          "sha512": "f327f0d06bc152bf0f18d0fb7beb743f181c5b58656d7ea53b5779df08174ba9e428fa7c477805b3cb420786372b5a8114a6f11c98af09e3dd2318adf5385c95",
+          "sha256": "148f8d96a3bb99beb9f84b212f64e70e2e139e170405348ccff20a3d055cea6c",
+          "sha1": "854e386e8fddb3b15c124c0bbe8a54ac9e4a6fc0",
+          "md5": "5aa24d286bd63b27c27780d4b3787ca9"
+        }
+      ]
+    }
+  ]
+}
