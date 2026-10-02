@@ -1,21 +1,21 @@
 # Leader 权威交接与基线报告（2026-10-02）
 
 ## 1. 交付与黄金基线确认
-- **全流程验收完成**：在 9902/9914 隔离实例上完成移动端 App E2E 全链路实测验证（真实 AVD 模拟器测试全 PASS：超长文本大段粘贴自动打包为 UTF-8 文件上传并安全注入路径引用、上传失败完整保留用户草稿、短文本实时直通保持 100% 完好；底层 WS 保活层 PASS），服务端相关契约完全体（01/02/03及protocol.md §8/§9）已全量正式落盘合流；按照用户明确指示，已彻底回退 Agent CLI 对话界面的底部 Dock 重构，回归到重构前用户最喜爱的原版经典底部 UI！
-- **最新黄金基线**：**Commit `cae23b0b3f3fe2ea6004450645d7f8efac909bf9`**（用户最喜爱的经典原版底部 Dock UI，包含 2,000 字符长文本文件化、PR #44 前台服务配置自愈与全套保活成果）
-- **提交说明**：`fix(input): use only 2000-unit or 100-line file threshold`
+- **全流程验收完成**：在 9902/9914 隔离实例上完成移动端 App E2E 全链路实测验证（真实 AVD 模拟器测试全 PASS：超长文本大段粘贴自动打包为 UTF-8 文件上传并安全注入路径引用、上传失败完整保留用户草稿、短文本实时直通保持 100% 完好；底层 WS 保活层 PASS），服务端相关契约完全体（01/02/03及protocol.md §8/§9）已全量正式落盘合流；按照用户明确指示，已彻底回退 Agent CLI 对话界面的底部 Dock 重构，回归到重构前用户最喜爱的原版经典底部 UI，并彻底修复了暗色模式下发送消息气泡底色塌缩为纯黑的缺陷！
+- **最新黄金基线**：**Commit `2e2357d4adad598796c4d2932205262e4948bb09`**（用户最喜爱的经典原版底部 Dock UI + 暗色模式消息气泡底色语义路由修复，包含 2,000 字符长文本文件化、PR #44 前台服务配置自愈与全套保活成果）
+- **提交说明**：`fix(theme): route dark message background #1E1E2E before black guard and preserve classic dock`
 - **关联已合入/跟进 PR**：
   * PR #41（前后台即刻重连与假活快速探活） -> MERGED
   * PR #43（Agent 任务通知体系、消息中心与会话跳转） -> MERGED
   * PR #44（切前台会话首帧快照自愈 + 前台服务配置自愈 + 探活防误掐死 + 通知状态对齐） -> 已验证
-  * PR #46（Issue #45 超长文本自动打包上传为文件） -> 2,000 字符门槛 + 原版经典 Dock UI（Commit `cae23b0b`）
+  * PR #46（Issue #45 超长文本自动打包上传为文件） -> 2,000 字符门槛 + 原版经典 Dock UI + 暗色消息气泡底色修复（Commit `2e2357d`）
   * corral-core PR #107（Commit `028030795`） / PR #108（版本 `20261002.background-liveness1`）
-- **权威交付 APK 凭证（经典原版底部 UI + 2000字长文本文件化正式版）**：
-  * 本地路径：`/Users/alauda/Downloads/corral-app-reverted-dock-cae23b0.apk`
-  * 精确 SHA-256：`dfe1f62ccaf952b4530f50c7261f47313f74b354dbc2f0045deaacbbdb74fb09`
+- **权威交付 APK 凭证（经典原版底栏 + 暗色气泡底色终极修复版）**：
+  * 本地路径：`/Users/alauda/Downloads/corral-app-classic-darkbubble-2e2357d.apk`
+  * 精确 SHA-256：`77b6b8a1481983d52685842d79dada31361cf927d175f2f64d878c6aa7456341`
   * 大小：41,074,779 bytes
-  * 115 专属提取码：**`e5dd1jd8jeuyizw2p`**
-  * 115 通用覆盖包：**`biqqnoq4kirgk83ar`**
+  * 115 专属提取码：**`biqqz48p8xhoc83ar`**
+  * 115 通用覆盖包：**`e5ddywhxq0nlrzw2p`**
 
 ## 2. 本次基线核心内容总结
 1. **服务端 `/pair/whoami` 与 `/pair/identify` 身份路由补齐（已实证）**：
