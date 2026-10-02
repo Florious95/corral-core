@@ -1,0 +1,44 @@
+[
+  {
+    "suite": "dev.agentmirror.app.conn.ConnListenerRoutingTest",
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  {
+    "suite": "dev.agentmirror.app.conn.Issue40ForegroundResumeRedTest",
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  {
+    "suite": "dev.agentmirror.app.conn.ReadySubscriptionNoFirstFrameRedTest",
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  {
+    "suite": "dev.agentmirror.app.conn.SessionRefTransitionRoutingTest",
+    "tests": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  {
+    "suite": "dev.agentmirror.app.session.SessionViewModelTest",
+    "tests": 47,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  {
+    "suite": "dev.agentmirror.app.session.SessionWarmGeometryRouteTest",
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+]
