@@ -20,16 +20,7 @@ import java.util.UUID
 
 /** Large pastes stay local even when live keyboard sync is enabled. */
 internal fun needsTextUpload(text: String): Boolean =
-    text.length >= 4_000 || text.lineSequence().take(100).count() >= 100
-
-/** Only the inserted part is a batch; one-key edits must not count the unchanged tail. */
-internal fun isBulkTextEdit(previous: String, current: String): Boolean {
-    val prefix = DiffSync.commonPrefixLength(previous, current)
-    var suffix = 0
-    val remaining = minOf(previous.length, current.length) - prefix
-    while (suffix < remaining && previous[previous.lastIndex - suffix] == current[current.lastIndex - suffix]) suffix++
-    return current.length - prefix - suffix > 100
-}
+    text.length >= 2_000 || text.lineSequence().take(100).count() >= 100
 
 internal fun textFileAttachment(text: String) = Attachment(
     name = "upload-text-${UUID.randomUUID()}.txt",
