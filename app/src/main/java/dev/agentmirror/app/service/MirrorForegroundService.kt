@@ -88,7 +88,7 @@ class MirrorForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = notifications.persistent("正在连接…")
+        val notification = notifications.persistent(connectionText(ServiceWire.managerOrNull()?.state() ?: ConnectionState.CONNECTING))
         // 前台服务类型 dataSync（携带运行数据，后台状态镜像）。Android 14+ 必声（manifest 属性
         // + 此处）；类型常量 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC 是 API 29 引入，
         // minSdk 26 直用会触发 InlinedApi（lint stage3 #11）——低版本走无类型重载（API 26-28

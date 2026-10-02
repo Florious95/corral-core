@@ -16,6 +16,7 @@
 
 package dev.agentmirror.app.service
 
+import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -218,6 +219,29 @@ class ForegroundServiceWiringTest {
         controller.destroy()
         assertNull("服务停止必须释放连接管理器", ServiceWire.managerOrNull())
         assertNull("服务停止必须解绑 serviceListener", ServiceWire.serviceListener)
+    }
+
+    @Test
+    fun readyServiceReentry_initialForegroundNotificationUsesActualState() {
+        ServiceWire.setConfig(ConnectionConfig("ws://192.0.2.44:9902/ws", "ready-fixture"))
+        val manager = ServiceWire.manager(NoopListener)
+        manager.start()
+        driveReadyWithListing(factory.created.single(), seq = 1)
+        assertEquals(ConnectionState.READY, manager.state())
+        val controller = Robolectric.buildService(MirrorForegroundService::class.java)
+        try {
+            val service = controller.create().startCommand(0, 1).get()
+
+            assertEquals(
+                "READY重入不得先发布虚假的正在连接文案",
+                "已连接",
+                shadowOf(service).lastForegroundNotification.extras.getCharSequence(Notification.EXTRA_TEXT).toString(),
+            )
+            assertSame(manager, ServiceWire.managerOrNull())
+            assertEquals(1, factory.created.size)
+        } finally {
+            controller.destroy()
+        }
     }
 
     @Test
