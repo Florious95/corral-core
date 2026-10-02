@@ -3,6 +3,7 @@
 > 状态：**已正式发布（Production Baseline）**。当前服务端（`server/`）、Android 客户端（`app/`）及全局 CLI（`corral-notify`）已全量落地并验证。
 > 基础协议：[WebSocket v1](../protocol.md)。本契约是能力协商保护的增量扩展，不修改终端 binary 格式、不把全局 `v` 改成 2。
 > MUST / MUST NOT / SHOULD 分别表示必须 / 禁止 / 应当。Android、iOS、Desktop 使用同一字段和恢复语义，不另造平台私有协议。
+> 关联：[02 · 桌面滚轮与原子裸输入](02-desktop-mouse-wheel-and-raw-input-contract.md)、[03 · 文件与超长文本引用](03-file-upload-and-long-text-reference-contract.md)。文件HTTP Bearer认证不等于通知能力协商；文本阈值/上传不得改变本契约的host/stream身份与本机发布权限。
 
 ## 0. 多端跨平台适配总纲（Cross-Platform Alignment）
 

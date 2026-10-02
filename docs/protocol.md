@@ -6,6 +6,14 @@
 > 需求出处：`requirement-base/entries/003`（四标准）、`005`（resize）、`006`（秒开+滚动）、
 > `008`（状态五值+隔离铁律）、`011`（技术路线裁定：WS 传输）。
 
+## 跨端契约完全体索引
+
+- [01 · Agent 主动任务通知](contracts/01-agent-notification-contract.md)：`notifications_v1` 能力协商、通知身份/历史恢复与本机IPC；基础WS旧客户端不自动获得新通知能力。
+- [02 · 桌面滚轮与裸字节输入](contracts/02-desktop-mouse-wheel-and-raw-input-contract.md)：双滚轮通道与含ESC输入的原子注入，不得被文件路线替换或碎割。
+- [03 · 文件与超长文本路径引用](contracts/03-file-upload-and-long-text-reference-contract.md)：HTTP文件管道、2000单位/100行客户端阈值、安全引用、iOS/Desktop/Web接入与失败保护。
+
+这三份是本v1的专题契约，不新增全局协议版本；客户端实现与部署是否通过验收须另给精确源码/产物/原件，不以文档状态替代运行时能力协商。
+
 ## 0. 术语
 
 | 术语 | 含义 |
@@ -147,7 +155,9 @@ C ── unsubscribe ─────▶ S       停止镜像
 | `list_delta` | S→C | 列表增量推送 | `seq` + 四组字段（见 §5.2） |
 | `subscribe` | C→S | 订阅会话镜像 | `ref`、`rows`、`cols` |
 | `unsubscribe` | C→S | 停止镜像（幂等） | `ref` |
-| `input` | C→S | 整条文本/命名键注入 | `req_id`、`ref`；`text` 与 `keys` 至多其一 |
+| `input` | C→S | 文本直通/命名键/裸字节/提交 | `req_id`、`ref`；`(text/attachment_path)`、`keys`、`bytes` 三组至多其一 |
+| `attach_preview` | C→S | 图片独立预贴（不提交，无成功ack） | `ref`、`path`；文本文件不得调用 |
+| `scroll_wheel` | C→S | 抽象滚轮格数 | `ref`、`delta`；原生桌面裸滚轮另见02 |
 | `input_ack` | S→C | 注入回执（必达） | `req_id`、`ok`; 失败时 `reason` |
 | `scrollback` | C→S | 按行区间拉历史 | `req_id`、`ref`、`from_line`、`count` |
 | `resize` | C→S | 上报行列数 | `ref`、`rows`、`cols` |
@@ -172,26 +182,22 @@ C **必须**重新 `list` 拉全量（无状态恢复）。
 `session_not_found`）。重复 subscribe 同一 ref 幂等：重放 snapshot + 重流（重连语义）。
 **unsubscribe** 幂等；退订未订阅的会话不算错误；连接关闭即全部退订。
 
-**input**——整条文本一次性注入并回车（send-keys 语义，非逐键，requirement 003）。
-`text` 为空 = 仅回车，允许。S **必须**回 `input_ack`（成功/失败+原因），杜绝"发了没反应"。
+**input**——当前为直通输入，**不是历史“非空text自动整条注入+回车”模型**。`req_id≥1`、`ref`非空且已订阅：
 
-**input.keys（R-1 快捷键条，017 裁定；可选字段，前向兼容增量，不 bump 版本）**——
-`input` 帧新增可选 `keys`：字符串数组，闭集 `esc` / `ctrl_c` / `tab` / `up` / `down` /
-`left` / `right`（对应 tmux 命名键 Escape / C-c / Tab / Up / Down / Left / Right）。
-**`text` 与 `keys` 互斥**：一帧至多携带其一——两者都有判协议错误（帧校验失败，S 回
-`error: bad_frame`，不执行注入、不回 `input_ack`）；两者皆无 = 仅回车（既有语义不变）。
-`keys` 注入**不附加回车**：快捷键条语义是"按一下那个键"，Esc/Ctrl-C/Tab/方向键后再补
-Enter 可能误触发 CLI 确认——这与 `text` 的"注入+回车"本质不同。旧客户端只发 `text`
-不发 `keys`，行为完全不变（send-keys 仍走既有路径）。
+- 无`attachment_path`的非空`text`：S执行`TypeKeys`，只输入，不自动追加Enter。明确提交可在内容末尾附一个CR（`\r`），或另发空text/无其它载荷的裸Enter，不能两者重复。
+- `text/keys/bytes/attachment_path`皆空：合法裸Enter；不能将“省略text”误判为不操作。
+- 非空`attachment_path`：这是**图片**提交路线。匹配先前`attach_preview`时只补剩余settle并提交；未匹配时独立粘贴图片路径、输入text、settle、一次Enter。text本身不得再加提交CR。
+- 发送失败与超时须有可见结果；HTTP上传成功不是input成功，更不是Agent读取成功。超长文本必须走§8，不能用大text、拆包或bytes规避文件路线。
 
-**多行文本与 R-2 退化风险**——含换行的 `text` 由 S 走既有 `paste-buffer -p` 括号粘贴路径
-整段注入 + Enter，**App 不拆分**（R-2 裁定，017）。退化风险：目标 CLI 不支持 `?2004`
-（DECSET 括号粘贴模式）时，终端退化为**逐行执行**，多行内容可能被 CLI 逐行当作命令执行。
-此行为由 CLI 自身是否声明 `?2004` 决定，S 侧以 R-2 已测路径（`TestInjectMultiline`）为准；
-在支持括号粘贴的 CLI（Claude Code 等）上无感。
+**input.keys**——命名键字符串数组，闭集 `esc` / `ctrl_c` / `tab` / `up` / `down` / `left` / `right` / `backspace`。只按对应键，不补Enter。
 
-**input_ack**——`req_id` 对应 `input.req_id`。`ok:true` 表示字节已进面板；`ok:false` 必须携带
-`reason`，枚举见 §7.2。`reason` 存在当且仅当 `ok:false`（一字段一义）。
+**input.bytes**——JSON Base64承载原始bytes，不补Enter；服务端按字节上限校验。含ESC（0x1b）的VT/SGR输入必须完整原子注入，禁止拆成孤立ESC+后续字符，详见02。该字段不是传长文本文件内容的旁路。
+
+**互斥**——`(text或attachment_path)`、`keys`、`bytes`三组至多一组非空；同组text与图片路径可共存。违规回`error: bad_frame`，不执行输入；正常Input必回`input_ack`。服务器默认input内容上限1 MiB（部署可配置），这不是客户端文件分流阈值。
+
+**多行文本**——普通短多行继续按当前TypeKeys/客户端明确提交语义处理；不能依赖历史“任何换行自动括号粘贴+Enter”的描述。大文仅传文件引用，不把正文改为逐行命令执行。图片fallback的独立括号粘贴是另一分支，不可泛化为文本文件预贴。
+
+**input_ack**——`req_id`对应本次Input；`ok:true`仅表示字节已进面板，`ok:false`必带`reason`（§7.3），不得宣称Agent已处理。reason存在当且仅当失败。
 
 **scrollback**——`from_line` 按 tmux capture-pane 语义寻址：0=当前屏顶行，负值=屏上历史。
 `count≥1`。S 收敛到可用范围，并在二进制 `scrollback` 回复中报告实际区间（见 §6.3）。
@@ -346,23 +352,31 @@ kind=3 时 payload 头部为 **12 字节元数据头**，描述**服务端实际
 | `too_large` | 文本超服务端大小上限 |
 | `internal` | 服务端内部错误 |
 
-## 8. 图片上传（HTTP，同端口）
+## 8. 文件与超长文本上传管线（File & Text Upload Pipeline，HTTP同端口）
 
-- 图片走 **multipart HTTP 端点**，不走 WebSocket：`POST /upload`（同服务端口）。
-- 鉴权：请求必须携带标准 HTTP 头 `Authorization: Bearer <pairing-token>`；服务端用与
-  WebSocket `auth` 握手相同的 `TokenValidator` 校验。缺失或错误凭据均返回 HTTP 401，
-  JSON 正文包含稳定的 `code: "unauthorized"` 与非空 `reason`；响应和日志不得回显 token。
-- 成功：S 将文件落盘主机，返回 JSON `{"path": "/绝对/路径"}`（`protocol.UploadResp`）。
-- 资源上限：单文件默认不超过 20 MiB，上传目录内的常规文件总量硬上限为 1 GiB；本次写入
-  会越过目录上限时返回 HTTP 507，JSON `code` 为 `storage_limit_exceeded` 并携带非空
-  `reason`。服务端不自动删除自定义目录中的既有文件，由用户清理后重试。
-- C 再将该 `path` 作为 `input.text` 注入，CLI 原生吃图片路径（requirement 003 图片管线；
-  **不涉及任何多模态 API**）。
+完整wire、错误表、计量与多端实现指南见[03号契约](contracts/03-file-upload-and-long-text-reference-contract.md)。
+
+### 8.1 通用文件HTTP上传
+
+- `POST /upload`与`/ws`使用同一已确认host/port，每次携带`Authorization: Bearer <pairing-token>`。WS与HTTP复用同一TokenValidator；401返回JSON `code=unauthorized`、非空reason及`WWW-Authenticate: Bearer`，不回显token。
+- multipart/form-data发送一个带filename的文件段，跨端统一字段名`file`。支持现有图片及UTF-8 `text/plain` `.txt`、Markdown `.md`等原始文件bytes；服务端不按图片MIME白名单拒绝文本、不转码正文。不要把文件内容放入WS。
+- HTTP200为JSON `{"path":"/absolute/host/path"}`，不是WS信封。path是服务器宿主绝对路径，不是客户端文件路径或下载URL。当前没有hash/size字段或分片、续传、远程删除API。
+- 自动文本filename=`upload-text-<uuid>.txt`；服务端清洗basename并加UTC `upload-YYYYMMDDTHHMMSS-`前缀/冲突唯一后缀。客户端必须使用返回path，不自行拼名。
+- 单文件默认20 MiB，超限413；目录常规文件容量默认1 GiB，可测量时越界507 `storage_limit_exceeded`。目录读取因权限失败时现实现保留最后可写路径，无法测量容量；其它存储故障507，目录无效400。错误不全是JSON，详见03；服务端不自动删除用户既有文件。
+
+### 8.2 客户端文本分流（最新用户裁定）
+
+- **仅总长度 ≥2000 UTF-16单位或 ≥100行**触发文件。CRLF算一个换行，独立CR/LF亦计，末尾换行增加最后空行；计数不改变文件bytes。Swift用`utf16.count`，Kotlin/JS用length。
+- **取消单次增量>100和旧4000规则**：几百字Clipboard/IME段落仍是普通文本。先对候选完整text判门槛再diff-sync；达到门槛不发该次正文/击键/bytes。逐键累计允许门槛前已知≤1999前缀历史同步，跨门槛才停止新增上行；编辑回门槛以下恢复普通text，不latch。
+- 点击发送捕获草稿，后台包装原始UTF-8 `.txt`（不trim、转码、补换行或加BOM）并上传。HTTP/网络/非法path失败保留完整草稿与新编辑，禁止退回全量WS正文。
+- 成功校验Unix绝对path且无CR/LF，清理只属于本客户端的已知CLI前缀，按03将路径用安全单引号引用（内含单引号替换为`'\''`）。不带图时`input.text=quotedPath+CR`明确提交；带图时`text=quotedPath`，图片`attachment_path`分支负责Enter，不重复CR。
+- 提交已入队才清仍与捕获内容一致的输入框，上传期间新稿不可覆盖。`input_ack`仅证明进入pane。Agent自主grep/head/tail或分段读取；不得自动全量读取或把文件当可执行脚本。
+- **图片路线仍独立**：`attach_preview`仅用于图片提前预贴/异步解码，后续`attachment_path`确认；txt/md不得冒充图片路径，02裸输入原子性和01通知协商不得退化。
 
 ## 9. 安全与日志
 
-- 配对 token 只在 `auth` 上行一次；**任何回复不回显、任何日志不出现**（011 路线 a）。
-- 未认证连接的任何操作一律 `error: unauthorized`。
+- 每条WebSocket连接的配对token仅在`auth`上行一次；**每次HTTP `/upload`另须Authorization Bearer**，两者复用同一认证身份。不是“整个应用生命周期token只发送一次”；任何回复不回显、任何日志不出现。
+- 未认证WebSocket操作返回`error: unauthorized`；HTTP认证拒绝为401 JSON（§8），不得把两种错误/认证入口混用。
 - 服务端日志不得记录帧 payload 中的敏感内容。
 
 ### 9.1 token 生命周期与全量吊销

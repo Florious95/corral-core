@@ -2,6 +2,7 @@
 
 > **状态**：**权威契约与跨端保护红线**。
 > **适用范围**：`CorralNative`（桌面原生 macOS 客户端）与 `agentmirrord`（服务端）交互；明确滚轮事件的全链路监控、编码与注入规范。
+> **关联**：[基础协议](../protocol.md)、[01 · 通知能力与恢复](01-agent-notification-contract.md)、[03 · 文件与超长文本引用](03-file-upload-and-long-text-reference-contract.md)。2000单位/100行阈值只作用于文本草稿；滚轮/快捷键/原始ESC输入不得被文本文件路线拦截、拆割或替代。
 > **背景与直接诱因**：服务端在 `feat/issue42-agent-task-notifications`（提交 `881ffa0d8`，部署 `deployment-9900-issue42-881f`）版本上线后，导致桌面端滚轮完全失效；在回退至黄金基线 `0b8e83a`（`deployment-9900-whoami-0b8e83a`）后滚轮即刻恢复。为防止后续服务端演进、重构与新功能开发再次引发同类回退，特制定本文档作为硬性边界。
 
 ---
