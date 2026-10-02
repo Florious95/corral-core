@@ -67,6 +67,9 @@ class Connection(
     }
 
     @Volatile private var closed = false
+    /** Successful protocol decodes on this socket, before downstream callbacks can be delayed. */
+    @Volatile internal var receivedProtocolFrames = 0L
+        private set
     private var authSent = false
     private var authAcked = false
 
@@ -170,6 +173,7 @@ class Connection(
             listener.onLocalDecodeError(e.code, e.message ?: "decode rejected")
             return
         }
+        receivedProtocolFrames++
         if (frame is AuthAckFrame) {
             if (frame.ok) {
                 authAcked = true
@@ -196,6 +200,7 @@ class Connection(
             listener.onLocalDecodeError(e.code, e.message ?: "binary decode rejected")
             return
         }
+        receivedProtocolFrames++
         if (ConnPerf.isEnabled()) {
             val kind = when (frame.kind) {
                 BinaryKind.SNAPSHOT -> "snapshot"

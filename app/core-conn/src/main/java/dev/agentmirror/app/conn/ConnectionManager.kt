@@ -17,6 +17,7 @@
 package dev.agentmirror.app.conn
 
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 
 private const val FOREGROUND_LIVENESS_BUDGET_MS = 5_000L
 private const val SNAPSHOT_RETRY_AFTER_MS = 2_000L
@@ -177,12 +178,21 @@ class ConnectionManager(
 
     /** A recent foreground edge grants one bounded recovery window to the current socket. */
     private var foregroundRecoveryArmed = false
-    private var foregroundLivenessConnection: Connection? = null
-    private var foregroundLivenessDeadlineMs: Long? = null
+    private class ForegroundProbe(val connection: Connection, val receivedFrames: Long, val deadlineMs: Long)
+    private val foregroundLiveness = AtomicReference<ForegroundProbe?>(null)
 
     private fun clearForegroundLiveness() {
-        foregroundLivenessConnection = null
-        foregroundLivenessDeadlineMs = null
+        foregroundLiveness.set(null)
+    }
+
+    private fun acknowledgeForegroundLiveness() {
+        val probe = foregroundLiveness.get() ?: return
+        if (connection === probe.connection &&
+            probe.connection.receivedProtocolFrames != probe.receivedFrames &&
+            foregroundLiveness.compareAndSet(probe, null)
+        ) {
+            foregroundRecoveryArmed = false
+        }
     }
 
     private fun markListRefresh() {
@@ -339,13 +349,15 @@ class ConnectionManager(
                 traceSubscribe(ref, dims.first, dims.second, sent = ok, replay = false, ready = true, hasConn = true, reason = "snapshot_retry")
             }
         }
-        val probeAt = foregroundLivenessDeadlineMs
-        if (probeAt != null && nowMs >= probeAt) {
-            val probeConnection = foregroundLivenessConnection
-            clearForegroundLiveness()
-            if (state == ConnectionState.READY && connection === probeConnection) {
-                probeConnection?.closeForReconnect("foreground liveness timeout")
-                return
+        val probe = foregroundLiveness.get()
+        if (probe != null && nowMs >= probe.deadlineMs && foregroundLiveness.compareAndSet(probe, null)) {
+            if (state == ConnectionState.READY && connection === probe.connection) {
+                // A decoded frame is liveness even if its downstream callback is still in flight.
+                if (probe.connection.receivedProtocolFrames == probe.receivedFrames) {
+                    probe.connection.closeForReconnect("foreground liveness timeout")
+                    return
+                }
+                foregroundRecoveryArmed = false
             }
         }
         val at = pendingReconnectAt ?: return
@@ -418,8 +430,7 @@ class ConnectionManager(
             }
             ConnectionState.READY -> {
                 val conn = connection ?: return
-                foregroundLivenessConnection = conn
-                foregroundLivenessDeadlineMs = clock.nowMs() + FOREGROUND_LIVENESS_BUDGET_MS
+                foregroundLiveness.set(ForegroundProbe(conn, conn.receivedProtocolFrames, clock.nowMs() + FOREGROUND_LIVENESS_BUDGET_MS))
                 if (!listRefreshInFlight) sendList()
                 for (workspace in activeLevel2) {
                     if (workspace in level2RefreshInFlight) continue
@@ -914,14 +925,11 @@ class ConnectionManager(
         }
 
         override fun onFrame(frame: FramePayload) {
+            acknowledgeForegroundLiveness()
             when (frame) {
                 is ListingFrame -> {
                     lastSeenSeq = frame.seq
                     listRefreshInFlight = false
-                    if (foregroundLivenessConnection === connection) {
-                        clearForegroundLiveness()
-                        foregroundRecoveryArmed = false
-                    }
                     listener?.onFrame(frame)
                 }
                 is ListDeltaFrame -> {
@@ -961,6 +969,7 @@ class ConnectionManager(
         }
 
         override fun onBinary(frame: BinaryFrame) {
+            acknowledgeForegroundLiveness()
             if (frame.kind == BinaryKind.SNAPSHOT) {
                 pendingSnapshots[frame.ref]?.let { wait ->
                     if (wait.connection === connection) pendingSnapshots.remove(frame.ref, wait)

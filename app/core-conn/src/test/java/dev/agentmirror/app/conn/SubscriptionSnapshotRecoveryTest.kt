@@ -4,7 +4,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 class SubscriptionSnapshotRecoveryTest {
     private val ref = "/tmp/test\u001f%166"
@@ -26,7 +28,11 @@ class SubscriptionSnapshotRecoveryTest {
         fun binary(ref: String, kind: BinaryKind = BinaryKind.SNAPSHOT, transport: Transport = transports.last()) {
             transport.listener.onBinary(BinaryFrameCodec.encode(BinaryFrame(kind, ref, "ready".toByteArray())))
         }
-        fun listing() = transports.last().listener.onText(FrameCodec.encode(ListingFrame(1, 1, emptyList())))
+        fun control(frame: FramePayload) = transports.last().listener.onText(FrameCodec.encode(frame))
+        fun listing() = control(ListingFrame(1, 1, emptyList()))
+        // Golden codec deliberately rejects encoding these S→C-only frames on the client.
+        fun level2() = transports.last().listener.onText("""{"v":1,"type":"level2_frame","payload":{"workspace":"/tmp/test","seq":2,"sessions":[]}}""")
+        fun heartbeat() = transports.last().listener.onText("""{"v":1,"type":"level2_heartbeat","payload":{"workspace":"/tmp/test","seq":2}}""")
     }
 
     /** Like OkHttp close(), this records a handshake request without a synchronous callback. */
@@ -40,6 +46,115 @@ class SubscriptionSnapshotRecoveryTest {
         override fun sendBinary(bytes: ByteArray) = true
         override fun close(reason: String) { closeReason = reason }
         fun subscriptions() = frames.filterIsInstance<SubscribeFrame>()
+    }
+
+    private fun assertForegroundProbeSurvives(reply: (Fixture) -> Unit) {
+        val f = Fixture()
+        f.manager.subscribe(ref, 24, 80)
+        f.binary(ref)
+        f.listing()
+        f.now = 2_000
+        f.manager.onForegroundResume()
+        assertEquals(2, f.transports.single().frames.filterIsInstance<ListFrame>().size)
+        f.now = 4_000
+        reply(f)
+        f.at(7_000)
+        assertEquals("有效业务数据应解除探活，Listing未回不代表WS失活", 1, f.transports.size)
+        assertEquals(ConnectionState.READY, f.manager.state())
+        assertEquals(null, f.transports.single().closeReason)
+    }
+
+    @Test fun foregroundListingHoldWithDeltaKeepsCurrentSocket() =
+        assertForegroundProbeSurvives { it.binary(ref, BinaryKind.DELTA) }
+
+    @Test fun foregroundListingHoldWithSnapshotKeepsCurrentSocket() =
+        assertForegroundProbeSurvives { it.binary(ref) }
+
+    @Test fun foregroundListingHoldWithLevel2KeepsCurrentSocket() =
+        assertForegroundProbeSurvives { it.level2() }
+
+    @Test fun foregroundListingHoldWithHeartbeatKeepsCurrentSocket() =
+        assertForegroundProbeSurvives { it.heartbeat() }
+
+    @Test fun foregroundListingHoldWithControlReplyKeepsCurrentSocket() =
+        assertForegroundProbeSurvives { it.control(InputAckFrame(reqId = 2, ok = true)) }
+
+    @Test fun decodedBinaryProvesLivenessEvenBeforeConsumerCallback() {
+        val f = Fixture()
+        f.listing()
+        f.manager.onForegroundResume()
+        val decoded = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val failure = AtomicReference<Throwable?>()
+        val previous = ConnPerf.hooks
+        ConnPerf.hooks = object : ConnPerfHooks {
+            override fun isEnabled() = true
+            override fun emitWsBinaryRecv(frameRef: String, kind: String, bytes: Int) {
+                decoded.countDown()
+                check(release.await(5, TimeUnit.SECONDS))
+            }
+        }
+        val receiver = Thread {
+            try { f.binary(ref, BinaryKind.DELTA) } catch (error: Throwable) { failure.set(error) }
+        }
+        try {
+            receiver.start()
+            assertTrue("装置必须已成功解码，尚未传播给manager", decoded.await(5, TimeUnit.SECONDS))
+            f.at(6_000)
+            assertEquals("不得因解码后的回调仍在途而掐死活跃WS", 1, f.transports.size)
+        } finally {
+            release.countDown()
+            receiver.join(5_000)
+            ConnPerf.hooks = previous
+        }
+        assertTrue(!receiver.isAlive)
+        assertEquals(null, failure.get())
+    }
+
+    @Test fun invalidFramesCannotPassForegroundProbe() {
+        val f = Fixture()
+        f.listing()
+        f.manager.onForegroundResume()
+        f.transports.single().listener.onText("not json")
+        f.transports.single().listener.onText("""{"v":1,"type":"unknown","payload":{}}""")
+        f.transports.single().listener.onBinary(byteArrayOf(0))
+        f.at(6_000)
+        assertEquals(2, f.transports.size)
+        assertEquals("foreground liveness timeout", f.transports.first().closeReason)
+    }
+
+    @Test fun dataBeforeForegroundEdgeCannotPassNewProbe() {
+        val f = Fixture()
+        f.listing()
+        f.binary(ref, BinaryKind.DELTA)
+        f.manager.onForegroundResume()
+        f.at(6_000)
+        assertEquals(2, f.transports.size)
+    }
+
+    @Test fun closedSocketDataCannotPassReplacementSocketProbe() {
+        val f = Fixture()
+        f.listing()
+        val old = f.transports.single()
+        f.manager.onForegroundResume()
+        f.at(6_000)
+        f.ready()
+        f.manager.onForegroundResume()
+        old.listener.onText("""{"v":1,"type":"level2_heartbeat","payload":{"workspace":"/tmp/test","seq":2}}""")
+        f.binary(ref, BinaryKind.DELTA, old)
+        f.at(11_000)
+        assertEquals(3, f.transports.size)
+    }
+
+    @Test fun healthyHeartbeatDoesNotAcknowledgeMissingSubscriptionSnapshot() {
+        val f = Fixture()
+        f.listing()
+        f.manager.onForegroundResume()
+        f.manager.subscribe(ref, 24, 80)
+        f.heartbeat()
+        f.at(5_000)
+        assertEquals(2, f.transports.size)
+        assertTrue(f.transports.first().closeReason!!.contains("subscription snapshot timeout"))
     }
 
     @Test fun retriesOnceWithLatestGeometryThenRedialsWithoutCloseCallback() {
