@@ -1,7 +1,7 @@
 # Leader 权威交接与基线报告（2026-10-02）
 
 ## 1. 交付与黄金基线确认
-- **全流程验收完成**：在 9902 隔离实例上完成移动端 App E2E 全链路实测验证（真实 AVD 模拟器测试全 PASS），所有代码已正式合入 main 主线并推送到 GitHub 远端！
+- **全流程验收完成**：在 9902 隔离实例上完成移动端 App E2E 全链路实测验证（底层 WS 保活层 PASS：旧物理连接在 Listing hold 期间不再被超时误掐死，持续收发 1051 个业务帧零断开，常驻通知状态全程准确稳定；极端夹具全屏占位画面前置不可判，不夸大宣称整场景绿），所有代码已正式合入 main 主线并推送到 GitHub 远端！
 - **最新黄金基线**：**Commit `f8896d020ac3ec9fe47d1eabe8dd1fad52ee69f3`**（PR #44，钉死不可变 Core `20261002.background-liveness1`）
 - **提交说明**：`fix(conn): recognize decoded business frames to avoid liveness timeout and align notification bootstrap state`
 - **关联已合入/跟进 PR**：
