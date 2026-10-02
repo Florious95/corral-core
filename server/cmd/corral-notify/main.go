@@ -13,6 +13,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -21,15 +23,16 @@ import (
 	"github.com/agentmirror/agentmirror/internal/pairing"
 )
 
-const usage = `Usage: corral-notify "消息正文" [--title "标题"] [--level info|success|warning|error] [--session <ref>] [--agent-name <name>]
+const usage = `Usage: corral-notify "消息正文" [--title "标题"] [--level info|success|warning|error]
        corral-notify --stdin [options]
 
-Options may appear before or after the body. --socket and --request-id are
+The daemon derives the sender name from the linked tmux session. Options may
+appear before or after the body. --session, --socket, and --request-id are
 available for isolated tests and deliberate same-intent retries.`
 
 type options struct {
-	body, title, level, session, agentName, socket, requestID string
-	stdin, help                                               bool
+	body, title, level, session, socket, requestID string
+	stdin, help                                    bool
 }
 
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
@@ -70,12 +73,6 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if err := validateText(opts.title, 256, false); err != nil {
 		fmt.Fprintln(stderr, "corral-notify: usage: invalid title")
 		return 2
-	}
-	if opts.agentName != "" {
-		if err := validateText(opts.agentName, 128, false); err != nil {
-			fmt.Fprintln(stderr, "corral-notify: usage: invalid agent-name")
-			return 2
-		}
 	}
 	if opts.socket == "" {
 		opts.socket = os.Getenv("CORRAL_NOTIFY_SOCKET")
@@ -140,8 +137,6 @@ func parseArgs(args []string) (options, error) {
 			o.level = value
 		case "--session":
 			o.session = value
-		case "--agent-name":
-			o.agentName = value
 		case "--socket":
 			o.socket = value
 		case "--request-id":
@@ -186,7 +181,7 @@ func splitOption(a string) (string, string, bool) {
 }
 
 func postNotification(o options) (api.NotificationIPCResponse, int, error) {
-	payload, err := json.Marshal(api.NotificationIPCRequest{RequestID: o.requestID, Title: o.title, Body: o.body, SessionRef: o.session, AgentName: o.agentName, Level: o.level})
+	payload, err := json.Marshal(api.NotificationIPCRequest{RequestID: o.requestID, Title: o.title, Body: o.body, SessionRef: o.session, Level: o.level})
 	if err != nil {
 		return api.NotificationIPCResponse{}, 2, err
 	}
@@ -239,7 +234,16 @@ func tmuxSessionRef() string {
 	if prev < 0 {
 		return ""
 	}
-	return prefix[:prev] + "\x1f" + pane
+	socket := prefix[:prev]
+	if resolved, err := filepath.EvalSymlinks(socket); err == nil {
+		socket = resolved
+	}
+	// Discovery's default socket directory is /tmp. macOS resolves it to
+	// /private/tmp, but both paths address the same tmux server.
+	if runtime.GOOS == "darwin" && strings.HasPrefix(socket, "/private/tmp/") {
+		socket = strings.TrimPrefix(socket, "/private")
+	}
+	return socket + "\x1f" + pane
 }
 
 func validateBody(body string) error { return validateText(body, 16384, false) }

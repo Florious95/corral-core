@@ -13,10 +13,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/agentmirror/agentmirror/internal/notify"
 	"github.com/agentmirror/agentmirror/internal/protocol"
+	"github.com/agentmirror/agentmirror/internal/sessionname"
 )
 
 // NotificationIPCRequest is the private HTTP-over-UDS request used by
@@ -26,7 +28,6 @@ type NotificationIPCRequest struct {
 	Title      string `json:"title,omitempty"`
 	Body       string `json:"body"`
 	SessionRef string `json:"session_ref,omitempty"`
-	AgentName  string `json:"agent_name,omitempty"`
 	Level      string `json:"level,omitempty"`
 }
 
@@ -48,19 +49,17 @@ func (s *Server) PublishNotification(ctx context.Context, req notify.Request) (p
 	if s.notifications == nil {
 		return protocol.NotificationRecord{}, false, errors.New("notifications unavailable")
 	}
+	// Agent identity is authoritative server-side. Ignore any caller-provided
+	// value and derive it from the catalog entry resolved by session_ref.
+	req.AgentName = ""
 	if req.SessionRef != "" {
-		if e := s.catalog.entry(req.SessionRef); e != nil {
+		if e := s.notificationSessionEntry(req.SessionRef); e != nil {
+			req.SessionRef = e.ref
 			req.SessionInstance = sessionInstance(e)
 			if req.Workspace == "" {
 				req.Workspace = e.pane.CWD
 			}
-			if req.AgentName == "" {
-				// Same display label the client renders for this pane in L2.
-				req.AgentName = displayName(e.pane)
-				if req.AgentName == "" {
-					req.AgentName = e.pane.Session
-				}
-			}
+			req.AgentName = notificationAgentName(e)
 		} else {
 			// A stale/unknown pane must never become an unguarded historical link.
 			req.SessionRef, req.SessionInstance = "", ""
@@ -85,6 +84,42 @@ func (s *Server) PublishNotification(ctx context.Context, req notify.Request) (p
 		}
 	}
 	return record, deduplicated, nil
+}
+
+// Resolve macOS's /tmp and /private/tmp spellings to the authoritative catalog
+// ref. Keep catalogEntry's fresh workspace overlay semantics and do not invent
+// links for panes absent from the catalog.
+func (s *Server) notificationSessionEntry(ref string) *sessionEntry {
+	if e := s.catalogEntry(ref); e != nil {
+		return e
+	}
+	socket, pane, ok := parseSessionRef(ref)
+	if !ok || runtime.GOOS != "darwin" {
+		return nil
+	}
+	switch {
+	case strings.HasPrefix(socket, "/private/tmp/"):
+		socket = strings.TrimPrefix(socket, "/private")
+	case strings.HasPrefix(socket, "/tmp/"):
+		socket = "/private" + socket
+	default:
+		return nil
+	}
+	return s.catalogEntry(socket + "\x1f" + pane)
+}
+
+func notificationAgentName(e *sessionEntry) string {
+	// Reuse the pane-name projection instead of guessing from Provider or
+	// trusting callers. A tmux session name is the identity fallback when the
+	// projection could only provide a project name/placeholder.
+	name := sessionname.Resolve(e.pane.WindowName, e.pane.PaneTitle, e.pane.CWD, e.pane.Command)
+	if name.Source == sessionname.SourceProject || name.Source == sessionname.SourcePlaceholder {
+		name.Value = strings.TrimSpace(e.pane.Session)
+	}
+	if strings.HasSuffix(strings.ToLower(name.Value), "leader") {
+		return "Leader"
+	}
+	return name.Value
 }
 
 func (s *Server) NotificationStore() *notify.Store { return s.notifications }
@@ -193,7 +228,7 @@ func (s *Server) NotificationHandler() http.Handler {
 			writeIPCError(w, http.StatusBadRequest, "invalid_json")
 			return
 		}
-		record, deduplicated, err := s.PublishNotification(r.Context(), notify.Request{RequestID: in.RequestID, Title: in.Title, Body: in.Body, SessionRef: in.SessionRef, AgentName: in.AgentName, Level: in.Level})
+		record, deduplicated, err := s.PublishNotification(r.Context(), notify.Request{RequestID: in.RequestID, Title: in.Title, Body: in.Body, SessionRef: in.SessionRef, Level: in.Level})
 		if err != nil {
 			status := http.StatusBadRequest
 			if notify.IsConflict(err) {

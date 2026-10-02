@@ -32,7 +32,7 @@
 | `session_ref` | string（1–255 UTF-8 bytes）或 null | 服务端规范化的 opaque 会话引用；**不是**展示名，也不一定是 `%140` 这样的裸 pane id |
 | `session_instance` | string（1–128 个 ASCII 字母/数字/`-`/`_`）或 null | 服务端会话 incarnation；历史链接的复用保护，见 §8 |
 | `workspace` | string（≤4,096 UTF-8 bytes）或 null | 发布时对应 pane 的 cwd，展示快照；不是跳转寻址键 |
-| `agent_name` | string（1–128 UTF-8 bytes）或 null | CLI 显式标签，否则取已识别 pane 的展示名；只供展示 |
+| `agent_name` | string（1–128 UTF-8 bytes）或 null | 服务端根据已识别 pane 的会话名称投影推导；Leader 统一为 `Leader`，调用方不可覆盖；只供展示 |
 | `level` | `info` / `success` / `warning` / `error` | Agent 显式严重程度；缺省 `success`，不意味着 daemon 判定任务真的完成 |
 
 约束：
@@ -246,20 +246,19 @@ Content-Type=`application/json`，完整 HTTP body≤128 KiB：
   "title": "验收完成",
   "body": "检查全部通过。\n报告已落盘。",
   "level": "success",
-  "agent_name": "Sol",
   "session_ref": null,
   "tmux_context": {"socket":"/tmp/tmux-501/team","pane":"%3"}
 }
 ```
 
 - request_id 必须为 UUID v4，由 CLI 在本次调用开始时生成；它是提交幂等键，**不是**通知 id。
-- title/level/agent_name/session_ref/tmux_context 可省略/null，视为未提供；title与level取已声明缺省值，session_ref为空时才允许自动上下文推断。显式空串不等同未提供，必须拒绝。body与request_id必须提供非空合法值。server-owned id/host_id/stream_id/seq/timestamp/workspace 禁止由请求覆盖。
+- title/level/session_ref/tmux_context 可省略/null，视为未提供；title与level取已声明缺省值，session_ref为空时才允许自动上下文推断。显式空串不等同未提供，必须拒绝。body与request_id必须提供非空合法值。server-owned id/host_id/stream_id/seq/timestamp/workspace/agent_name 禁止由请求覆盖。
 - 显式 session_ref 优先，若同时有 tmux_context不得改绑其他会话。
 - 自动上下文仅用于确定发信 pane：由 TMUX/TMUX_PANE 得到 socket+pane，再由 server既有 catalog/discovery映射为 canonical ref；它不决定任务何时完成。
 - lookup受现有 discovery/白名单/fixture范围约束；无缓存时可一次有界按需查找，不新增周期扫描。
 - 显式 `--session` / `CORRAL_SESSION_REF` 无法解析到可证明的当前会话，返回422 `session_not_found`，不得猜第一个同名Agent/同编号pane。
 - 仅自动tmux推断失败：允许接受**无链接**消息，响应带 `warnings:["session_unresolved"]`，CLI必须显示警告。不让路由推断失败吞掉完成文本。
-- workspace/缺省agent_name取发布时catalog；不是实时数据。无会话时workspace=null，agent_name只保留显式合法标签。
+- workspace/agent_name取发布时catalog；不是实时数据。会话名复用已有 window/title 展示名投影，无法得到有效名称时回退 tmux Session；Leader 角色统一显示 `Leader`。无会话时workspace和agent_name均为null，不接受调用者自报身份。
 
 ### 6.3 幂等、成功与失败
 
@@ -287,7 +286,7 @@ Content-Type=`application/json`，完整 HTTP body≤128 KiB：
 
 ```text
 corral-notify "消息正文" [--session <opaque-ref>] [--title <标题>]
-              [--agent-name <名称>] [--level info|success|warning|error]
+              [--level info|success|warning|error]
               [--socket <path>] [--request-id <uuid>]
 corral-notify --stdin [上述可选参数]
 ```
@@ -295,7 +294,7 @@ corral-notify --stdin [上述可选参数]
 - 正文恰好一个位置参数，或 `--stdin` 读取UTF-8正文；两者不可同时使用。消息空/全空白/超限必须非零退出，不拆成多条、不默默截断。可选参数支持在正文前或正文后；`--`可保护以`-`开头的正文。不得因Go标准flag遇到首个位置参数停止解析而忽略示例中的后置参数。
 - `--help`是独立用法请求：打印帮助并退出0，不产生通知；此时不是发布成功回执。敏感正文优先用stdin，避免argv/进程列表和shell history泄漏。
 - session来源：`--session` > `CORRAL_SESSION_REF` > 可用的TMUX/TMUX_PANE自动上下文 > 无会话。
-- TMUX上下文必须正确处理socket路径，不能按空格拆分；解析TMUX中尾部pid/session两个逗号字段，不能假设路径不含逗号。
+- TMUX上下文必须正确处理socket路径，不能按空格拆分；解析TMUX中尾部pid/session两个逗号字段，不能假设路径不含逗号。macOS 的 `/private/tmp` 与 `/tmp` socket 别名须解析到同一个 catalog ref；持久化和下发使用 catalog 中的权威 ref。
 - 缺省level=success，title=`Agent 任务通知`。不读取剪贴板、Agent日志或“最后一轮回复”。
 - `--request-id` 用于**同一发布意图**的有意识重试；缺省每次主动调用生成新key。不得为所有Agent/所有任务复用一个常量key。
 - 总IPC deadline **3s**；不得自动重试为新key、静默启动daemon、无限等待。超时/响应截断若请求可能已经提交，必须判 `outcome_unknown`。
@@ -312,7 +311,7 @@ corral-notify --stdin [上述可选参数]
 Agent 示例（主动调用，不做Hook）：
 
 ```bash
-corral-notify 'Issue #42 验收完成，报告已落盘。' --title '验收完成' --agent-name Sol
+corral-notify 'Issue #42 验收完成，报告已落盘。' --title '验收完成'
 printf '第一项已完成\n第二项仍需用户确认\n' | corral-notify --stdin --level warning
 ```
 
