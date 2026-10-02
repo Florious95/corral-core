@@ -1,21 +1,21 @@
 # Leader 权威交接与基线报告（2026-10-02）
 
 ## 1. 交付与黄金基线确认
-- **全流程验收完成**：在 9902/9914 隔离实例上完成移动端 App E2E 全链路实测验证（真实 AVD 模拟器测试全 PASS：超长文本大段粘贴自动打包为 UTF-8 文件上传并安全注入路径引用、上传失败完整保留用户草稿、短文本实时直通保持 100% 完好；底层 WS 保活层 PASS），服务端相关契约完全体（01/02/03及protocol.md §8/§9）已全量正式落盘合流，终端底部 1:1 现代主义 Dock 与 2,000 字符长文本文件化已完成终极官方合流出包！
-- **最新黄金基线**：**Commit `1b4b28f31cdfaf67ae1b0523f477c57b27dceaa9`**（PR #46，完美合并 Terminal Modernist Dock 1:1 与 2,000 字符长文本文件化，叠加在保活黄金基线 `f8896d0` 之上）
-- **提交说明**：`feat(session): unify modernist dock 1:1 with relaxed 2000-unit file upload threshold`
+- **全流程验收完成**：在 9902/9914 隔离实例上完成移动端 App E2E 全链路实测验证（真实 AVD 模拟器测试全 PASS：超长文本大段粘贴自动打包为 UTF-8 文件上传并安全注入路径引用、上传失败完整保留用户草稿、短文本实时直通保持 100% 完好；底层 WS 保活层 PASS），服务端相关契约完全体（01/02/03及protocol.md §8/§9）已全量正式落盘合流，Opus 5.5 对话界面与底部 Dock 1:1 终极精修版已构建上传 115 交付！
+- **最新黄金基线**：**Commit `47b0c3d751fe777e38f8f63d5b86b3fe539be891`**（Opus 5.5 精修终极交付，包含 SparkGlyph 双星、菜单纯标题、卡红修复、7 键连体外框、物理圆角避让边距，叠加在黄金基线 `1b4b28f` 之上）
+- **提交说明**：`feat(dock): refine modernist dock glyph, menu, state and corner insets`
 - **关联已合入/跟进 PR**：
   * PR #41（前后台即刻重连与假活快速探活） -> MERGED
   * PR #43（Agent 任务通知体系、消息中心与会话跳转） -> MERGED
   * PR #44（切前台会话首帧快照自愈 + 前台服务配置自愈 + 探活防误掐死 + 通知状态对齐） -> 已验证
-  * PR #46（Issue #45 超长文本自动打包上传为文件 + 终端底部 Modernist Dock 1:1） -> 终极合流官方候选 `1b4b28f31`
+  * PR #46（Issue #45 超长文本自动打包上传为文件 + 终端底部 Modernist Dock 1:1 精修） -> 终极候选 `47b0c3d7`
   * corral-core PR #107（Commit `028030795`） / PR #108（版本 `20261002.background-liveness1`）
-- **权威交付 APK 凭证（终极双合流正式版）**：
-  * 本地路径：`/Users/alauda/Downloads/corral-app-final-dock-1b4b28f.apk`
-  * 精确 SHA-256：`96a6f571a580266ad2faa36c364e0eb7d72c1c1b37097f7766a27f9b05f56cd3`
-  * 大小：41,140,315 bytes
-  * 115 专属提取码：**`e5dd6425m7sodzw2p`**
-  * 115 通用覆盖包：**`ak66q0zstp223htb5`**
+- **权威交付 APK 凭证（Opus 5.5 UI重构终极正式版）**：
+  * 本地路径：`/Users/alauda/Downloads/corral-app-opus-dock-47b0c3d.apk`
+  * 精确 SHA-256：`9fcb796d442fca31c2eec169b373a1861185cf815107e47e6420d44aa4fef498`
+  * 大小：41,123,931 bytes
+  * 115 专属提取码：**`biqqv0s01qf1m83ar`**
+  * 115 通用覆盖包：**`cs776749u3rk1dmv0`**
 
 ## 2. 本次基线核心内容总结
 1. **服务端 `/pair/whoami` 与 `/pair/identify` 身份路由补齐（已实证）**：
