@@ -1,5 +1,17 @@
 # Subscription first-snapshot recovery candidate
 
+## Current frozen candidate: recovery2
+
+Source `7491b2aaf26a2f301912446e0e62b606e4ee1253`, tree `c5b49da1319623c8f164106ad1524751a65d7600`.
+Coordinate `dev.agentmirror.core:core-conn:20261002.snapshot-recovery2` adds volatile closed visibility and serialized finish to the same recovery logic, because local pump termination and transport callbacks run on different real threads.
+- AAR SHA-256 `ebacef81ae370f985f29b241ae9a4aedea192fffa66dec2c9a2154a5dce1f252`
+- JAR SHA-256 `ed517bfe1a2de91bf902024501002e72d3ca6dbf0d98fd415912e03da9c6beab`
+- Developer tests: 12/12 passed, including competing timeout/network termination.
+
+Recovery1 remains immutable below for historical evidence; its APK is **not the deliverable**. Protocol/terminal still use the identical golden hashes listed below.
+
+## Historical intermediate candidate: recovery1
+
 Source: `ad4ff6b590f584c22f555e2e5d4b342bf83d3a38` (tree `95cfcdc8f741df9f2a1e23cbf22bf6c3af2cc63d`). Golden source reconstruction is a separate predecessor commit `c7fe4e68a`; all its classes/Kotlin metadata match golden core-conn JAR `0c2aab7c59ef67d2775074036070f05ef734dba258ed0343345e96d0ee15f66c` byte-for-byte.
 
 New coordinate: `dev.agentmirror.core:core-conn:20261002.snapshot-recovery1`.
