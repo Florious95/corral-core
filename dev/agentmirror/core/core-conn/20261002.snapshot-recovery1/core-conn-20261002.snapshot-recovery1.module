@@ -1,0 +1,96 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "dev.agentmirror.core",
+    "module": "core-conn",
+    "version": "20261002.snapshot-recovery1",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.14.5"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "dev.agentmirror.core",
+          "module": "core-protocol",
+          "version": {
+            "requires": "20260915.close"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "core-conn-20261002.snapshot-recovery1.jar",
+          "url": "core-conn-20261002.snapshot-recovery1.jar",
+          "size": 51907,
+          "sha512": "2e898c7cb5c7b14ea6a801e131f574a6c6fe6062885715b5cea9f3d0ff74036a77911f07180fa5a34d9dfb6e6d331aa7fcaef6a32b8dfff582d99c413b8f524a",
+          "sha256": "5ddaed63a224e5c744a6591f7ac44da2bc666e63ac8d5545aff1ee3b791fcf8a",
+          "sha1": "f5f46b463a25cff974f7c4be00a9ca6d09a120b4",
+          "md5": "2ea57a14976bf0e8e3a9116f5dfe1593"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "dev.agentmirror.core",
+          "module": "core-protocol",
+          "version": {
+            "requires": "20260915.close"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "core-conn-20261002.snapshot-recovery1.jar",
+          "url": "core-conn-20261002.snapshot-recovery1.jar",
+          "size": 51907,
+          "sha512": "2e898c7cb5c7b14ea6a801e131f574a6c6fe6062885715b5cea9f3d0ff74036a77911f07180fa5a34d9dfb6e6d331aa7fcaef6a32b8dfff582d99c413b8f524a",
+          "sha256": "5ddaed63a224e5c744a6591f7ac44da2bc666e63ac8d5545aff1ee3b791fcf8a",
+          "sha1": "f5f46b463a25cff974f7c4be00a9ca6d09a120b4",
+          "md5": "2ea57a14976bf0e8e3a9116f5dfe1593"
+        }
+      ]
+    }
+  ]
+}
