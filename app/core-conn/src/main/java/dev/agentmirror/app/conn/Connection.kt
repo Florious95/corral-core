@@ -127,6 +127,19 @@ class Connection(
         transport.close("client close")
     }
 
+    /**
+     * Abort this socket as a recoverable failure.
+     *
+     * The manager uses this for a foreground liveness timeout: the old socket must not turn an
+     * intentional health decision into STOPPED, and its terminal callback must enter normal
+     * reconnect handling.
+     */
+    fun closeForReconnect(reason: String) {
+        if (closed) return
+        explicitPermanent = false
+        transport.close(reason)
+    }
+
     // ---- TransportListener ----
 
     override fun onOpen() {

@@ -16,7 +16,7 @@
 
 package dev.agentmirror.app.conn
 
-
+private const val FOREGROUND_LIVENESS_BUDGET_MS = 5_000L
 
 /**
  * 连接层对外状态（docs/protocol.md §3 生命周期）。
@@ -165,6 +165,16 @@ class ConnectionManager(
     private var listRefreshDeadlineMs = 0L
     private var level2RefreshDeadlineMs = 0L
 
+    /** A recent foreground edge grants one bounded recovery window to the current socket. */
+    private var foregroundRecoveryArmed = false
+    private var foregroundLivenessConnection: Connection? = null
+    private var foregroundLivenessDeadlineMs: Long? = null
+
+    private fun clearForegroundLiveness() {
+        foregroundLivenessConnection = null
+        foregroundLivenessDeadlineMs = null
+    }
+
     private fun markListRefresh() {
         listRefreshInFlight = true
         listRefreshDeadlineMs = clock.nowMs() + 40_000L
@@ -253,6 +263,8 @@ class ConnectionManager(
         if (state != ConnectionState.STOPPED) return
         attempt = 0
         lastSeenSeq = null
+        foregroundRecoveryArmed = false
+        clearForegroundLiveness()
         attemptConnect()
     }
 
@@ -268,6 +280,8 @@ class ConnectionManager(
      */
     fun stop() {
         pendingReconnectAt = null
+        foregroundRecoveryArmed = false
+        clearForegroundLiveness()
         dialCoordinator?.cancel(generation)
         generation++
         listRefreshInFlight = false
@@ -289,6 +303,15 @@ class ConnectionManager(
      * @inv 可重复调用；不改变非重连状态
      */
     fun pump(nowMs: Long) {
+        val probeAt = foregroundLivenessDeadlineMs
+        if (probeAt != null && nowMs >= probeAt) {
+            val probeConnection = foregroundLivenessConnection
+            clearForegroundLiveness()
+            if (state == ConnectionState.READY && connection === probeConnection) {
+                probeConnection?.closeForReconnect("foreground liveness timeout")
+                return
+            }
+        }
         val at = pendingReconnectAt ?: return
         if (nowMs >= at) {
             pendingReconnectAt = null
@@ -345,6 +368,7 @@ class ConnectionManager(
      */
     fun onForegroundResume() {
         expireRefreshes()
+        if (state != ConnectionState.STOPPED) foregroundRecoveryArmed = true
         ConnDiag.record(
             "ws",
             "foreground_resume state=$state list_in_flight=$listRefreshInFlight " +
@@ -357,8 +381,10 @@ class ConnectionManager(
                 attemptConnect()
             }
             ConnectionState.READY -> {
-                if (!listRefreshInFlight) sendList()
                 val conn = connection ?: return
+                foregroundLivenessConnection = conn
+                foregroundLivenessDeadlineMs = clock.nowMs() + FOREGROUND_LIVENESS_BUDGET_MS
+                if (!listRefreshInFlight) sendList()
                 for (workspace in activeLevel2) {
                     if (workspace in level2RefreshInFlight) continue
                     if (conn.send(Level2SubscribeFrame(workspace = workspace))) {
@@ -620,6 +646,47 @@ class ConnectionManager(
     }
 
     /**
+     * 请求服务端从二级列表中的精确 anchor pane 创建 Agent。
+     *
+     * @return 已发送的 req_id；当前未 READY 或编码/传输失败返回 null。请求不自动重放，
+     *         调用方必须在掉线未收到结果时刷新并由用户再次确认。
+     */
+    fun sendCreateAgent(
+        workspace: String,
+        anchorRef: String,
+        provider: String,
+        name: String,
+        bypass: Boolean = false,
+    ): Long? {
+        val conn = connection ?: return null
+        if (!conn.isReady) return null
+        val reqId = nextReqId++
+        val frame = CreateAgentFrame(
+            reqId = reqId,
+            workspace = workspace,
+            anchorRef = anchorRef,
+            provider = provider,
+            name = name,
+            bypass = bypass,
+        )
+        return if (conn.send(frame)) reqId else null
+    }
+
+    /**
+     * 请求服务端精准关闭一个会话 pane。
+     *
+     * @return 已发送的 req_id；未 READY、ref 为空或传输失败返回 null。
+     * 结果经 Listener.onFrame 以 [CloseSessionResultFrame] 到达。
+     */
+    fun sendCloseSession(ref: String): Long? {
+        if (ref.isEmpty()) return null
+        val conn = connection ?: return null
+        if (!conn.isReady) return null
+        val reqId = nextReqId++
+        return if (conn.send(CloseSessionFrame(reqId = reqId, ref = ref))) reqId else null
+    }
+
+    /**
      * 拉一页历史（from_line 按 tmux capture-pane 语义；count >= 1）。
      *
      * @contract
@@ -794,6 +861,8 @@ class ConnectionManager(
             val reconnect = readyIsReconnect
             readyIsReconnect = false
             setState(ConnectionState.READY)
+            foregroundRecoveryArmed = false
+            clearForegroundLiveness()
             // 无状态恢复：重建全量列表 + 重放全部活跃订阅（当前屏快照重放）。
             sendList()
             replaySubscriptions(reconnect = reconnect)
@@ -804,6 +873,10 @@ class ConnectionManager(
                 is ListingFrame -> {
                     lastSeenSeq = frame.seq
                     listRefreshInFlight = false
+                    if (foregroundLivenessConnection === connection) {
+                        clearForegroundLiveness()
+                        foregroundRecoveryArmed = false
+                    }
                     listener?.onFrame(frame)
                 }
                 is ListDeltaFrame -> {
@@ -872,6 +945,9 @@ class ConnectionManager(
         }
 
         override fun onClosed(permanent: Boolean, reason: String) {
+            val resumeRecovery = foregroundRecoveryArmed
+            foregroundRecoveryArmed = false
+            clearForegroundLiveness()
             listRefreshInFlight = false
             level2RefreshInFlight.clear()
             lastSeenSeq = null
@@ -893,7 +969,12 @@ class ConnectionManager(
                     "onClosed permanent=false state=$state coordinator=${dialCoordinator != null} " +
                         "has_target=${target != null} after_ready=$afterReady",
                 )
-                if (!afterReady && dialCoordinator != null && target != null) {
+                if (resumeRecovery) {
+                    // A failure after a foreground edge is already a liveness verdict; do not
+                    // enqueue it behind the ordinary background policy or a later pump tick.
+                    pendingReconnectAt = null
+                    attemptConnect()
+                } else if (!afterReady && dialCoordinator != null && target != null) {
                     dialCoordinator.onTargetFailed(generation, target.url, reason)
                 } else {
                     scheduleReconnect()
