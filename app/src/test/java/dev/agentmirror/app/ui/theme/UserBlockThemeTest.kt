@@ -113,6 +113,35 @@ class UserBlockThemeTest {
         }
     }
 
+    @Test fun darkTrueColorMessageUsesReadableBlockColdWarmAndUncached() {
+        val message = TerminalColor.Rgb(30, 30, 46)
+        assertEquals(31, TermPalette.luma(0xFF1E1E2E.toInt()))
+        for (family in listOf("vesper", "catppuccin", "dracula")) {
+            select(family)
+            // Catppuccin的浅槽是Latte；Vesper/Dracula两槽都使用真实暗色方案。
+            for (dark in if (family == "catppuccin") listOf(true) else listOf(false, true)) {
+                val palette = TermPalette.of(dark)
+                for (against in listOf(null, palette.defaultBg, palette.defaultBg xor 0x00010101)) {
+                    repeat(2) {
+                        val actual = TermPalette.colorFor(message, true, dark, against)
+                        assertEquals("$family/dark=$dark", palette.userBlockBg, actual)
+                        assertNotEquals("$family:消息块不能塌回屏幕底", palette.defaultBg, actual)
+                        assertTrue("$family:正文至少4.5:1", contrastRatio(palette.defaultFg, actual) >= 4.5)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test fun trueNearBlackStillMapsToScreenPaperInBothSlots() {
+        forEachSlot { label, dark, palette ->
+            for (value in listOf(0, 8, 16)) {
+                assertEquals(label, palette.defaultBg,
+                    TermPalette.colorFor(TerminalColor.Rgb(value, value, value), true, dark))
+            }
+        }
+    }
+
     @Test fun ordinaryAnsiAndDefaultBackgroundSemanticsAreUnchanged() {
         forEachSlot { label, dark, palette ->
             for (i in 0..15) {

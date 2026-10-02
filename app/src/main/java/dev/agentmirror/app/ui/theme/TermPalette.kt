@@ -49,7 +49,7 @@ object TermPalette {
     private val NEAR_WHITE_INDEXES = setOf(231, 253, 255)
 
     /** 原色亮度 ≤ 此值视为「终端黑」（整屏底），映射到 [Scheme.defaultBg]。 */
-    const val SCREEN_BLACK_LUMA_MAX = 32
+    const val SCREEN_BLACK_LUMA_MAX = 16
 
     /** 原色亮度 ≥ 此值视为「高亮白块」，浅底上压到用户块。 */
     const val HIGHLIGHT_WHITE_LUMA_MIN = 220
@@ -314,7 +314,7 @@ object TermPalette {
     }
 
     /**
-     * 真彩 / 256 扩展底：083 亮度守卫触发条件不动；else 与浅底 scaleLuma 改为投影 / userBlock。
+     * 真彩 / 256 扩展底：近黑保持屏幕底；明确的暗色消息底先映射语义块，不能被投影吞回纸色。
      */
     private fun guardRgbBg(raw: Int, pal: Scheme, againstBg: Int?): Int {
         val y = luma(raw)
@@ -324,6 +324,7 @@ object TermPalette {
         val chroma = maxOf(r, g, b) - minOf(r, g, b)
         return when {
             y <= SCREEN_BLACK_LUMA_MAX -> pal.defaultBg
+            raw == 0xFF1E1E2E.toInt() && luma(pal.defaultBg) < luma(pal.defaultFg) -> pal.userBlockBg
             y >= HIGHLIGHT_WHITE_LUMA_MIN && chroma <= ACHROMA_MAX -> pal.userBlockBg
             y >= HIGHLIGHT_WHITE_LUMA_MIN -> pal.userBlockBg
             else -> project(raw, background = true, pal, againstBg)

@@ -30,6 +30,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import java.util.concurrent.TimeUnit
 
 /**
  * 083 §2 显式背景重映射（t.bg / A-bg-map）。
@@ -58,6 +59,7 @@ class TermBgRemapTest {
         val view = TermSurfaceView(RuntimeEnvironment.getApplication())
         view.nightOverride = dark
         view.presenter = TermViewPresenter(emulator) { _, _ -> }
+        prepareFrame(view, 480, 160)
         val bitmap = Bitmap.createBitmap(480, 160, Bitmap.Config.ARGB_8888)
         val canvas = RecordingCanvas(bitmap)
         view.draw(canvas)
@@ -181,6 +183,7 @@ class TermBgRemapTest {
             view.presenter = TermViewPresenter(emulator) { _, _ -> }
             fun painted(dark: Boolean): Int {
                 view.nightOverride = dark
+                prepareFrame(view, 200, 80)
                 val bitmap = Bitmap.createBitmap(200, 80, Bitmap.Config.ARGB_8888)
                 val canvas = RecordingCanvas(bitmap)
                 view.draw(canvas)
@@ -206,6 +209,32 @@ class TermBgRemapTest {
         } finally {
             TermPalette.resetBindingForTest()
         }
+    }
+
+    @Test
+    fun darkTrueColorMessageRendersASeparateBackgroundFromScreenPaper() {
+        TermPalette.bindSelectionForTest("follow-system", "vesper")
+        try {
+            val palette = TermPalette.of(true)
+            val canvas = render("plain\n\u001b[48;2;30;30;46muser message\u001b[0m", dark = true)
+            assertNotEquals(palette.defaultBg, palette.userBlockBg)
+            assertTrue("真实SGR消息必须绘制语义气泡底", canvas.rects.any { it.color == palette.userBlockBg })
+            assertTrue("非消息屏幕仍绘制默认底", canvas.rects.any { it.color == palette.defaultBg })
+        } finally {
+            TermPalette.resetBindingForTest()
+        }
+    }
+
+    private fun prepareFrame(view: TermSurfaceView, width: Int, height: Int) {
+        view.layout(0, 0, width, height)
+        val presenter = checkNotNull(view.presenter)
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
+        while (!presenter.hasPreparedFrame && System.nanoTime() < deadline) {
+            presenter.beginFrame()
+            Thread.sleep(5)
+        }
+        assertTrue("渲染装置必须有真实异步准备帧", presenter.hasPreparedFrame)
+        presenter.beginFrame()
     }
 
     private fun hex(argb: Int): String = (argb.toLong() and 0xffffffffL).toString(16)
