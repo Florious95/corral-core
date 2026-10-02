@@ -16,7 +16,12 @@
 
 package dev.agentmirror.app.conn
 
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 
+private const val FOREGROUND_LIVENESS_BUDGET_MS = 5_000L
+private const val SNAPSHOT_RETRY_AFTER_MS = 2_000L
+private const val SNAPSHOT_TIMEOUT_MS = 4_000L
 
 /**
  * 连接层对外状态（docs/protocol.md §3 生命周期）。
@@ -138,6 +143,15 @@ class ConnectionManager(
     /** 活跃订阅簿记：ref → (rows, cols)，重连后重放。 */
     private val activeSubscriptions = LinkedHashMap<String, Pair<Int, Int>>()
 
+    /** Only a matching SNAPSHOT completes a subscribe, not a successful local send or Listing. */
+    private class SnapshotWait(val connection: Connection, val startedAtMs: Long) {
+        var retried = false
+    }
+    private val pendingSnapshots = ConcurrentHashMap<String, SnapshotWait>()
+
+    /** 每个订阅的尺寸驻留意图；null 表示沿用服务端/旧客户端默认。 */
+    private val activeRetainPaneSizes = LinkedHashMap<String, Boolean?>()
+
     /** Single server slot: at most the latest workspace is replayed on READY/resume. */
     private val activeLevel2 = LinkedHashSet<String>()
 
@@ -161,6 +175,25 @@ class ConnectionManager(
     private val level2RefreshInFlight = LinkedHashSet<String>()
     private var listRefreshDeadlineMs = 0L
     private var level2RefreshDeadlineMs = 0L
+
+    /** A recent foreground edge grants one bounded recovery window to the current socket. */
+    private var foregroundRecoveryArmed = false
+    private class ForegroundProbe(val connection: Connection, val receivedFrames: Long, val deadlineMs: Long)
+    private val foregroundLiveness = AtomicReference<ForegroundProbe?>(null)
+
+    private fun clearForegroundLiveness() {
+        foregroundLiveness.set(null)
+    }
+
+    private fun acknowledgeForegroundLiveness() {
+        val probe = foregroundLiveness.get() ?: return
+        if (connection === probe.connection &&
+            probe.connection.receivedProtocolFrames != probe.receivedFrames &&
+            foregroundLiveness.compareAndSet(probe, null)
+        ) {
+            foregroundRecoveryArmed = false
+        }
+    }
 
     private fun markListRefresh() {
         listRefreshInFlight = true
@@ -250,6 +283,9 @@ class ConnectionManager(
         if (state != ConnectionState.STOPPED) return
         attempt = 0
         lastSeenSeq = null
+        foregroundRecoveryArmed = false
+        clearForegroundLiveness()
+        pendingSnapshots.clear()
         attemptConnect()
     }
 
@@ -265,6 +301,9 @@ class ConnectionManager(
      */
     fun stop() {
         pendingReconnectAt = null
+        foregroundRecoveryArmed = false
+        clearForegroundLiveness()
+        pendingSnapshots.clear()
         dialCoordinator?.cancel(generation)
         generation++
         listRefreshInFlight = false
@@ -286,6 +325,41 @@ class ConnectionManager(
      * @inv 可重复调用；不改变非重连状态
      */
     fun pump(nowMs: Long) {
+        for ((ref, wait) in pendingSnapshots) {
+            val conn = connection ?: continue
+            if (state != ConnectionState.READY || conn !== wait.connection) continue
+            val elapsed = nowMs - wait.startedAtMs
+            // Check the original hard deadline first, even if this is the first late pump.
+            if (elapsed >= SNAPSHOT_TIMEOUT_MS) {
+                // The WS thread may have acknowledged this entry after the pump read it.
+                if (!pendingSnapshots.remove(ref, wait)) continue
+                ConnDiag.record("ws", "snapshot_timeout ref=$ref elapsed_ms=$elapsed retried=${wait.retried}")
+                foregroundRecoveryArmed = true
+                clearForegroundLiveness()
+                pendingSnapshots.clear()
+                conn.closeForReconnect("subscription snapshot timeout: $ref")
+                return
+            }
+            if (!wait.retried && elapsed >= SNAPSHOT_RETRY_AFTER_MS && pendingSnapshots[ref] === wait) {
+                wait.retried = true
+                val dims = activeSubscriptions[ref] ?: continue
+                // Do not arm again if a concurrent matching snapshot already completed the wait.
+                val ok = conn.send(subscriptionFrame(ref, dims))
+                ConnDiag.record("ws", "snapshot_retry ref=$ref elapsed_ms=$elapsed sent=$ok")
+                traceSubscribe(ref, dims.first, dims.second, sent = ok, replay = false, ready = true, hasConn = true, reason = "snapshot_retry")
+            }
+        }
+        val probe = foregroundLiveness.get()
+        if (probe != null && nowMs >= probe.deadlineMs && foregroundLiveness.compareAndSet(probe, null)) {
+            if (state == ConnectionState.READY && connection === probe.connection) {
+                // A decoded frame is liveness even if its downstream callback is still in flight.
+                if (probe.connection.receivedProtocolFrames == probe.receivedFrames) {
+                    probe.connection.closeForReconnect("foreground liveness timeout")
+                    return
+                }
+                foregroundRecoveryArmed = false
+            }
+        }
         val at = pendingReconnectAt ?: return
         if (nowMs >= at) {
             pendingReconnectAt = null
@@ -342,6 +416,7 @@ class ConnectionManager(
      */
     fun onForegroundResume() {
         expireRefreshes()
+        if (state != ConnectionState.STOPPED) foregroundRecoveryArmed = true
         ConnDiag.record(
             "ws",
             "foreground_resume state=$state list_in_flight=$listRefreshInFlight " +
@@ -354,8 +429,9 @@ class ConnectionManager(
                 attemptConnect()
             }
             ConnectionState.READY -> {
-                if (!listRefreshInFlight) sendList()
                 val conn = connection ?: return
+                foregroundLiveness.set(ForegroundProbe(conn, conn.receivedProtocolFrames, clock.nowMs() + FOREGROUND_LIVENESS_BUDGET_MS))
+                if (!listRefreshInFlight) sendList()
                 for (workspace in activeLevel2) {
                     if (workspace in level2RefreshInFlight) continue
                     if (conn.send(Level2SubscribeFrame(workspace = workspace))) {
@@ -495,12 +571,13 @@ class ConnectionManager(
      * @err STOPPED ⇒ 返回 false 且不记簿；未就绪（但已启动）⇒ 返回 true 仅记簿待重放
      * @inv 重复订阅以最新 rows/cols 覆盖簿记（重放意图最新优先）；同一 ref 可多次立发 SubscribeFrame
      */
-    fun subscribe(ref: String, rows: Int, cols: Int): Boolean {
+    fun subscribe(ref: String, rows: Int, cols: Int, retainPaneSize: Boolean? = null): Boolean {
         if (state == ConnectionState.STOPPED) {
             traceSubscribe(ref, rows, cols, sent = false, replay = false, ready = false, hasConn = false, reason = "stopped")
             return false
         }
         activeSubscriptions[ref] = rows to cols
+        activeRetainPaneSizes[ref] = retainPaneSize
         val conn = connection
         if (conn == null) {
             traceSubscribe(ref, rows, cols, sent = false, replay = false, ready = false, hasConn = false, reason = "no_conn")
@@ -510,10 +587,25 @@ class ConnectionManager(
             traceSubscribe(ref, rows, cols, sent = false, replay = false, ready = false, hasConn = true, reason = "not_ready")
             return true
         }
-        val ok = conn.send(SubscribeFrame(ref = ref, rows = rows, cols = cols))
+        val ok = sendSubscription(conn, ref, rows to cols)
         traceSubscribe(ref, rows, cols, sent = ok, replay = false, ready = true, hasConn = true, reason = if (ok) "sent" else "send_failed")
         return ok
     }
+
+    private fun sendSubscription(conn: Connection, ref: String, dims: Pair<Int, Int>): Boolean {
+        // Arm before sending: a transport may deliver the snapshot synchronously in tests.
+        // Repeated geometry subscribes on the same socket must not extend the original budget.
+        pendingSnapshots.computeIfAbsent(ref) { SnapshotWait(conn, clock.nowMs()) }
+        return conn.send(subscriptionFrame(ref, dims))
+    }
+
+    private fun subscriptionFrame(ref: String, dims: Pair<Int, Int>) = SubscribeFrame(
+        ref = ref,
+        rows = dims.first,
+        cols = dims.second,
+        clientType = "mobile",
+        retainPaneSize = activeRetainPaneSizes[ref],
+    )
 
     /**
      * 退订（幂等）；同时移出重放簿记。
@@ -526,6 +618,8 @@ class ConnectionManager(
      */
     fun unsubscribe(ref: String): Boolean {
         activeSubscriptions.remove(ref)
+        activeRetainPaneSizes.remove(ref)
+        pendingSnapshots.remove(ref)
         val conn = connection ?: return true
         if (!conn.isReady) return true
         return conn.send(UnsubscribeFrame(ref = ref))
@@ -604,6 +698,47 @@ class ConnectionManager(
         val ok = conn.send(ListFrame(reqId = nextReqId++))
         if (ok) markListRefresh()
         return ok
+    }
+
+    /**
+     * 请求服务端从二级列表中的精确 anchor pane 创建 Agent。
+     *
+     * @return 已发送的 req_id；当前未 READY 或编码/传输失败返回 null。请求不自动重放，
+     *         调用方必须在掉线未收到结果时刷新并由用户再次确认。
+     */
+    fun sendCreateAgent(
+        workspace: String,
+        anchorRef: String,
+        provider: String,
+        name: String,
+        bypass: Boolean = false,
+    ): Long? {
+        val conn = connection ?: return null
+        if (!conn.isReady) return null
+        val reqId = nextReqId++
+        val frame = CreateAgentFrame(
+            reqId = reqId,
+            workspace = workspace,
+            anchorRef = anchorRef,
+            provider = provider,
+            name = name,
+            bypass = bypass,
+        )
+        return if (conn.send(frame)) reqId else null
+    }
+
+    /**
+     * 请求服务端精准关闭一个会话 pane。
+     *
+     * @return 已发送的 req_id；未 READY、ref 为空或传输失败返回 null。
+     * 结果经 Listener.onFrame 以 [CloseSessionResultFrame] 到达。
+     */
+    fun sendCloseSession(ref: String): Long? {
+        if (ref.isEmpty()) return null
+        val conn = connection ?: return null
+        if (!conn.isReady) return null
+        val reqId = nextReqId++
+        return if (conn.send(CloseSessionFrame(reqId = reqId, ref = ref))) reqId else null
     }
 
     /**
@@ -781,12 +916,16 @@ class ConnectionManager(
             val reconnect = readyIsReconnect
             readyIsReconnect = false
             setState(ConnectionState.READY)
+            foregroundRecoveryArmed = false
+            clearForegroundLiveness()
+            pendingSnapshots.clear()
             // 无状态恢复：重建全量列表 + 重放全部活跃订阅（当前屏快照重放）。
             sendList()
             replaySubscriptions(reconnect = reconnect)
         }
 
         override fun onFrame(frame: FramePayload) {
+            acknowledgeForegroundLiveness()
             when (frame) {
                 is ListingFrame -> {
                     lastSeenSeq = frame.seq
@@ -830,6 +969,12 @@ class ConnectionManager(
         }
 
         override fun onBinary(frame: BinaryFrame) {
+            acknowledgeForegroundLiveness()
+            if (frame.kind == BinaryKind.SNAPSHOT) {
+                pendingSnapshots[frame.ref]?.let { wait ->
+                    if (wait.connection === connection) pendingSnapshots.remove(frame.ref, wait)
+                }
+            }
             val targeted = binaryListeners[frame.ref]
             val recipients = LinkedHashSet<Listener>()
             if (targeted != null && targeted.isNotEmpty()) {
@@ -859,6 +1004,10 @@ class ConnectionManager(
         }
 
         override fun onClosed(permanent: Boolean, reason: String) {
+            val resumeRecovery = foregroundRecoveryArmed
+            foregroundRecoveryArmed = false
+            clearForegroundLiveness()
+            pendingSnapshots.clear()
             listRefreshInFlight = false
             level2RefreshInFlight.clear()
             lastSeenSeq = null
@@ -880,7 +1029,12 @@ class ConnectionManager(
                     "onClosed permanent=false state=$state coordinator=${dialCoordinator != null} " +
                         "has_target=${target != null} after_ready=$afterReady",
                 )
-                if (!afterReady && dialCoordinator != null && target != null) {
+                if (resumeRecovery) {
+                    // A failure after a foreground edge is already a liveness verdict; do not
+                    // enqueue it behind the ordinary background policy or a later pump tick.
+                    pendingReconnectAt = null
+                    attemptConnect()
+                } else if (!afterReady && dialCoordinator != null && target != null) {
                     dialCoordinator.onTargetFailed(generation, target.url, reason)
                 } else {
                     scheduleReconnect()
@@ -915,7 +1069,7 @@ class ConnectionManager(
             }
         }
         for ((ref, dims) in activeSubscriptions) {
-            val ok = conn.send(SubscribeFrame(ref = ref, rows = dims.first, cols = dims.second))
+            val ok = sendSubscription(conn, ref, dims)
             traceSubscribe(
                 ref,
                 dims.first,

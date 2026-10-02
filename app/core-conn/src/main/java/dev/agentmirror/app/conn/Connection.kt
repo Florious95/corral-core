@@ -66,7 +66,10 @@ class Connection(
         fun onClosed(permanent: Boolean, reason: String)
     }
 
-    private var closed = false
+    @Volatile private var closed = false
+    /** Successful protocol decodes on this socket, before downstream callbacks can be delayed. */
+    @Volatile internal var receivedProtocolFrames = 0L
+        private set
     private var authSent = false
     private var authAcked = false
 
@@ -127,6 +130,20 @@ class Connection(
         transport.close("client close")
     }
 
+    /**
+     * Abort this socket as a recoverable failure.
+     *
+     * A liveness verdict must not wait for the transport's asynchronous close handshake.
+     * Finish locally first so the manager can redial and all late frames/terminal callbacks
+     * from this socket are ignored, then request transport cleanup.
+     */
+    fun closeForReconnect(reason: String) {
+        if (closed) return
+        explicitPermanent = false
+        finish(reason)
+        transport.close(reason)
+    }
+
     // ---- TransportListener ----
 
     override fun onOpen() {
@@ -156,6 +173,7 @@ class Connection(
             listener.onLocalDecodeError(e.code, e.message ?: "decode rejected")
             return
         }
+        receivedProtocolFrames++
         if (frame is AuthAckFrame) {
             if (frame.ok) {
                 authAcked = true
@@ -182,6 +200,7 @@ class Connection(
             listener.onLocalDecodeError(e.code, e.message ?: "binary decode rejected")
             return
         }
+        receivedProtocolFrames++
         if (ConnPerf.isEnabled()) {
             val kind = when (frame.kind) {
                 BinaryKind.SNAPSHOT -> "snapshot"
@@ -201,7 +220,7 @@ class Connection(
         finish(throwable.message ?: "transport failure")
     }
 
-    private fun finish(reason: String) {
+    @Synchronized private fun finish(reason: String) {
         if (closed) return
         closed = true
         val permanent = explicitPermanent ?: when {

@@ -307,6 +307,7 @@ data class SubscribeFrame(
     @SerialName("cols") val cols: Int,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("client_type") val clientType: String = "mobile",
+    @SerialName("retain_pane_size") val retainPaneSize: Boolean? = null,
 ) : FramePayload {
     override val frameType: String get() = FrameType.SUBSCRIBE
     override fun validate(): String? = when {
