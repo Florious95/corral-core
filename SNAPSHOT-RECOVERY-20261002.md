@@ -1,6 +1,16 @@
 # Subscription first-snapshot recovery candidate
 
-## Current frozen candidate: recovery2
+## Current frozen candidate: recovery3
+
+Source `843b18222ea4f9348e87bbc2c611b13a49728d08`, tree `12f3bfa9982bc0e039291d8c86bd5adfd0e02b1d`.
+Coordinate `dev.agentmirror.core:core-conn:20261002.snapshot-recovery3` additionally atomically claims the deadline before redialing and never rearms the wait from retry. A concurrent matching WS snapshot cannot leave a stale pump entry that falsely reconnects an already-completed wait. Budgets and scope are unchanged.
+- AAR SHA-256 `ceeb3752668d2acd2128265117405faa6e8d40fbe0da508e4f781b7b1f89af75`
+- JAR SHA-256 `3c22c27b31df6a9c8776e5cbeecb3fd54b5d7e97f33b7bb734751a0483d0c841`
+- Developer tests: 12/12 passed. Final independent acceptance is recorded separately.
+
+Recovery1/recovery2 coordinates are immutable intermediate evidence, **not APK deliverables**. Protocol/terminal are unchanged.
+
+## Historical intermediate candidate: recovery2
 
 Source `7491b2aaf26a2f301912446e0e62b606e4ee1253`, tree `c5b49da1319623c8f164106ad1524751a65d7600`.
 Coordinate `dev.agentmirror.core:core-conn:20261002.snapshot-recovery2` adds volatile closed visibility and serialized finish to the same recovery logic, because local pump termination and transport callbacks run on different real threads.
