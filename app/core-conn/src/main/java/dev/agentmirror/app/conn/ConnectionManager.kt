@@ -16,7 +16,11 @@
 
 package dev.agentmirror.app.conn
 
+import java.util.concurrent.ConcurrentHashMap
+
 private const val FOREGROUND_LIVENESS_BUDGET_MS = 5_000L
+private const val SNAPSHOT_RETRY_AFTER_MS = 2_000L
+private const val SNAPSHOT_TIMEOUT_MS = 4_000L
 
 /**
  * 连接层对外状态（docs/protocol.md §3 生命周期）。
@@ -137,6 +141,12 @@ class ConnectionManager(
 
     /** 活跃订阅簿记：ref → (rows, cols)，重连后重放。 */
     private val activeSubscriptions = LinkedHashMap<String, Pair<Int, Int>>()
+
+    /** Only a matching SNAPSHOT completes a subscribe, not a successful local send or Listing. */
+    private class SnapshotWait(val connection: Connection, val startedAtMs: Long) {
+        var retried = false
+    }
+    private val pendingSnapshots = ConcurrentHashMap<String, SnapshotWait>()
 
     /** 每个订阅的尺寸驻留意图；null 表示沿用服务端/旧客户端默认。 */
     private val activeRetainPaneSizes = LinkedHashMap<String, Boolean?>()
@@ -265,6 +275,7 @@ class ConnectionManager(
         lastSeenSeq = null
         foregroundRecoveryArmed = false
         clearForegroundLiveness()
+        pendingSnapshots.clear()
         attemptConnect()
     }
 
@@ -282,6 +293,7 @@ class ConnectionManager(
         pendingReconnectAt = null
         foregroundRecoveryArmed = false
         clearForegroundLiveness()
+        pendingSnapshots.clear()
         dialCoordinator?.cancel(generation)
         generation++
         listRefreshInFlight = false
@@ -303,6 +315,27 @@ class ConnectionManager(
      * @inv 可重复调用；不改变非重连状态
      */
     fun pump(nowMs: Long) {
+        for ((ref, wait) in pendingSnapshots) {
+            val conn = connection ?: continue
+            if (state != ConnectionState.READY || conn !== wait.connection) continue
+            val elapsed = nowMs - wait.startedAtMs
+            // Check the original hard deadline first, even if this is the first late pump.
+            if (elapsed >= SNAPSHOT_TIMEOUT_MS) {
+                ConnDiag.record("ws", "snapshot_timeout ref=$ref elapsed_ms=$elapsed retried=${wait.retried}")
+                foregroundRecoveryArmed = true
+                clearForegroundLiveness()
+                pendingSnapshots.clear()
+                conn.closeForReconnect("subscription snapshot timeout: $ref")
+                return
+            }
+            if (!wait.retried && elapsed >= SNAPSHOT_RETRY_AFTER_MS) {
+                wait.retried = true
+                val dims = activeSubscriptions[ref] ?: continue
+                val ok = sendSubscription(conn, ref, dims)
+                ConnDiag.record("ws", "snapshot_retry ref=$ref elapsed_ms=$elapsed sent=$ok")
+                traceSubscribe(ref, dims.first, dims.second, sent = ok, replay = false, ready = true, hasConn = true, reason = "snapshot_retry")
+            }
+        }
         val probeAt = foregroundLivenessDeadlineMs
         if (probeAt != null && nowMs >= probeAt) {
             val probeConnection = foregroundLivenessConnection
@@ -540,17 +573,24 @@ class ConnectionManager(
             traceSubscribe(ref, rows, cols, sent = false, replay = false, ready = false, hasConn = true, reason = "not_ready")
             return true
         }
-        val ok = conn.send(
-            SubscribeFrame(
-                ref = ref,
-                rows = rows,
-                cols = cols,
-                clientType = "mobile",
-                retainPaneSize = retainPaneSize,
-            ),
-        )
+        val ok = sendSubscription(conn, ref, rows to cols)
         traceSubscribe(ref, rows, cols, sent = ok, replay = false, ready = true, hasConn = true, reason = if (ok) "sent" else "send_failed")
         return ok
+    }
+
+    private fun sendSubscription(conn: Connection, ref: String, dims: Pair<Int, Int>): Boolean {
+        // Arm before sending: a transport may deliver the snapshot synchronously in tests.
+        // Repeated geometry subscribes on the same socket must not extend the original budget.
+        pendingSnapshots.computeIfAbsent(ref) { SnapshotWait(conn, clock.nowMs()) }
+        return conn.send(
+            SubscribeFrame(
+                ref = ref,
+                rows = dims.first,
+                cols = dims.second,
+                clientType = "mobile",
+                retainPaneSize = activeRetainPaneSizes[ref],
+            ),
+        )
     }
 
     /**
@@ -565,6 +605,7 @@ class ConnectionManager(
     fun unsubscribe(ref: String): Boolean {
         activeSubscriptions.remove(ref)
         activeRetainPaneSizes.remove(ref)
+        pendingSnapshots.remove(ref)
         val conn = connection ?: return true
         if (!conn.isReady) return true
         return conn.send(UnsubscribeFrame(ref = ref))
@@ -863,6 +904,7 @@ class ConnectionManager(
             setState(ConnectionState.READY)
             foregroundRecoveryArmed = false
             clearForegroundLiveness()
+            pendingSnapshots.clear()
             // 无状态恢复：重建全量列表 + 重放全部活跃订阅（当前屏快照重放）。
             sendList()
             replaySubscriptions(reconnect = reconnect)
@@ -916,6 +958,11 @@ class ConnectionManager(
         }
 
         override fun onBinary(frame: BinaryFrame) {
+            if (frame.kind == BinaryKind.SNAPSHOT) {
+                pendingSnapshots[frame.ref]?.let { wait ->
+                    if (wait.connection === connection) pendingSnapshots.remove(frame.ref, wait)
+                }
+            }
             val targeted = binaryListeners[frame.ref]
             val recipients = LinkedHashSet<Listener>()
             if (targeted != null && targeted.isNotEmpty()) {
@@ -948,6 +995,7 @@ class ConnectionManager(
             val resumeRecovery = foregroundRecoveryArmed
             foregroundRecoveryArmed = false
             clearForegroundLiveness()
+            pendingSnapshots.clear()
             listRefreshInFlight = false
             level2RefreshInFlight.clear()
             lastSeenSeq = null
@@ -1009,15 +1057,7 @@ class ConnectionManager(
             }
         }
         for ((ref, dims) in activeSubscriptions) {
-            val ok = conn.send(
-                SubscribeFrame(
-                    ref = ref,
-                    rows = dims.first,
-                    cols = dims.second,
-                    clientType = "mobile",
-                    retainPaneSize = activeRetainPaneSizes[ref],
-                ),
-            )
+            val ok = sendSubscription(conn, ref, dims)
             traceSubscribe(
                 ref,
                 dims.first,

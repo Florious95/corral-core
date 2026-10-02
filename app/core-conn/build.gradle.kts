@@ -24,7 +24,7 @@ plugins {
 }
 
 group = "dev.agentmirror.core"
-version = "20260915.close"
+version = "20261002.snapshot-recovery1"
 apply(from = rootProject.file("gradle/core-maven-publish.gradle"))
 
 kotlin {

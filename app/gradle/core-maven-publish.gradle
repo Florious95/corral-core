@@ -6,9 +6,7 @@
  * 给判据 `ls jar aar` 与后续 AGP 消费；不是 com.android.library。
  */
 group = "dev.agentmirror.core"
-version = "20260822.0"
-
-def coreVer = "20260822.0"
+def coreVer = project.version.toString()
 
 tasks.register("makeAar", Zip) {
     def jarTask = tasks.named("jar")

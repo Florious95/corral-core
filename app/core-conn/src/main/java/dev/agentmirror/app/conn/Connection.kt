@@ -130,13 +130,14 @@ class Connection(
     /**
      * Abort this socket as a recoverable failure.
      *
-     * The manager uses this for a foreground liveness timeout: the old socket must not turn an
-     * intentional health decision into STOPPED, and its terminal callback must enter normal
-     * reconnect handling.
+     * A liveness verdict must not wait for the transport's asynchronous close handshake.
+     * Finish locally first so the manager can redial and all late frames/terminal callbacks
+     * from this socket are ignored, then request transport cleanup.
      */
     fun closeForReconnect(reason: String) {
         if (closed) return
         explicitPermanent = false
+        finish(reason)
         transport.close(reason)
     }
 
