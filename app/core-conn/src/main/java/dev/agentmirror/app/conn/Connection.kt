@@ -66,7 +66,7 @@ class Connection(
         fun onClosed(permanent: Boolean, reason: String)
     }
 
-    private var closed = false
+    @Volatile private var closed = false
     private var authSent = false
     private var authAcked = false
 
@@ -215,7 +215,7 @@ class Connection(
         finish(throwable.message ?: "transport failure")
     }
 
-    private fun finish(reason: String) {
+    @Synchronized private fun finish(reason: String) {
         if (closed) return
         closed = true
         val permanent = explicitPermanent ?: when {

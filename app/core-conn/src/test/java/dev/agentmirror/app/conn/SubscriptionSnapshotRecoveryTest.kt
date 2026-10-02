@@ -3,6 +3,8 @@ package dev.agentmirror.app.conn
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicInteger
 
 class SubscriptionSnapshotRecoveryTest {
     private val ref = "/tmp/test\u001f%166"
@@ -127,6 +129,35 @@ class SubscriptionSnapshotRecoveryTest {
         assertEquals(ConnectionState.READY, f.manager.state())
         f.at(9_000)
         assertEquals(3, f.transports.size)
+    }
+
+    @Test fun timeoutAndTransportFailureFinishOnlyOnceAcrossThreads() {
+        repeat(20) {
+            val closedCalls = AtomicInteger()
+            val transport = Transport()
+            val conn = Connection(transport, "fixture", object : Connection.Listener {
+                override fun onOpened() = Unit
+                override fun onReady() = Unit
+                override fun onFrame(frame: FramePayload) = Unit
+                override fun onBinary(frame: BinaryFrame) = Unit
+                override fun onLocalDecodeError(code: FrameError, message: String) = Unit
+                override fun onClosed(permanent: Boolean, reason: String) { closedCalls.incrementAndGet() }
+            })
+            conn.start()
+            transport.listener.onOpen()
+            transport.listener.onText(FrameCodec.encode(AuthAckFrame(ok = true)))
+            val start = CountDownLatch(1)
+            val threads = (0 until 8).map { index ->
+                Thread {
+                    start.await()
+                    if (index % 2 == 0) conn.closeForReconnect("timeout")
+                    else transport.listener.onFailure(IllegalStateException("network failure"))
+                }.also { it.start() }
+            }
+            start.countDown()
+            threads.forEach { it.join(5_000); assertTrue(!it.isAlive) }
+            assertEquals(1, closedCalls.get())
+        }
     }
 
     @Test fun nonReadySubscribeIsGuardedOnlyAfterReplayIsSent() {
