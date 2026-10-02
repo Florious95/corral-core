@@ -1,8 +1,30 @@
 # 01 · Agent 主动任务通知契约（notifications_v1）
 
-> 状态：**Issue #42 架构提案，尚未实现**。实现发布后，声明 `notifications_v1` 能力即承诺遵守本文。
+> 状态：**已正式发布（Production Baseline）**。当前服务端（`server/`）、Android 客户端（`app/`）及全局 CLI（`corral-notify`）已全量落地并验证。
 > 基础协议：[WebSocket v1](../protocol.md)。本契约是能力协商保护的增量扩展，不修改终端 binary 格式、不把全局 `v` 改成 2。
 > MUST / MUST NOT / SHOULD 分别表示必须 / 禁止 / 应当。Android、iOS、Desktop 使用同一字段和恢复语义，不另造平台私有协议。
+
+## 0. 多端跨平台适配总纲（Cross-Platform Alignment）
+
+本通知体系为 **跨平台通用规范（Multi-Platform Universal Contract）**：
+- **服务端权威**：Go 服务端管理 1000 条持久化环形历史、本地 Unix Domain Socket IPC、以及基于 WebSocket 的 `notifications_v1` 能力协商广播。
+- **Android 端（已落地）**：`NotificationTransport` 截获通知帧，`NotificationHub` 驱动 `NotificationRepository` 有界存储，`NotificationHelper` 触发系统 Heads-up（`agent_tasks_v1`），消息中心支持全文展开与会话直达。
+- **iOS 端适配指南（待接入 Team 指引）**：
+  * **能力协商**：在现有 WebSocket 的 `auth` 帧中声明 `capabilities: ["notifications_v1"]`；
+  * **前台/活跃期**：接收 `notification` 实时帧，调用 `UNUserNotificationCenter` 弹送系统本地横幅通知（Local Notification），点击通过 URL Scheme（`corral://notification/<host>/<id>`）或状态机切入终端会话；
+  * **切后台/恢复期**：由于 iOS 系统挂起 WebSocket，应用重新进入前台握手成功后，读取 `auth_ack.payload.notification_state`，使用 `notifications_sync` 按游标逐页拉取未读历史补齐消息中心，不漏掉离线任务；
+  * **UI 展现**：复用 SwiftUI 版 `MessageCenterView`，统一配色徽章、Agent 名称、工作区与一键直达终端。
+- **Desktop 桌面端适配指南（macOS / Windows / Linux）**：
+  * **长连接协商**：Desktop 客户端保持常驻 WebSocket 连接，声明 `notifications_v1`；
+  * **原生系统通知**：
+    - macOS：调用 `NSUserNotification` / `UNUserNotificationCenter`（或 Web/Electron `new Notification()`）；
+    - Windows：调用 WinRT / PowerShell Toast Notification；
+    - Linux：调用 `libnotify`（`notify-send`）或 D-Bus `org.freedesktop.Notifications`；
+  * **点击直达**：点击系统通知直接将 Desktop 窗口激活到前台，并自动将当前标签页/终端视口切换至对应的 `session_ref`。
+- **命令行 CLI 极简标准**：
+  * 命令行调用彻底移除 `--agent-name` 参数，调用方仅需传递消息正文：
+    `corral-notify [--title "<标题>"] [--level "success"] "<正文>"`
+  * 服务端通过调用者所在的 tmux pane 环境（`$TMUX`、`$TMUX_PANE`）与规范化后的 socket 路径（自动将 macOS `/private/tmp` 归一化为 `/tmp`），全自动从 catalog 中通过 `displayName` 投影推导出真实的 Agent 名字（在 Leader 终端触发自动识别为 `Leader`，执行席位自动识别为对应角色名）。
 
 ## 1. 范围、信任和成功的含义
 
