@@ -49,7 +49,7 @@ object TermPalette {
     private val NEAR_WHITE_INDEXES = setOf(231, 253, 255)
 
     /** 原色亮度 ≤ 此值视为「终端黑」（整屏底），映射到 [Scheme.defaultBg]。 */
-    const val SCREEN_BLACK_LUMA_MAX = 16
+    const val SCREEN_BLACK_LUMA_MAX = 32
 
     /** 原色亮度 ≥ 此值视为「高亮白块」，浅底上压到用户块。 */
     const val HIGHLIGHT_WHITE_LUMA_MIN = 220
@@ -323,8 +323,8 @@ object TermPalette {
         val b = raw and 0xFF
         val chroma = maxOf(r, g, b) - minOf(r, g, b)
         return when {
-            y <= SCREEN_BLACK_LUMA_MAX -> pal.defaultBg
             raw == 0xFF1E1E2E.toInt() && luma(pal.defaultBg) < luma(pal.defaultFg) -> pal.userBlockBg
+            y <= SCREEN_BLACK_LUMA_MAX -> pal.defaultBg
             y >= HIGHLIGHT_WHITE_LUMA_MIN && chroma <= ACHROMA_MAX -> pal.userBlockBg
             y >= HIGHLIGHT_WHITE_LUMA_MIN -> pal.userBlockBg
             else -> project(raw, background = true, pal, againstBg)
