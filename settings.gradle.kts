@@ -26,7 +26,7 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
         // First-snapshot recovery Core and unchanged golden protocol/terminal, immutable publication.
-        maven { url = uri("https://raw.githubusercontent.com/Florious95/corral-core/16bd7774fb76fd1741fb2363a9b75317b58acf33/") }
+        maven { url = uri("https://raw.githubusercontent.com/Florious95/corral-core/28df59b69bb638f32d7eae694a6c9f9174dc742a/") }
         val candidateRepo = rootDir.parentFile.resolve("workspace-create-agent-core-maven/.team/nodes/developer/session-longpress-close-core-maven")
         if (candidateRepo.isDirectory) {
             maven { url = candidateRepo.toURI() }
