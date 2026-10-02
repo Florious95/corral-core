@@ -2,19 +2,19 @@
 
 ## 1. 交付与黄金基线确认
 - **全流程验收完成**：在 9902 隔离实例上完成移动端 App E2E 全链路实测验证（真实 AVD 模拟器测试全 PASS），所有代码已正式合入 main 主线并推送到 GitHub 远端！
-- **最新黄金基线**：**Commit `dc65207065f4bb3f9b9b2026320c310be9747d90`**（PR #44，钉死不可变 Core `20261002.snapshot-recovery2`）
-- **提交说明**：`fix(conn): recover on snapshot deadline in foreground session open`
+- **最新黄金基线**：**Commit `75c67c4dd29a0722e687542fcc7ca7311cf448a6`**（PR #44，钉死不可变 Core `20261002.snapshot-recovery3`）
+- **提交说明**：`fix(conn): recover on snapshot deadline with atomic winner race defense`
 - **关联已合入/跟进 PR**：
   * PR #41（前后台即刻重连与假活快速探活） -> MERGED
   * PR #43（Agent 任务通知体系、消息中心与会话跳转） -> MERGED
-  * PR #44（切前台打开会话首帧快照有界超时与立即快速自愈） -> OPEN / 待合并
-  * corral-core PR #107（首帧快照守卫与异步关闭防卡死） / PR #108（不可变 Maven 产物发布）
-- **权威交付 APK 凭证**：
-  * 本地路径：`/Users/alauda/Downloads/corral-app-snapshot-recovery2-a1d8db0.apk`
-  * 精确 SHA-256：`a1d8db0e56e82dfb532ceeeae492d6f3601afc1e1d2e704c4ec68688b4a9f6f0`
+  * PR #44（切前台打开会话首帧快照有界超时与立即快速自愈） -> 最终冻结 recovery3
+  * corral-core PR #107（首帧快照守卫与原子竞态消除） / PR #108（不可变 Maven 产物发布 recovery3）
+- **权威交付 APK 凭证（仅此候选有效）**：
+  * 本地路径：`/Users/alauda/Downloads/corral-app-snapshot-recovery3-0efb225.apk`
+  * 精确 SHA-256：`0efb2251cedf618feb67592e65557cb231e04d7cd0ae7bcad3221310501b51fd`
   * 大小：41,074,779 bytes
-  * 115 专属提取码：**`biqzi22x1iy9g83ar`**
-  * 115 通用覆盖包：**`cs7gsr9le87hndmv0`**
+  * 115 专属提取码：**`e5dyvdt2iy60uzw2p`**
+  * 115 通用覆盖包：**`e5dyvm2d15lrwzw2p`**
 
 ## 2. 本次基线核心内容总结
 1. **服务端 `/pair/whoami` 与 `/pair/identify` 身份路由补齐（已实证）**：
