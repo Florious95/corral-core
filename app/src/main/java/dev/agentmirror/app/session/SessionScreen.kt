@@ -327,7 +327,7 @@ fun SessionScreen(
                         text = result.text,
                         selection = TextRange(result.text.length),
                     )
-                    viewModel.onPassthroughInput(mirror, next)
+                    viewModel.onPassthroughInput(mirror, next, fromShortcut = true)
                     mirror = next
                 }
                 else -> viewModel.transientError = shortcutProviderError(result)
@@ -453,11 +453,11 @@ fun SessionScreen(
                     onSendText = send@{ text ->
                         if (textUploadInProgress) return@send
                         val draft = text.ifEmpty { mirror.text }
-                        if (needsTextUpload(draft)) {
+                        if (viewModel.shouldUploadDraft(draft)) {
                             textUploadInProgress = true
                             scope.launch {
                                 try {
-                                    val sent = withContext(Dispatchers.IO) { viewModel.sendDraft(draft) }
+                                    val sent = withContext(Dispatchers.IO) { viewModel.sendDraft(draft, asFile = true) }
                                     // Keep failed uploads and edits made during IO; never erase a newer draft.
                                     if (sent && mirror.text == draft) mirror = TextFieldValue("")
                                 } finally {

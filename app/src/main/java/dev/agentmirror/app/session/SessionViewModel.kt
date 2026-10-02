@@ -526,10 +526,12 @@ class SessionViewModel(
      * - [inputSyncEnabled] == false（关闭）：输入期不向 CLI 注入按键；发送时将 [text] 一次性
      *   发给 CLI 并附带 CR（`\r` / 0x0D）提交。Raw 模式下 LF 只是插入换行，不是回车。
      *
-     * - 超长草稿（≥4000 UTF-16 单位或 ≥100 行）：上传原文 UTF-8 文件，仅注入引用路径；
-     *   不使用图片预贴，不向终端灌入原文。调用方在 IO 线程执行，失败时保留本地草稿。
+     * - 文件草稿（≥4000 UTF-16 单位、≥100 行或用户单次批量插入 >100 单位）：
+     *   上传原文 UTF-8 文件，仅注入引用路径，不使用图片预贴。批量草稿保护持续到发送；
+     *   逐键输入保留阈值前实时同步。调用方在 IO 线程执行，失败时保留本地草稿。
      *
      * @param text 本地待发送草稿；短文同步开启时只补未同步差异，再发裸 Enter
+     * @param asFile UI 在切换 IO dispatcher 前捕获的文件决策，避免期间编辑改变发送路线
      * @return true 表示提交已入连接发送队列；false 时调用方不得清除文件草稿
      * @contract
      * @pre connectionState 为 READY，且 inputStatus 非 Sending
@@ -539,14 +541,14 @@ class SessionViewModel(
      * @inv 在途不回发（发送闸）
      */
     @JvmOverloads
-    fun sendDraft(text: String = ""): Boolean {
+    fun sendDraft(text: String = "", asFile: Boolean = false): Boolean {
         if (inputStatus is InputStatus.Sending) return false
         // 本地先判定可发送性：未就绪立即明确报错（静默失效猎杀）。
         if (connectionState != ConnectionState.READY) {
             inputStatus = InputStatus.Failed("连接未就绪，无法发送")
             return false
         }
-        if (needsTextUpload(text)) {
+        if (asFile || shouldUploadDraft(text)) {
             if (uploadStatus is UploadStatus.Uploading) return false
             return sendTextFileDraft(text)
         }
@@ -611,6 +613,7 @@ class SessionViewModel(
         val reference = textFileReference(path)
         val submitted = manager.sendInput(ref, if (attachmentPath.isEmpty()) "$reference\r" else reference, attachmentPath)
         inputStatus = if (submitted) InputStatus.Sending else InputStatus.Failed("发送失败：草稿已保留")
+        if (submitted && fileDraftText == text) fileDraftText = null
         return submitted
     }
 
@@ -651,8 +654,17 @@ class SessionViewModel(
      * @err none（连接未就绪时发送静默丢，synced 也不推进，避免以为 CLI 已跟上）
      * @inv 同步后光标约定在行尾；不改本地草稿；不引入额外延迟
      */
-    fun onPassthroughInput(oldValue: TextFieldValue, newValue: TextFieldValue) {
-        if (!inputSyncEnabled || needsTextUpload(newValue.text)) return
+    @JvmOverloads
+    fun onPassthroughInput(oldValue: TextFieldValue, newValue: TextFieldValue, fromShortcut: Boolean = false) {
+        if (fromShortcut || newValue.text.isEmpty()) fileDraftText = null
+        if (newValue.text.isNotEmpty() && (
+                fileDraftText != null || needsTextUpload(newValue.text) ||
+                    (!fromShortcut && isBulkTextEdit(oldValue.text, newValue.text))
+                )) {
+            fileDraftText = newValue.text
+            return
+        }
+        if (!inputSyncEnabled) return
         val wasComposing = oldValue.composition != null
         val isComposing = newValue.composition != null
         val composition = newValue.composition
@@ -705,6 +717,11 @@ class SessionViewModel(
 
     /** 已同步到 CLI 行尾的文本（084）；组合期不推进。 */
     private var syncedText: String = ""
+
+    /** Clipboard/IME batches stay local until send, even if subsequently edited below the threshold. */
+    private var fileDraftText by mutableStateOf<String?>(null)
+
+    internal fun shouldUploadDraft(text: String): Boolean = needsTextUpload(text) || fileDraftText == text
 
     /**
      * 上传附件（协议 §8 multipart）→ 主机绝对路径**立刻**经 [ConnectionManager.sendAttachPreview]

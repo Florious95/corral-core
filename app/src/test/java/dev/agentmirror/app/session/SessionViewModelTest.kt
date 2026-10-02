@@ -62,8 +62,8 @@ class SessionViewModelTest {
         var lastToken: String? = null
         var uploadCount = 0
         var onUpload: (() -> Unit)? = null
-        override fun upload(baseUrl: String, token: String?, attachment: Attachment): UploadOutcome {
-            lastToken = token
+        override fun upload(baseUrl: String, uploadToken: String?, attachment: Attachment): UploadOutcome {
+            lastToken = uploadToken
             return upload(baseUrl, attachment)
         }
         override fun upload(baseUrl: String, attachment: Attachment): UploadOutcome {
@@ -283,6 +283,107 @@ class SessionViewModelTest {
             assertTrue(h.vm.uploadStatus is UploadStatus.Failed)
             assertTrue(h.inputFrames().isEmpty())
         }
+    }
+
+    // Leader scheme A: >100-unit paste/batch is held from its first edit.
+    @Test fun batchPasteIsHeldBeforeGlobalLengthThreshold() {
+        val h = Harness()
+        h.vm.onPassthroughInput(tv(""), tv("x".repeat(101)))
+        assertTrue("批量提交必须从第一个事务起留本地", h.inputFrames().isEmpty())
+    }
+
+    @Test fun batchPasteBelowGlobalThresholdIsStillUploadedOnSend() {
+        val h = Harness()
+        val draft = "x".repeat(101)
+        h.vm.onPassthroughInput(tv(""), tv(draft))
+        assertTrue(h.vm.sendDraft(draft))
+        assertTrue("批量草稿必须作为文件上传", h.uploader.lastAttachment != null)
+        assertEquals(draft, h.uploader.lastAttachment!!.bytes.toString(Charsets.UTF_8))
+        assertTrue(h.inputFrames().none { it.text.contains("xxx") })
+    }
+
+    @Test fun editedBatchRemainsFileDraftUntilSend() {
+        val h = Harness()
+        h.vm.onPassthroughInput(tv(""), tv("x".repeat(101)))
+        h.vm.onPassthroughInput(tv("x".repeat(101)), tv("x".repeat(60)))
+        h.vm.sendDraft("x".repeat(60))
+        assertTrue("编辑不解除批量草稿保护", h.uploader.lastAttachment != null)
+        assertEquals("x".repeat(60), h.uploader.lastAttachment!!.bytes.toString(Charsets.UTF_8))
+        assertTrue(h.inputFrames().none { it.text.contains("xxx") })
+    }
+
+    @Test fun hundredUnitEditsStayLiveUntilCumulativeThresholdThenOnlyFileIsSent() {
+        val h = Harness()
+        var previous = ""
+        for (n in 100..4_500 step 100) {
+            val next = "x".repeat(n)
+            h.vm.onPassthroughInput(tv(previous), tv(next))
+            previous = next
+        }
+        assertEquals(39, h.inputFrames().size)
+        assertTrue(h.inputFrames().all { it.text == "x".repeat(100) })
+        h.vm.sendDraft(previous)
+        assertEquals(3_900, h.keyFrames().size)
+        assertEquals(previous, h.uploader.lastAttachment!!.bytes.toString(Charsets.UTF_8))
+        assertEquals("'/host/img.png'\r", h.inputFrames().last().text)
+    }
+
+    @Test fun singleKeyMiddleEditDoesNotMistakeUnchangedTailForBatch() {
+        val h = Harness()
+        val before = "a".repeat(200)
+        h.vm.onPassthroughInput(tv(""), tv(before), fromShortcut = true)
+        val after = "a".repeat(50) + "b" + "a".repeat(150)
+        h.vm.onPassthroughInput(tv(before), tv(after))
+        assertFalse(h.vm.shouldUploadDraft(after))
+        h.vm.sendDraft(after)
+        assertEquals(null, h.uploader.lastAttachment)
+        assertEquals("", h.inputFrames().last().text)
+    }
+
+    @Test fun shortcutReplacesHeldBatchWithoutChangingItsOrdinaryLiveBehavior() {
+        val h = Harness()
+        h.vm.onPassthroughInput(tv(""), tv("x".repeat(101)))
+        val command = "echo " + "a".repeat(200)
+        h.vm.onPassthroughInput(tv("x".repeat(101)), tv(command), fromShortcut = true)
+        assertFalse(h.vm.shouldUploadDraft(command))
+        assertEquals(command, h.inputFrames().single().text)
+        h.vm.sendDraft(command)
+        assertEquals(null, h.uploader.lastAttachment)
+    }
+
+    @Test fun clearingBatchRestoresOrdinaryShortTyping() {
+        val h = Harness()
+        h.vm.onPassthroughInput(tv(""), tv("x".repeat(101)))
+        h.vm.onPassthroughInput(tv("x".repeat(101)), tv(""))
+        h.vm.onPassthroughInput(tv(""), tv("short"))
+        assertEquals("short", h.inputFrames().single().text)
+        assertFalse(h.vm.shouldUploadDraft("short"))
+    }
+
+    @Test fun capturedFileSubmissionCannotBecomeRawTextWhenEditorChangesDuringDispatch() {
+        val h = Harness()
+        val captured = "x".repeat(101)
+        h.vm.onPassthroughInput(tv(""), tv(captured))
+        h.vm.onPassthroughInput(tv(captured), tv(""))
+        h.vm.sendDraft(captured, asFile = true)
+        assertEquals(captured, h.uploader.lastAttachment!!.bytes.toString(Charsets.UTF_8))
+        assertTrue(h.inputFrames().none { it.text.contains("xxx") })
+    }
+
+    @Test fun editMadeDuringUploadKeepsItsOwnFileProtectionAfterOriginalSubmission() {
+        val h = Harness()
+        val original = "x".repeat(101)
+        val edited = "z".repeat(200)
+        h.vm.onPassthroughInput(tv(""), tv(original))
+        h.uploader.onUpload = { h.vm.onPassthroughInput(tv(original), tv(edited)) }
+        h.vm.sendDraft(original)
+        h.ackOk(h.inputFrames().last().reqId)
+        h.uploader.onUpload = null
+        assertTrue(h.vm.shouldUploadDraft(edited))
+        h.vm.sendDraft(edited)
+        assertEquals(2, h.uploader.uploadCount)
+        assertEquals(edited, h.uploader.lastAttachment!!.bytes.toString(Charsets.UTF_8))
+        assertTrue(h.inputFrames().none { it.text.contains("zzz") || it.text.contains("xxx") })
     }
 
     // ---- 镜像流：snapshot 重放 / delta 追加 / scrollback 头插 ----
