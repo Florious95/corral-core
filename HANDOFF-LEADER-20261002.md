@@ -62,5 +62,5 @@
 ## 4. 现场收尾与资源状态
 - **Git 状态**：`main` 分支纯净对齐（Commit `008c90187`），工作树 0 diff；
 - **测试环境**：9902 fixture 与测试模拟器完全关闭退出，端口彻底释放；
-- **生产环境**：9900 运行 PID 78435 稳定常驻，挂载 `notify.sock`，whoami/launchers/nodeprobe/广播完全正常；
+- **生产环境**：9900 运行 PID 38384（全网卡 0.0.0.0:9900 监听，Tailscale 100.75.207.88 /pair/whoami 200 OK）稳定常驻，挂载 `notify.sock`，whoami/launchers/nodeprobe/广播完全正常；
 - **全员待命**：固定席位（developer, tester, app-tester）已全量执行 `--discard-session` 重置为纯净初始态，sol 与 opus 已安全停止。
