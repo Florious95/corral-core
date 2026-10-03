@@ -2,8 +2,10 @@
 
 ## 1. 交付与黄金基线确认
 - **全流程验收完成**：在 9902/9914 隔离实例上完成移动端 App E2E 全链路实测验证（真实 AVD 模拟器测试全 PASS：超长文本大段粘贴自动打包为 UTF-8 文件上传并安全注入路径引用、上传失败完整保留用户草稿、短文本实时直通保持 100% 完好；底层 WS 保活层 PASS），服务端相关契约完全体（01/02/03及protocol.md §8/§9）已全量正式落盘合流；按照用户明确指示，已彻底回退 Agent CLI 对话界面的底部 Dock 重构，回归到重构前用户最喜爱的原版经典底部 UI，并彻底修复了暗色模式下发送消息气泡底色塌缩为纯黑的缺陷！
-- **最新黄金基线**：**Commit `2e2357d4adad598796c4d2932205262e4948bb09`**（用户最喜爱的经典原版底部 Dock UI + 暗色模式消息气泡底色语义路由修复，包含 2,000 字符长文本文件化、PR #44 前台服务配置自愈与全套保活成果）
-- **提交说明**：`fix(theme): route dark message background #1E1E2E before black guard and preserve classic dock`
+- **最新黄金基线**：
+  * **App 客户端**：**Commit `2e2357d4adad598796c4d2932205262e4948bb09`**（用户最喜爱的经典原版底部 Dock UI + 暗色模式消息气泡底色语义路由修复，包含 2,000 字符长文本文件化、PR #44 前台服务配置自愈与全套保活成果）
+  * **服务端 Core**：**Commit `017836a43093c93f5d555f30e076e293ed2de5cb`**（P0 重订阅全局原子单调代际分配器，彻底消除重订阅 delta 静默丢弃与视口冻屏死锁）
+- **提交说明**：`fix(theme): route dark message background #1E1E2E before black guard and preserve classic dock` / `fix(reflow): allocate monotonic global reflow epoch across resubscriptions`
 - **关联已合入/跟进 PR**：
   * PR #41（前后台即刻重连与假活快速探活） -> MERGED
   * PR #43（Agent 任务通知体系、消息中心与会话跳转） -> MERGED
@@ -62,5 +64,5 @@
 ## 4. 现场收尾与资源状态
 - **Git 状态**：`main` 分支纯净对齐（Commit `008c90187`），工作树 0 diff；
 - **测试环境**：9902 fixture 与测试模拟器完全关闭退出，端口彻底释放；
-- **生产环境**：9900 运行 PID 38384（全网卡 0.0.0.0:9900 监听，Tailscale 100.75.207.88 /pair/whoami 200 OK）稳定常驻，挂载 `notify.sock`，whoami/launchers/nodeprobe/广播完全正常；
+- **生产环境**：9900 运行 PID 86757（全网卡 0.0.0.0:9900 监听，Tailscale 100.75.207.88 /pair/whoami 200 OK，二进制 SHA: `69c18631...`）稳定常驻，挂载 `notify.sock`，whoami/launchers/nodeprobe/广播完全正常；
 - **全员待命**：固定席位（developer, tester, app-tester）已全量执行 `--discard-session` 重置为纯净初始态，sol 与 opus 已安全停止。
