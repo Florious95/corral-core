@@ -82,6 +82,15 @@ class MainNavState(initialShowPairing: Boolean) {
      */
     var showMessageCenter by mutableStateOf(false)
 
+    /** 打开时冻结的入口范围：一级为 null，进入通知会话不改变此范围。 */
+    var messageCenterWorkspace by mutableStateOf<String?>(null)
+        private set
+
+    fun openMessageCenter(workspace: String? = null) {
+        messageCenterWorkspace = workspace
+        showMessageCenter = true
+    }
+
     /** 系统通知点按后待路由的目标（等本地库加载完再解析）；重建前未消费的会保存恢复。 */
     var pendingNotification by mutableStateOf<NotificationTarget?>(null)
 
@@ -94,8 +103,8 @@ class MainNavState(initialShowPairing: Boolean) {
      * 再推会话页；返回时回到消息中心，再返回落在该工作区的会话列表。
      */
     fun openSessionFromMessages(ref: String, name: String, workspace: String?) {
+        if (!showMessageCenter) openMessageCenter()
         workspace?.takeIf { it.isNotBlank() }?.let { selectedWorkspaceCwd = it }
-        showMessageCenter = true
         openSession(ref, name)
         sessionWorkspaceHint = workspace
     }
@@ -106,7 +115,7 @@ class MainNavState(initialShowPairing: Boolean) {
             is NotificationRoute.Session -> openSessionFromMessages(route.ref, route.name, route.workspace)
             is NotificationRoute.MessageCenter -> {
                 activeSession = null
-                showMessageCenter = true
+                openMessageCenter()
             }
         }
     }
@@ -155,6 +164,7 @@ class MainNavState(initialShowPairing: Boolean) {
         outState.putBoolean(KEY_SHOW_SETTINGS, showSettings)
         outState.putInt(KEY_HOME_PANE, homePane.ordinal)
         outState.putBoolean(KEY_SHOW_MESSAGES, showMessageCenter)
+        messageCenterWorkspace?.let { outState.putString(KEY_MESSAGE_WORKSPACE, it) }
         pendingNotification?.let {
             outState.putStringArray(KEY_PENDING_NOTIFICATION, arrayOf(it.hostId, it.id, it.sessionRef))
         }
@@ -173,6 +183,7 @@ class MainNavState(initialShowPairing: Boolean) {
         val paneOrd = savedInstanceState.getInt(KEY_HOME_PANE, ThreePane.Sessions.ordinal)
         homePane = ThreePane.entries.getOrElse(paneOrd) { ThreePane.Sessions }
         showMessageCenter = savedInstanceState.getBoolean(KEY_SHOW_MESSAGES)
+        messageCenterWorkspace = savedInstanceState.getString(KEY_MESSAGE_WORKSPACE)
         pendingNotification = savedInstanceState.getStringArray(KEY_PENDING_NOTIFICATION)
             ?.takeIf { it.size == 3 && it[0] != null && it[1] != null }
             ?.let { NotificationTarget(it[0]!!, it[1]!!, it[2]) }
@@ -190,6 +201,7 @@ class MainNavState(initialShowPairing: Boolean) {
         const val KEY_SESSION_REF = "nav_session_ref"
         const val KEY_SESSION_NAME = "nav_session_name"
         const val KEY_SHOW_MESSAGES = "nav_show_messages"
+        const val KEY_MESSAGE_WORKSPACE = "nav_message_workspace"
         const val KEY_PENDING_NOTIFICATION = "nav_pending_notification"
     }
 }

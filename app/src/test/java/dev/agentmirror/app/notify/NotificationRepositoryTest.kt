@@ -16,6 +16,8 @@
 
 package dev.agentmirror.app.notify
 
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -95,6 +97,101 @@ class NotificationRepositoryTest {
     }
 
     @Test
+    fun level1_includesEveryWorkspaceAndUnlinkedMessages() = runBlocking {
+        val r = repo()
+        r.acceptHistory(listOf(record("1"), record("2", workspace = "/work/other"), record("3", workspace = null)))
+        assertEquals(listOf("3", "2", "1"), r.itemsFor(null).first().map { it.record.seq })
+        assertEquals(3, r.unreadCountFor(null).first())
+        r.markAllRead(null)
+        assertEquals(0, r.unreadCountFor(null).first())
+        assertTrue(r.items.value.all { it.read })
+    }
+
+    @Test
+    fun level2_strictDirectoryFilter_excludesChildrenPrefixesAndMissingWorkspace() = runBlocking {
+        val r = repo()
+        r.acceptHistory(
+            listOf(
+                record("1"),
+                record("2", workspace = "/work/other"),
+                record("3", workspace = "/work/project/child"),
+                record("4", workspace = "/work/project-other"),
+                record("5", workspace = null),
+                record("6", workspace = ""),
+                record("7", workspace = "/work/Project"),
+            ),
+        )
+        assertEquals(listOf("1"), r.itemsFor("/work/project").first().map { it.record.seq })
+        assertEquals(1, r.unreadCountFor("/work/project").first())
+        assertTrue(r.itemsFor("/work/missing").first().isEmpty())
+        assertEquals(0, r.unreadCountFor("/work/missing").first())
+        assertTrue("empty L2 context is not the global scope", r.itemsFor("").first().isEmpty())
+    }
+
+    @Test
+    fun workspaceFilter_normalizesTrailingSlashAndKnownMacAliasesOnly() = runBlocking {
+        val r = repo()
+        r.acceptHistory(
+            listOf(
+                record("1", workspace = "/private/tmp/project/"),
+                record("2", workspace = "/tmp/project"),
+                record("3", workspace = "/private/var/project"),
+                record("4", workspace = "/private/etc/project/"),
+                record("5", workspace = "/private/work/project"),
+                record("6", workspace = "/tmp/project2"),
+                record("7", workspace = "/"),
+            ),
+        )
+        assertEquals(listOf("2", "1"), r.itemsFor("/tmp/project/").first().map { it.record.seq })
+        assertEquals(listOf("2", "1"), r.itemsFor("/private/tmp/project").first().map { it.record.seq })
+        assertEquals(listOf("3"), r.itemsFor("/var/project/").first().map { it.record.seq })
+        assertEquals(listOf("4"), r.itemsFor("/etc/project").first().map { it.record.seq })
+        assertTrue(r.itemsFor("/work/project").first().isEmpty())
+        assertEquals(listOf("7"), r.itemsFor("/").first().map { it.record.seq })
+    }
+
+    @Test
+    fun level2_markAllRead_onlyMarksMatchingWorkspaceAndPersistsIsolation() = runBlocking {
+        val file = File(tmp.root, "scoped.json")
+        val r = repo(file)
+        r.acceptHistory(
+            listOf(
+                record("1", workspace = "/tmp/project"),
+                record("2", workspace = "/private/tmp/project/"),
+                record("3", workspace = "/tmp/other"),
+                record("4", workspace = "/tmp/project/child"),
+                record("5", workspace = null),
+            ),
+        )
+        r.markAllRead("/tmp/project/")
+        val restored = repo(file)
+        assertEquals(0, restored.unreadCountFor("/private/tmp/project").first())
+        assertEquals(1, restored.unreadCountFor("/tmp/other").first())
+        assertEquals(3, restored.unreadCount.value)
+        assertEquals(setOf("1", "2"), restored.items.value.filter { it.read }.map { it.record.seq }.toSet())
+        restored.markAllRead("/tmp/missing")
+        assertEquals(3, restored.unreadCount.value)
+    }
+
+    @Test
+    fun level2_projectionsUpdateAfterLiveHistoryAndReadWithoutDroppingGlobalRecords() = runBlocking {
+        val r = repo()
+        val scopedItems = r.itemsFor("/work/project")
+        val scopedUnread = r.unreadCountFor("/work/project")
+        assertTrue(scopedItems.first().isEmpty())
+        r.acceptLive(record("1"), eligibleForAlert = true) {}
+        r.acceptLive(record("2", workspace = "/work/other"), eligibleForAlert = true) {}
+        assertEquals(1, scopedUnread.first())
+        r.acceptHistory(listOf(record("3", workspace = "/work/project/")))
+        assertEquals(listOf("3", "1"), scopedItems.first().map { it.record.seq })
+        assertEquals(2, scopedUnread.first())
+        r.markRead(record("1").key)
+        assertEquals(1, scopedUnread.first())
+        assertEquals(3, r.items.value.size)
+        assertEquals(2, r.unreadCount.value)
+    }
+
+    @Test
     fun items_newestFirst_seqComparedNumerically() {
         val r = repo()
         val sameInstant = "2026-10-01T01:00:00.123Z"
@@ -169,6 +266,7 @@ class NotificationRepositoryTest {
             sessionRef: String? = "/tmp/tmux-501/team\u001f%3",
             hostId: String = "h",
             agentName: String? = "Sol",
+            workspace: String? = "/work/project",
         ) = NotificationRecord(
             id = "id-$seq",
             hostId = hostId,
@@ -179,7 +277,7 @@ class NotificationRepositoryTest {
             body = body,
             sessionRef = sessionRef,
             sessionInstance = sessionRef?.let { "inst" },
-            workspace = "/work/project",
+            workspace = workspace,
             agentName = agentName,
             level = "success",
         )

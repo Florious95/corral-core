@@ -156,6 +156,7 @@ fun MessageCenterScreen(
     onMarkAllRead: () -> Unit,
     modifier: Modifier = Modifier,
     providerOf: (NotificationRecord) -> String? = { null },
+    workspaceFilter: String? = null,
 ) {
     BackHandler(onBack = onBack)
     val p = LocalAppPalette.current
@@ -194,7 +195,7 @@ fun MessageCenterScreen(
                 )
             }
             if (items.isEmpty()) {
-                MessageEmptyState(Modifier.weight(1f))
+                MessageEmptyState(workspaceFilter = workspaceFilter, modifier = Modifier.weight(1f))
             } else {
                 val floating = kit.recipes.listRow == ListRowStyle.FloatingCard
                 val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -659,7 +660,7 @@ private fun SystemAlertBanner() {
 }
 
 @Composable
-private fun MessageEmptyState(modifier: Modifier = Modifier) {
+private fun MessageEmptyState(workspaceFilter: String?, modifier: Modifier = Modifier) {
     val p = LocalAppPalette.current
     val kit = LocalThemeSuite.current
     Column(
@@ -686,7 +687,7 @@ private fun MessageEmptyState(modifier: Modifier = Modifier) {
         }
         Spacer(Modifier.height(18.dp))
         AppText(
-            text = "暂无消息",
+            text = if (workspaceFilter == null) "暂无消息" else "当前工作区暂无任务消息",
             color = p.rowTitleText,
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,

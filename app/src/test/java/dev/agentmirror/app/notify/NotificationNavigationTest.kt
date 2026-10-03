@@ -122,6 +122,47 @@ class NotificationNavigationTest {
     }
 
     @Test
+    fun level1MessageCenterScope_doesNotDriftAfterOpeningNotificationSession() {
+        val nav = MainNavState(initialShowPairing = false)
+        nav.openMessageCenter()
+        nav.openSessionFromMessages("%3", "Sol", "/work/project")
+        assertEquals("/work/project", nav.selectedWorkspaceCwd)
+        assertNull("L1 remains global even though the target session selects L2", nav.messageCenterWorkspace)
+        nav.onSystemBack()
+        assertTrue(nav.showMessageCenter)
+        assertNull(nav.messageCenterWorkspace)
+    }
+
+    @Test
+    fun level2MessageCenterScope_survivesSessionReturnAndRotation() {
+        val nav = MainNavState(initialShowPairing = false)
+        nav.selectedWorkspaceCwd = "/work/project"
+        nav.openMessageCenter(nav.selectedWorkspaceCwd)
+        nav.openSessionFromMessages("%3", "Sol", "/work/project/")
+        val restored = MainNavState(initialShowPairing = true).apply {
+            restoreFrom(Bundle().also(nav::writeTo))
+        }
+        assertEquals("/work/project", restored.messageCenterWorkspace)
+        restored.onSystemBack()
+        assertTrue(restored.showMessageCenter)
+        assertEquals("/work/project", restored.messageCenterWorkspace)
+        restored.onSystemBack()
+        restored.selectedWorkspaceCwd = null
+        restored.openMessageCenter()
+        assertNull("reopening L1 replaces the old L2 scope", restored.messageCenterWorkspace)
+    }
+
+    @Test
+    fun systemNotificationFallback_opensGlobalCenterNotPreviousScope() {
+        val nav = MainNavState(initialShowPairing = false)
+        nav.openMessageCenter("/work/project")
+        nav.showMessageCenter = false
+        nav.applyNotificationRoute(NotificationRoute.MessageCenter(null))
+        assertTrue(nav.showMessageCenter)
+        assertNull(nav.messageCenterWorkspace)
+    }
+
+    @Test
     fun crossWorkspaceOpen_selectsTargetWorkspaceBeforeSession() {
         val nav = MainNavState(initialShowPairing = false)
         nav.selectedWorkspaceCwd = "/work/other"
