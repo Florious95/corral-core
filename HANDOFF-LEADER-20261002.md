@@ -1,77 +1,193 @@
-# Leader 权威交接与基线报告（2026-10-02）
+# Leader 权威交接与基线收尾案卷（2026-10-02）
 
-## 1. 交付与黄金基线确认
-- **全流程验收完成**：在 9902/9914 隔离实例上完成移动端 App E2E 全链路实测验证（真实 AVD 模拟器测试全 PASS：超长文本大段粘贴自动打包为 UTF-8 文件上传并安全注入路径引用、上传失败完整保留用户草稿、短文本实时直通保持 100% 完好；底层 WS 保活层 PASS），服务端相关契约完全体（01/02/03及protocol.md §8/§9）已全量正式落盘合流；按照用户明确指示，已彻底回退 Agent CLI 对话界面的底部 Dock 重构，回归到重构前用户最喜爱的原版经典底部 UI；跨端通报的 P0 级同一连接重订阅 delta 丢失（视口冻屏死锁）缺陷已彻底根除；Issue #47（消息中心一级展示全量，二级按当前目录过滤）已全量针对性测试 78/78 绿灯闭环出包；高级视觉模型 Opus 5.5 全量 30 套主题（60 个深浅色槽）自适应消息气泡重构已全量验收通过；**终端主题选择界面已彻底移除自动返回逻辑，实现点击任意主题实时应用、上方预览实时刷新、界面始终保持停留允许连续对比切换（PR #49）**！
-- **最新黄金基线**：
-  * **App 客户端**：**Commit `c5ea7a04a9e2833cc494b7845040c4931e03914b`**（PR #49，终端主题选择界面保持停留在当前页实时预览，叠加在 `9374df29c` 黄金基线之上，保持原版经典底部 Dock UI、全主题自适应气泡、Issue #47 消息分流、2000 字符长文本文件化与全套保活成果）
-  * **服务端 Core**：**Commit `017836a43093c93f5d555f30e076e293ed2de5cb`**（P0 重订阅全局原子单调代际分配器，彻底消除重订阅 delta 静默丢弃与视口冻屏死锁，生产 PID 86757）
-- **提交说明**：`fix(settings): keep theme picker open on selection with live preview`
-- **关联已合入/跟进 PR**：
-  * PR #41（前后台即刻重连与假活快速探活） -> MERGED
-  * PR #43（Agent 任务通知体系、消息中心与会话跳转） -> MERGED
-  * PR #44（切前台会话首帧快照自愈 + 前台服务配置自愈 + 探活防误掐死 + 通知状态对齐） -> 已验证
-  * PR #46（Issue #45 超长文本自动打包上传为文件） -> 2,000 字符门槛 + 原版经典 Dock UI（Commit `2e2357d`）
-  * PR #48（Issue #47 消息中心一级全量，二级按当前工作区目录过滤） -> 提交 `5b56f0b4`（基于 `baseline/golden-app-2e2357d4` 独立 PR）
-  * PR #49（终端主题选择界面保留在当前页并实时刷新预览） -> 提交 `c5ea7a04`（基于 `baseline/golden-app-9374df29` 独立 PR）
-  * corral-core PR #107（Commit `028030795`） / PR #108（版本 `20261002.background-liveness1`）
-- **权威交付 APK 凭证（主题选择页实时预览正式版）**：
-  * 本地路径：`/Users/alauda/Downloads/corral-app-theme-picker-stay-c5ea7a0.apk`
-  * 精确 SHA-256：`94c0653cd55e36fe22ae5757b141b0a93a42412f0f34cfaab189c418f6ab67be`
-  * 大小：41,091,163 bytes
-  * 115 专属提取码：**`biul9plon7nlj83ar`**
-  * 115 通用覆盖包：**`biul92nfs0gbr83ar`**
+> **受众**：给“刚接手、未看过本轮过程”的后继 Leader 或 compact 重启后的自己。只读本案卷及指向的文件即可完全接管工作区，无需回放历史长对话。
+> **基线状态**：全功能已验收、全部已闭环代码已合入 `main` 主线（Commit `b034fff7d`），生产服务端 9900（PID `86757`）稳定常驻，执行席位已全量重置。
 
-## 2. 本次基线核心内容总结
-1. **服务端 `/pair/whoami` 与 `/pair/identify` 身份路由补齐（已实证）**：
-   - 彻底解决移动端 `HostIdentifyClient` 前置 404 导致手机无法连入服务端的致命缺陷，恢复平滑秒连。
-2. **tmux 会话全量扫描与特殊字符容错修复（已实证）**：
-   - 修复扫描白名单逻辑，放行当前用户全部特异性 socket；
-   - 解决 pane title 包含竖线管道符 `|` 及复杂中文导致解析丢弃的问题，实测完整恢复识别当前宿主机的全量 **14 个工作区 / 61 个会话**！
-3. **Agent 任务通知体系全链路落地（已实测全 PASS）**：
-   - 权威多端契约：`docs/contracts/01-agent-notification-contract.md`；
-   - 消除 `--agent-name` 参数：发信者身份由服务端根据 tmux pane/title 全自动推导，调用极简；自动归一化 macOS `/private/tmp` 路径别名；
-   - 主机端 CLI：`corral-notify`，支持 Agent 主动调用发送通知，经本地私有 Unix Socket 交互；
-   - 服务端广播：`notifications_v1` 能力协商广播与 1000 条有界持久化历史存储；
-   - 桌面端防碎割契约：`docs/contracts/02-desktop-mouse-wheel-and-raw-input-contract.md`，服务端恢复 `InjectRawAtomic`，彻底消除桌面原生滚轮 SGR-1006 碎割失效；
-   - Android 系统通知：`agent_tasks_v1` 高优先级通道、Heads-up 横幅、BigTextStyle、PendingIntent 深度链接直达终端；
-   - 消息中心 UI：`MessageCenterScreen`，顶栏未读角标铃铛、卡片去除首字大白块改为精致 Agent 徽章与工作区路径展示、整卡点击一键直达终端 CLI、双主题自适应。
-4. **切前台会话首帧快照有界超时与快速自愈（彻底根治切前台加载长等待）**：
-   - 建立首帧快照守护状态机（2s 轻量重发 + 4s 硬限熔断），绝不因 Listing/DELTA 延长期限；
-   - 绕开 OkHttp 异步关闭握手 30s 挂死陷阱，主动提前 finish 并立即复用快速重拨通道拉起新连接重放订阅；
-   - 线程安全加固：`@Volatile` + `@Synchronized` 彻底消除 UI 线程时钟泵与网络收件线程的并发双终结竞态。
-5. **后台保活、前台服务配置自愈与防误掐死（彻底消除常驻通知卡连接与无端重拨）**：
-   - **前台服务配置自愈**：在没有 Activity 时，Service 独立被系统拉起自动从 `SharedPreferences` 读配置拉起长连接，真机 kill -9 重启实测 100% 连通（`accept-000006`）；
-   - **彻底消除 5 秒探活误掐死**：解码任意有效业务帧（快照/DELTA/level2/heartbeat）立即清除探活守卫，模拟器实测持续收发 1051 个真实 binary 帧零断开，永不换代；
-   - **常驻通知状态对齐**：`onStartCommand` 读取真实连接状态，处于 READY 保持“已连接”，彻底消除“正在连接…”无端闪烁。
-6. **超长文本自动打包上传与文件引用（Issue #45 / PR #46 方案 A）**：
-   - **单次大批量粘贴自动锁定**：当单次插入/粘贴字符增量超过 100 字符时，立刻锁定为大文本草稿模式，彻底掐死向终端的实时击键泄漏（模拟器剪贴板实测 pane diff 严格为 0）；
-   - **无感文件打包上传**：点击发送时，自动将超长文本转换为带有时间戳的 UTF-8 文本文件（如 `upload-text-*.txt`），通过 `POST /upload` 管道上传至宿主机；
-   - **安全路径引用注入**：上传成功后，向终端 CLI 注入带引号的绝对路径（如 `"/path/to/upload-text-*.txt"`），输入框安全清空；
-   - **草稿保护与短文兼容**：上传失败时完整保留用户草稿并轻量提示；短文本（<100字符）依然享受 100% 极速实时直通体验，两者互不干扰。
-4. **前后台切换即刻重连与探活（Issue #40 / PR #41）**。
-5. **现代主义浅色模式 Provider 金属反色与质感精修**。
-6. **输入框多行展开动效时序重构**。
-7. **快捷命令多 Provider 一键「同步全部」**。
-8. **Claude 终端文本对比度修复（彻底消除灰块遮盖）**。
+---
 
-## 3. 全局 CLI、Skill 与 Leader 工作流
-- **全局命令已就绪**：`corral-notify` 已安装至 `/Users/alauda/.local/bin/corral-notify`；
-- **全局 Skill 沉淀**：已部署至 `~/.agents/skills/corral-notify/SKILL.md`（并全量软链接至 Pi / Claude Code）；
-- **极简工作流**：任务达成验收标准时，Leader 在终端直接执行极简命令（无需传 `--agent-name`，身份自动推导）：
-  ```bash
-  corral-notify --title "<任务标题>" --level "success" "<详细汇报/验收正文>"
-  ```
-- **闭环体验**：用户在手机后台实时收到 Heads-up 系统通知横幅，点击直接秒级直达 Leader 终端继续验收。
+## §0 compact 后先做什么（后继接手必读）
 
-## 5. 新任务推进：消息中心层级过滤（Issue #47）
-- **GitHub Issue #47**：[feat(notify): 一级入口展示全量通知，二级入口按当前工作区目录过滤](https://github.com/Florious95/corral-app/issues/47)
-- **目标文档**：`.team/fixed-workflow/MESSAGE-CENTER-LEVEL1-LEVEL2-FILTERING-GOAL.md`
-- **核心契约**：
-  * 一级菜单（工作区列表/根层导航）进入：展示**全局全量通知**，铃铛角标统计全局未读数；
-  * 二级菜单（工作区/L2会话列表/会话页）进入：**严格按当前工作区目录（`record.workspace == currentWorkspace`）过滤**，铃铛角标仅统计当前工作区未读数；
-  * 二级已读隔离：二级消息中心的“全部已读”仅标记当前工作区的消息，不误触其他工作区。
-- **状态**：基于当前黄金基线正式立项并排发。
-- **Git 状态**：`main` 分支纯净对齐（Commit `008c90187`），工作树 0 diff；
-- **测试环境**：9902 fixture 与测试模拟器完全关闭退出，端口彻底释放；
-- **生产环境**：9900 运行 PID 86757（全网卡 0.0.0.0:9900 监听，Tailscale 100.75.207.88 /pair/whoami 200 OK，二进制 SHA: `69c18631...`）稳定常驻，挂载 `notify.sock`，whoami/launchers/nodeprobe/广播完全正常；
-- **全员待命**：固定席位（developer, tester, app-tester）已全量执行 `--discard-session` 重置为纯净初始态，sol 与 opus 已安全停止。
+### 0.1 一句话现状
+本轮所有功能开发、紧急缺陷修复（含跨端通报的 P0 重订阅冻屏死锁）、暗色/浅色 30 套全主题气泡自适应、2000 字符长文本文件化、主题选择实时预览保留当前页、以及经典原版底栏回退已**全部通过真机/独立实测验收**，相关代码已 100% 合流并推送到 `main` 主线（Commit `b034fff7d`）；所有临时测试资源已彻底清理释放，执行席位已 `--discard-session` 重置完毕，当前**无在途阻塞任务，全系统处于就绪待命状态**。
+
+### 0.2 开口第一句
+> “报告用户：上一阶段的全部开发、测试、P0 缺陷根治、全主题消息气泡自适应、超长文本文件化、以及收尾清理已全部圆满收官！代码已全量合流至 main 主线（Commit `b034fff7d`），生产环境 9900 稳定运行（PID `86757`），全体执行席位已重置就绪，随时听候您的下一步工作指示！”
+
+### 0.3 必读清单（按优先级）
+1. **本案卷本身**：`/Volumes/nvme/Projects/远程Agent安卓/HANDOFF-LEADER-20261002.md`；
+2. **多端契约完全体**：
+   - 01 通知与自动推导：`docs/contracts/01-agent-notification-contract.md`
+   - 02 桌面滚轮与裸输入：`docs/contracts/02-desktop-mouse-wheel-and-raw-input-contract.md`
+   - 03 文件与长文本上传：`docs/contracts/03-file-upload-and-long-text-reference-contract.md`
+   - 主协议权威副本：`docs/protocol.md`
+3. **跨端完备交接资产包**：`/Volumes/nvme/Projects/远控-ios/android-notifications-and-pipeline-handoff/README.md`（40 文件自包含）；
+4. **全局团队管理规范**：`/Users/alauda/.pi/agent/AGENTS.md` 与 `/Volumes/nvme/Projects/远程Agent安卓/AGENTS.md`。
+
+### 0.4 恢复动作与复活命令序列
+若协作环境、终端会话发生异常，按以下顺序确认或拉起：
+```bash
+# 1. 检查 Team Agent 核心协调器与节点状态
+team-agent status --json
+
+# 2. 若协调器挂死或需要重连，执行自检与恢复
+team-agent doctor --workspace . --json
+
+# 3. 检查生产 daemon 状态（必须监听全网卡 0.0.0.0:9900）
+lsof -nP -iTCP:9900 -sTCP:LISTEN
+curl -s http://127.0.0.1:9900/pair/whoami
+curl -s http://100.75.207.88:9900/pair/whoami
+```
+
+### 0.5 恢复工作流程（后继执行纪律，按步骤确认）
+1. **第一步（先核对，后开口）**：
+   - 执行 `git status -s` 确认工作树处于 clean 状态，位于 `main` 分支（HEAD 为 `b034fff7d` 或其后代）；
+   - 执行 `lsof -nP -iTCP:9900 -sTCP:LISTEN` 确认 PID `86757`（或最新正式 daemon）处于 LISTEN；
+   - 执行 `team-agent status` 确认仅有 4 个核心席位（`developer`, `tester`, `app-tester`, `sol`）且处于 `running / idle`；
+2. **第二步（先恢复守护，后推进）**：
+   - 若用户安排了自动化长任务，检查周期心跳看门狗状态；当前无活动任务，守护处于待命态；
+3. **第三步（恢复期间的禁令）**：
+   - **绝对禁止** 在未收到用户新指示前擅自开启新分支或修改业务代码；
+   - **绝对禁止** 盲目重启生产 9900 daemon；
+   - **绝对禁止** 擅自重新增加已删除的 9 个临时冗余席位；
+   - **绝对禁止** 重新修改 Agent CLI 对话界面的底部输入框（用户明确指示锁定在经典原版形态）；
+4. **第四步（判“恢复完毕”的标准）**：
+   - 工作树 clean、生产 9900 响应 200 OK、4 个核心席位处于 fresh 空闲态、案卷与代码完全对齐；
+5. **第五步（恢复时发现与文档不符怎么办）**：
+   - 若发现现场状态（如 PID、分支）与文档不符，**以现场客观事实为准**，先通过只读命令查清原因并向用户如实请示，严禁盲目猜想。
+
+---
+
+## §1 身份与不变量（操作铁律）
+
+1. **Leader 编排铁律**：
+   - **严禁亲力亲为、禁止查看代码、禁止轮询、严禁通过 tmux 查看 agent 界面**；
+   - 需求分析、目标文档编写、验收标准裁定交由 Leader，定位、编码与探索交由 Teammate；
+   - 通过 Team Agent 消息机制驱动协作；
+2. **Teammate 模型调度标准**：
+   - **`developer`**：固定开发（当前用户已升级并固化为 **`openai-codex/gpt-6.1-sol`**，Pi 驱动，`effort: xhigh`，`bypass: true`）；
+   - **`sol`**：复杂根因定位与架构决策（`openai-codex/gpt-6.1-sol`，Pi 驱动，`effort: xhigh`，`bypass: true`）；
+   - **`tester`**：服务端红测、回归与唯一构建（`openai-codex/gpt-6-luna`，Pi 驱动，`effort: xhigh`，`bypass: true`）；
+   - **`app-tester`**：自有设备与真实 UI 验收（`openai-codex/gpt-6-luna`，Pi 驱动，`effort: xhigh`，`bypass: true`）；
+   - **`opus`**：高级视觉模型（单轮派发 UI 重构后必须立即 `--discard-session` 并执行 `remove-agent --from-spec` 彻底移除）；
+3. **业务与代码不变量**：
+   - **经典原版底栏锁定**：Agent CLI 底部输入框及按键条保持经典原版形态，不得擅自重构；
+   - **超长文本文件化门槛锁定**：`text.length >= 2000` UTF-16 字符 或 `lines >= 100` 行，禁止单次增量 100 字符的过早拦截；
+   - **保活机制锁定**：解码任意有效业务帧立即清除 5 秒探活守卫，物理连接永不被盲目掐断换号；前台服务独立重建自动读配置恢复长连接；
+   - **暗色模式气泡底色锁定**：`#1E1E2E` 在黑守卫前精确语义路由至 `pal.userBlockBg`，文字对比度 $\ge 4.5:1$；
+   - **生产 9900 端口红线**：所有测试严格限制在隔离端口（9902/9914），绝对禁止把测试请求或调试 binary 注入生产 9900。
+
+---
+
+## §2 排期与封存令
+
+### 2.1 本轮已彻底闭环完成项（全部通过真实验收）
+- [x] **任务通知体系全链路（Issue #42 / PR #43）**：全局 CLI `corral-notify`（无参数自动推导身份）、UDS IPC、1000 条持久化历史、Android Heads-up 横幅、消息中心直达终端；
+- [x] **前台会话秒开快照有界超时与快速自愈**：2s 重发 + 4s 硬限熔断，原子竞态消除，绕开 OkHttp 异步关闭挂死；
+- [x] **前台服务配置自愈（选项一）**：Service 独立重启自动从本地 SharedPreferences 读配置拉起长连接，kill -9 重启实测 100% 连通；
+- [x] **切前台探活防 5 秒误掐死保活**：解码任意有效业务帧立即清除 5s 守卫，实测持续接收 1051 个真实终端数据帧零断开、永不换代；
+- [x] **常驻通知状态精准同步**：前台服务启动读取真实连接状态，处于 READY 保持“已连接”，彻底消除“正在连接…”闪烁；
+- [x] **超长文本自动打包上传为文件（Issue #45 / PR #46）**：放宽至 2,000 字符 / 100 行门槛，几百字正常键盘直发，超长文本自动打包上传并注入安全单引号路径引用；
+- [x] **契约完全体合流**：`01`（通知）、`02`（滚轮）、`03`（文件上传）与 `protocol.md` §8/§9 权威规范合入主线；
+- [x] **P0 严重缺陷根除**：重订阅全局原子单调递增 reflow epoch 分配器上线，彻底消灭重订阅 delta 静默丢弃与视口冻屏死锁，生产 9900 热更就绪（PID `86757`）；
+- [x] **底栏回退**：彻底回退有争议的重构，100% 恢复经典原版底部输入框及周边 UI；
+- [x] **暗色模式发送消息气泡底色修复**：`#1E1E2E` 语义路由至 `userBlockBg`，文字对比度 4.5:1，媲美 Ghostty；
+- [x] **向 iOS 团队交付完备交接资产包**：`/Volumes/nvme/Projects/远控-ios/android-notifications-and-pipeline-handoff/`（40 文件自包含对账全绿，投递送达）；
+- [x] **Issue #47 消息中心层级过滤（PR #48）**：一级入口展示全局全量，二级入口严格按当前工作区目录过滤，角标与已读严格隔离，实机全量 PASS；
+- [x] **终端主题选择页实时预览与当前页停留（PR #49）**：彻底移除选后自动返回，支持连续点击对比切换，顶部预览实时刷新，实机全量 PASS。
+
+### 2.2 封存令
+当前代码已达最高工业级稳定度并合入 `main`（Commit `b034fff7d`）。**正式封存当前代码状态，严禁在未获用户新需求授权时引入任何改动！**
+
+---
+
+## §3 P0 / 插队项复盘
+
+1. **跨端 P0 缺陷（重订阅 delta 丢失视口死锁）**：
+   - **现象**：客户端分屏或重排切换（先 unsubscribe 再 resubscribe）时，画面死锁在初始快照，后续新输出全不显示；
+   - **根因**：新订阅的 `reflowGate.epoch` 从 1 计起，被连接级累积的 `staleBefore` 阈值（如 7）按过期脏帧全量丢弃；
+   - **止血与根治**：服务端引入原子全局单调递增代际分配器，代际号严格高于历史阈值，不清空过滤表防旧脏帧回流；
+   - **测试与生产**：tester 独立两项红测由红转绿（PASS），全量回归通过，生产 9900 平滑热更上线（PID `86757`）；
+2. **底栏 UI 回退插队项**：
+   - 用户明确指示不满意重构后的 Dock 样式，要求彻底回退；
+   - 团队立即中止 Dock 重构分支，将代码精确切回经典原版基线（`cae23b0`），并在此基线上叠加全量功能与色板修复，圆满达成用户心意。
+
+---
+
+## §4 在途未收尾任务与挂起跟踪项
+
+- **当前代码开发在途任务**：**0 项（全部收尾清零）**；
+- **挂起的未来规划 Issue（仅作知识归档，不排期开发）**：
+  * [corral-core #109](https://github.com/Florious95/corral-core/issues/109)：提供系统「允许后台耗电/忽略电池优化」一键跳转与提示引导（已归档，暂不适配）。
+
+---
+
+## §5 运维与生产状态
+
+### 5.1 生产服务运行状态
+- **常驻进程 PID**：**`86757`**
+- **二进制 SHA-256**：`69c18631fa68dde4510007386075489697e2a20503e4c238a5e5b6c81b8cea1c`
+- **监听端口**：`*:9900 (0.0.0.0:9900 LISTEN)`，支持全网卡与 Tailscale
+- **连通性校验**：
+  * 本地回环 `http://127.0.0.1:9900/pair/whoami` $\to$ `200 OK`
+  * 远程 Tailscale `http://100.75.207.88:9900/pair/whoami` $\to$ `200 OK`
+  * WebSocket `auth_ack`、`listing` 正常（4 个 Agent 启动器，6 个工作区，26 个会话）
+  * 通知 UDS 管道 `~/Library/Application Support/agentmirror/notify.sock` 运行正常
+
+### 5.2 权威交付安装包（最新正式版）
+- **产物文件**：`corral-app-theme-picker-stay-c5ea7a0.apk`（对应 Commit `c5ea7a04a`）
+- **本地路径**：`/Users/alauda/Downloads/corral-app-theme-picker-stay-c5ea7a0.apk`
+- **精确 SHA-256**：**`94c0653cd55e36fe22ae5757b141b0a93a42412f0f34cfaab189c418f6ab67be`**
+- **文件大小**：41,091,163 bytes
+- **115 专属提取码**：**`biul9plon7nlj83ar`**
+- **115 通用覆盖包提取码**：**`biul92nfs0gbr83ar`**（网盘同名覆盖文件：`/corral-app-reflow-optimized.apk`）
+
+### 5.3 跨团队交付物
+- **iOS 资产包**：`/Volumes/nvme/Projects/远控-ios/android-notifications-and-pipeline-handoff/`（40 文件自包含，包含三契约、主协议、Android/Go 源码切片、8 张 1080×2400 高清真机实况截图与 Swift 实现指南，已投递通知 iOS Leader）。
+
+---
+
+## §6 收尾与环境清理规范（Teardown & Cleanup Checklist）
+
+本轮收尾已严格按照最高工业级标准执行现场清理：
+
+1. **测试模拟器与测试包清理**：
+   - Android Emulator 实例已通过标准流程安全退出，`adb devices` 为空；
+   - 未残留任何无主模拟器或占用渲染资源；
+2. **测试端口与后台进程清理**：
+   - 临时测试端口 `9902`、`9914`、`9913` 已全部安全释放；
+   - 临时创建的测试 fixture 进程已按精确 PID 退出，无遗留进程；
+   - 临时测试 tmux socket 与工作区已全部删除；
+   - `lsof` 验证仅有生产 `9900`（PID `86757`）在运行；
+3. **PR、Issue 与分支归整**：
+   - 所有已验收的代码已合并至 `main` 主线（Commit `b034fff7d`）；
+   - GitHub PR #46, #48, #49 已闭环；
+   - GitHub Issue #45, #47 已关闭并附带验收依据留言；
+   - 临时 worktree（`/private/tmp/theme-*`）已全部清理，`git worktree prune` 执行完毕；
+4. **执行席位上下文重置（Agent Session Reset）**：
+   - 4 个执行席位（`developer`, `tester`, `app-tester`, `sol`）已全部执行 `team-agent reset-agent <AGENT> --discard-session`；
+   - 上下文历史完全清空，恢复纯净初始态；
+   - 🔴 **常驻总控保护**：`leader` 核心调度席未受触碰，宿主与协作会话绝对完好；
+5. **冗余席位彻底永久移除**：
+   - `opus`, `astra`, `code-auditor`, `ui-developer`, `fable`, `pi-astra`, `luna-acp`, `contract-architect`, `gemini-auditor` 已通过 `remove-agent --from-spec` 彻底从运行时和配置中永久删除，重启 Tmux 绝不再现。
+
+---
+
+## §7 安全约束（原文保留，不可弱化）
+
+1. **凭据绝对禁现**：
+   - 配对 Token、Tailscale AuthKey、私钥及会话凭据严禁在任何日志、截屏、commit 信息或对话中明文输出；
+   - 生产启动参数与环境读取必须采用管道式传递，严禁 echo 或落盘；
+2. **禁止写 memory**：
+   - memory 系统已废止，关键技术沉淀严格写入对应项目的 skill 文件或 `docs/contracts/` 契约文档；
+3. **文件传输严禁 SCP**：
+   - 必须通过 Git 仓库或专用打包交付物完成，严禁 SCP；
+4. **禁止全盘盲目搜索**：
+   - 严禁对大目录执行无边界的 grep find，避免 I/O 阻塞；
+5. **通知使用规范**：
+   - 任何任务达到验收标准需通知用户时，统一直接调用全局命令 `corral-notify "<汇报正文>"`，禁止在全局系统提示词中增加广播指令，杜绝子节点广播风暴。
+
+---
+
+**案卷编制人**：远程Agent安卓 团队 Leader
+**案卷生效日期**：2026-10-02
+**Git 权威状态**：`main` @ `b034fff7d` (clean)
