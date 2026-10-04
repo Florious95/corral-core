@@ -297,6 +297,7 @@ func (c *wsConn) markStaleBefore(ref string, epoch uint64) {
 	if ref == "" {
 		return
 	}
+	observeReflowEpoch(epoch)
 	c.staleMu.Lock()
 	if c.staleBefore == nil {
 		c.staleBefore = make(map[string]uint64)

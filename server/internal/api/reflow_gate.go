@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -19,6 +20,40 @@ const (
 )
 
 var errReflowUnstable = errors.New("reflow changed during every capture")
+
+// reflow epochs are connection-stream generations, not per-gate counters. A
+// resubscribe creates a new gate while the connection's writer may still hold
+// deltas from the old gate; a process-wide monotonic allocator keeps every new
+// generation above any staleBefore threshold already observed on that stream.
+var reflowEpoch atomic.Uint64
+
+func nextReflowEpoch(previous uint64) uint64 {
+	for {
+		current := reflowEpoch.Load()
+		if current == ^uint64(0) || previous == ^uint64(0) {
+			return ^uint64(0)
+		}
+		candidate := current + 1
+		if candidate <= previous {
+			candidate = previous + 1
+		}
+		if reflowEpoch.CompareAndSwap(current, candidate) {
+			return candidate
+		}
+	}
+}
+
+// observeReflowEpoch folds externally retained epochs into the allocator. This
+// matters when a writer records a staleBefore threshold before a fresh gate is
+// constructed (including direct/test fixtures).
+func observeReflowEpoch(epoch uint64) {
+	for {
+		current := reflowEpoch.Load()
+		if current >= epoch || reflowEpoch.CompareAndSwap(current, epoch) {
+			return
+		}
+	}
+}
 
 // reflowGate drains redraw output until a fresh snapshot replaces it. revision
 // invalidates a capture if the relay drains any more bytes during that capture.
@@ -62,7 +97,7 @@ func (g *reflowGate) begin() (uint64, bool) {
 	g.syncPrefix, g.syncOpen, g.syncComplete = 0, false, false
 	g.syncFrame = 0
 	g.syncChanged = make(chan struct{}, 1)
-	g.epoch++
+	g.epoch = nextReflowEpoch(g.epoch)
 	return g.epoch, true
 }
 
