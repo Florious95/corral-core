@@ -1,0 +1,31 @@
+{
+  "session-snapshot-deadline": {
+    "commit": "843b18222ea4f9348e87bbc2c611b13a49728d08",
+    "tree": "12f3bfa9982bc0e039291d8c86bd5adfd0e02b1d",
+    "tracked_status": ""
+  },
+  "session-snapshot-maven": {
+    "commit": "28df59b69bb638f32d7eae694a6c9f9174dc742a",
+    "tree": "68aef1425c0bc0b7314ad95295c5d10330f293df",
+    "tracked_status": ""
+  },
+  "session-snapshot-app": {
+    "commit": "75c67c4dd29a0722e687542fcc7ca7311cf448a6",
+    "tree": "2ed4db647d84c9e65fef48e4e634440c720bfce9",
+    "tracked_status": ""
+  },
+  "aar": {
+    "sha256": "ceeb3752668d2acd2128265117405faa6e8d40fbe0da508e4f781b7b1f89af75",
+    "bytes": 48575
+  },
+  "jar": {
+    "sha256": "3c22c27b31df6a9c8776e5cbeecb3fd54b5d7e97f33b7bb734751a0483d0c841",
+    "bytes": 52050
+  },
+  "developer_unit_tests": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+}

@@ -17,9 +17,12 @@
 package dev.agentmirror.app.notify
 
 import dev.agentmirror.app.diag.DiagLog
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import java.io.File
 import java.util.concurrent.Executor
@@ -28,6 +31,21 @@ import java.util.concurrent.Executors
 /** 消息中心的一行：不可变记录 + 本设备已读状态。 */
 data class NotificationItem(val record: NotificationRecord, val read: Boolean) {
     val key: NotificationKey get() = record.key
+}
+
+/** null 为一级全量；二级只匹配同目录，不包含子目录或相似前缀。 */
+internal fun NotificationRecord.belongsToWorkspace(workspace: String?): Boolean =
+    workspace == null || normalizeWorkspacePath(workspace)?.let { it == normalizeWorkspacePath(this.workspace) } == true
+
+private fun normalizeWorkspacePath(path: String?): String? {
+    val normalized = path?.takeIf { it.isNotBlank() }?.trimEnd('/')?.ifEmpty { "/" } ?: return null
+    // macOS 的已知系统目录别名；不能把任意 /private/foo 误当成 /foo。
+    return when {
+        normalized == "/private/tmp" || normalized.startsWith("/private/tmp/") -> normalized.removePrefix("/private")
+        normalized == "/private/var" || normalized.startsWith("/private/var/") -> normalized.removePrefix("/private")
+        normalized == "/private/etc" || normalized.startsWith("/private/etc/") -> normalized.removePrefix("/private")
+        else -> normalized
+    }
 }
 
 /**
@@ -56,6 +74,12 @@ class NotificationRepository(
 
     private val _unreadCount = MutableStateFlow(0)
     val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
+
+    fun itemsFor(workspace: String?): Flow<List<NotificationItem>> =
+        if (workspace == null) items else items.map { rows -> rows.filter { it.record.belongsToWorkspace(workspace) } }.distinctUntilChanged()
+
+    fun unreadCountFor(workspace: String?): Flow<Int> =
+        if (workspace == null) unreadCount else itemsFor(workspace).map { rows -> rows.count { !it.read } }.distinctUntilChanged()
 
     /** 本地库加载完成（通知点击的冷启动路由要等它，避免把刚落盘的记录当成已裁剪）。 */
     private val _loaded = MutableStateFlow(false)
@@ -129,9 +153,9 @@ class NotificationRepository(
         }
     }
 
-    fun markAllRead() {
+    fun markAllRead(workspace: String? = null) {
         executor.execute {
-            entries.values.filter { !it.read }.forEach {
+            entries.values.filter { !it.read && it.record.belongsToWorkspace(workspace) }.forEach {
                 it.read = true
                 dirty = true
             }

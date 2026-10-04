@@ -111,12 +111,16 @@ internal fun ThreePaneHome(
     val kit = LocalThemeSuite.current
     // 消息中心入口（Issue #42）：通知库未安装（单测 / 预览）时不显示铃铛。
     val notificationHub = remember { NotificationCenter.hubOrNull() }
-    val unreadMessages = notificationHub?.repository?.unreadCount?.collectAsState()
+    val messageWorkspace = navState.selectedWorkspaceCwd
+    val unreadFlow = remember(notificationHub, messageWorkspace) {
+        notificationHub?.repository?.unreadCountFor(messageWorkspace)
+    }
+    val unreadMessages = unreadFlow?.collectAsState(initial = 0)
     val messageBell: (@Composable () -> Unit)? = notificationHub?.let {
         {
             MessageBellButton(
                 unreadCount = unreadMessages?.value ?: 0,
-                onClick = { navState.showMessageCenter = true },
+                onClick = { navState.openMessageCenter(messageWorkspace) },
             )
         }
     }

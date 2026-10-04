@@ -16,6 +16,7 @@
 
 package dev.agentmirror.app.service
 
+import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -27,6 +28,7 @@ import dev.agentmirror.app.conn.FakeWebSocketTransport
 import dev.agentmirror.app.conn.TransportFactory
 import dev.agentmirror.app.conn.WebSocketTransport
 import dev.agentmirror.app.session.createSessionViewModel
+import dev.agentmirror.app.tsnet.TsnetWire
 import dev.agentmirror.app.workspace.WorkspaceViewModel
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -112,6 +114,7 @@ class ForegroundServiceWiringTest {
         ServiceWire.transportFactory = factory
         ServiceWire.releaseManager()
         ServiceWire.resetConfigForTest()
+        TsnetWire.resetForTest()
     }
 
     @After
@@ -131,6 +134,7 @@ class ForegroundServiceWiringTest {
         ServiceWire.transportFactory = NoopTransportFactory
         ServiceWire.releaseManager()
         ServiceWire.resetConfigForTest()
+        TsnetWire.resetForTest()
     }
 
     private fun seedConfig(url: String, token: String) {
@@ -215,6 +219,95 @@ class ForegroundServiceWiringTest {
         controller.destroy()
         assertNull("服务停止必须释放连接管理器", ServiceWire.managerOrNull())
         assertNull("服务停止必须解绑 serviceListener", ServiceWire.serviceListener)
+    }
+
+    @Test
+    fun readyServiceReentry_initialForegroundNotificationUsesActualState() {
+        ServiceWire.setConfig(ConnectionConfig("ws://192.0.2.44:9902/ws", "ready-fixture"))
+        val manager = ServiceWire.manager(NoopListener)
+        manager.start()
+        driveReadyWithListing(factory.created.single(), seq = 1)
+        assertEquals(ConnectionState.READY, manager.state())
+        val controller = Robolectric.buildService(MirrorForegroundService::class.java)
+        try {
+            val service = controller.create().startCommand(0, 1).get()
+
+            assertEquals(
+                "READY重入不得先发布虚假的正在连接文案",
+                "已连接",
+                shadowOf(service).lastForegroundNotification.extras.getCharSequence(Notification.EXTRA_TEXT).toString(),
+            )
+            assertSame(manager, ServiceWire.managerOrNull())
+            assertEquals(1, factory.created.size)
+        } finally {
+            controller.destroy()
+        }
+    }
+
+    @Test
+    fun serviceOnlyRestart_restoresStoredConfig_withoutActivityOrDuplicateDial() {
+        seedConfig("ws://192.0.2.44:9902/ws", "service-recovery-fixture")
+        assertNull(ServiceWire.currentConfig())
+        assertNull(TsnetWire.environment)
+        val controller = Robolectric.buildService(MirrorForegroundService::class.java)
+        try {
+            val service = controller.create().startCommand(0, 1).get()
+
+            assertTrue("恢复不得依赖Activity启动", createdActivities.isEmpty())
+            assertNull(shadowOf(RuntimeEnvironment.getApplication()).getNextStartedActivity())
+            assertNull("恢复不得递归启动Service", shadowOf(RuntimeEnvironment.getApplication()).getNextStartedService())
+            assertNotNull("仅重建Service必须恢复保存的配对配置", ServiceWire.currentConfig())
+            assertEquals("ws://192.0.2.44:9902/ws", ServiceWire.currentConfig()!!.url)
+            assertEquals("service-recovery-fixture", ServiceWire.currentConfig()!!.token)
+            assertEquals("http://192.0.2.44:9902", ServiceWire.uploadBaseUrl)
+            assertNotNull("服务独立恢复也必须安装tsnet运行环境", TsnetWire.environment)
+            val manager = ServiceWire.managerOrNull()!!
+            assertEquals(ConnectionState.AUTHENTICATING, manager.state())
+            assertEquals(1, factory.created.size)
+            assertEquals(1, factory.created.single().dialIndex)
+            driveReadyWithListing(factory.created.single(), seq = 1)
+            assertEquals(ConnectionState.READY, manager.state())
+
+            service.onStartCommand(null, 0, 2)
+
+            assertSame("重复启动应复用已恢复的manager", manager, ServiceWire.managerOrNull())
+            assertEquals("重复启动不得新建连接", 1, factory.created.size)
+            assertEquals(1, factory.created.single().dialIndex)
+            assertEquals(ConnectionState.READY, manager.state())
+        } finally {
+            controller.destroy()
+        }
+    }
+
+    @Test
+    fun serviceOnlyRestart_keepsCurrentConfig_insteadOfReadingStalePrefs() {
+        seedConfig("ws://192.0.2.44:9902/ws", "stored-fixture")
+        val current = ConnectionConfig("ws://192.0.2.45:9902/ws", "current-fixture")
+        ServiceWire.setConfig(current)
+        val controller = Robolectric.buildService(MirrorForegroundService::class.java)
+        try {
+            controller.create().startCommand(0, 1)
+
+            assertSame("内存已有配置时不得被旧prefs覆盖", current, ServiceWire.currentConfig())
+            assertNotNull(ServiceWire.managerOrNull())
+            assertEquals(1, factory.created.size)
+        } finally {
+            controller.destroy()
+        }
+    }
+
+    @Test
+    fun serviceOnlyRestart_withoutStoredConfig_doesNotInventConnection() {
+        val controller = Robolectric.buildService(MirrorForegroundService::class.java)
+        try {
+            controller.create().startCommand(0, 1)
+
+            assertNull(ServiceWire.currentConfig())
+            assertNull(ServiceWire.managerOrNull())
+            assertTrue("无配对配置不得猜地址或拨号", factory.created.isEmpty())
+        } finally {
+            controller.destroy()
+        }
     }
 
     // ---- 红测二：被杀后冷启动恢复（004 架构底线守门测试）----

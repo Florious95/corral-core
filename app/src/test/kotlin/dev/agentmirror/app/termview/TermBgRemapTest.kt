@@ -20,6 +20,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import dev.agentmirror.app.ui.theme.TermPalette
+import dev.agentmirror.app.ui.theme.contrastRatio
 import dev.agentmirror.terminal.TerminalColor
 import dev.agentmirror.terminal.TerminalEmulator
 import org.junit.Assert.assertEquals
@@ -30,6 +31,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import java.util.concurrent.TimeUnit
 
 /**
  * 083 §2 显式背景重映射（t.bg / A-bg-map）。
@@ -45,10 +47,20 @@ class TermBgRemapTest {
 
     private class RecordingCanvas(bitmap: Bitmap) : Canvas(bitmap) {
         data class Rect(val color: Int)
+        data class Text(val text: String, val color: Int)
         val rects = mutableListOf<Rect>()
+        val texts = mutableListOf<Text>()
         override fun drawRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
             rects += Rect(paint.color)
             super.drawRect(left, top, right, bottom, paint)
+        }
+        override fun drawText(text: String, x: Float, y: Float, paint: Paint) {
+            texts += Text(text, paint.color)
+            super.drawText(text, x, y, paint)
+        }
+        override fun drawText(text: String, start: Int, end: Int, x: Float, y: Float, paint: Paint) {
+            texts += Text(text.substring(start, end), paint.color)
+            super.drawText(text, start, end, x, y, paint)
         }
     }
 
@@ -58,6 +70,7 @@ class TermBgRemapTest {
         val view = TermSurfaceView(RuntimeEnvironment.getApplication())
         view.nightOverride = dark
         view.presenter = TermViewPresenter(emulator) { _, _ -> }
+        prepareFrame(view, 480, 160)
         val bitmap = Bitmap.createBitmap(480, 160, Bitmap.Config.ARGB_8888)
         val canvas = RecordingCanvas(bitmap)
         view.draw(canvas)
@@ -181,6 +194,7 @@ class TermBgRemapTest {
             view.presenter = TermViewPresenter(emulator) { _, _ -> }
             fun painted(dark: Boolean): Int {
                 view.nightOverride = dark
+                prepareFrame(view, 200, 80)
                 val bitmap = Bitmap.createBitmap(200, 80, Bitmap.Config.ARGB_8888)
                 val canvas = RecordingCanvas(bitmap)
                 view.draw(canvas)
@@ -206,6 +220,54 @@ class TermBgRemapTest {
         } finally {
             TermPalette.resetBindingForTest()
         }
+    }
+
+    @Test
+    fun darkTrueColorMessageRendersASeparateBackgroundFromScreenPaper() {
+        TermPalette.bindSelectionForTest("follow-system", "vesper")
+        try {
+            val palette = TermPalette.of(true)
+            val canvas = render("plain\n\u001b[48;2;30;30;46muser message\u001b[0m", dark = true)
+            assertNotEquals(palette.defaultBg, palette.userBlockBg)
+            assertTrue("真实SGR消息必须绘制语义气泡底", canvas.rects.any { it.color == palette.userBlockBg })
+            assertTrue("非消息屏幕仍绘制默认底", canvas.rects.any { it.color == palette.defaultBg })
+        } finally {
+            TermPalette.resetBindingForTest()
+        }
+    }
+
+    @Test
+    fun lightTrueColorMessageRendersThemeBubbleWithReadableText() {
+        // 白纸 GitHub 与低对比 Solarized Light：旧实现两者都把 48;2;30;30;46 压回纸色。
+        for (family in listOf("github", "solarized")) {
+            TermPalette.bindSelectionForTest(family, "vesper")
+            try {
+                val palette = TermPalette.of(false)
+                val canvas = render("plain\n\u001b[48;2;30;30;46muser message\u001b[0m", dark = false)
+                assertNotEquals(family, palette.defaultBg, palette.userBlockBg)
+                assertTrue("$family:浅色消息必须画出主题气泡底", canvas.rects.any { it.color == palette.userBlockBg })
+                val inside = canvas.texts.filter { "user" in it.text }
+                assertTrue("$family:夹具失效，没画出消息正文", inside.isNotEmpty())
+                assertTrue("$family:气泡正文走块字色", inside.all { it.color == palette.userBlockFg })
+                assertTrue(contrastRatio(palette.userBlockFg, palette.userBlockBg) >= 4.5)
+                assertTrue("$family:气泡外正文保持主题字色",
+                    canvas.texts.filter { "plain" in it.text }.all { it.color == palette.defaultFg })
+            } finally {
+                TermPalette.resetBindingForTest()
+            }
+        }
+    }
+
+    private fun prepareFrame(view: TermSurfaceView, width: Int, height: Int) {
+        view.layout(0, 0, width, height)
+        val presenter = checkNotNull(view.presenter)
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
+        while (!presenter.hasPreparedFrame && System.nanoTime() < deadline) {
+            presenter.beginFrame()
+            Thread.sleep(5)
+        }
+        assertTrue("渲染装置必须有真实异步准备帧", presenter.hasPreparedFrame)
+        presenter.beginFrame()
     }
 
     private fun hex(argb: Int): String = (argb.toLong() and 0xffffffffL).toString(16)

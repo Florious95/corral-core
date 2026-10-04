@@ -302,7 +302,9 @@ fun AgentMirrorApp(
 @Composable
 private fun MessageCenterRoute(hub: NotificationHub, navState: MainNavState, workspaceViewModel: WorkspaceViewModel) {
     val repository = hub.repository
-    val items by repository.items.collectAsState()
+    val workspaceFilter = navState.messageCenterWorkspace
+    val itemsFlow = remember(repository, workspaceFilter) { repository.itemsFor(workspaceFilter) }
+    val items by itemsFlow.collectAsState(initial = emptyList())
     val sourceHostId by repository.sourceHostId.collectAsState()
     val support by hub.support.collectAsState()
     // 二级推送到达后重算：品牌标以会话自身的 provider 为准。
@@ -321,8 +323,9 @@ private fun MessageCenterRoute(hub: NotificationHub, navState: MainNavState, wor
             navState.openSessionFromMessages(ref, item.record.sessionDisplayName(), item.record.workspace)
         },
         onMarkRead = repository::markRead,
-        onMarkAllRead = repository::markAllRead,
+        onMarkAllRead = { repository.markAllRead(workspaceFilter) },
         providerOf = providerOf,
+        workspaceFilter = workspaceFilter,
     )
 }
 
