@@ -172,7 +172,6 @@ internal fun SettingsScreen(
                     onSelect = { id ->
                         if (darkSlot) themeStore.saveDark(id) else themeStore.saveLight(id)
                         themeSel = themeStore.load()
-                        page = SettingsPage.Main
                     },
                     onBack = backToMain,
                 )
