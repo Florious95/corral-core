@@ -13,29 +13,31 @@
 
 ---
 
-### 全局基线状态（全量新特性与无参数通知身份自动推导已合流，全新终极黄金基线！）
-- **全新终极黄金基线**：**Commit `008c90187311d0a51c91104e12c1451f28b7e732`**（`main` 主线）
-- **提交说明**：`docs(contracts): add 02-desktop-mouse-wheel-and-raw-input-contract`（包含 `d4181a3ed fix(notify): infer sender identity from the linked pane` 与 `5530953e3`）
-- **核心能力与新特性全景**：
-  1. **极简通知体系与身份全自动推导**：
-     - 彻底消除 `corral-notify` 的 `--agent-name` 参数，调用极致精简；
-     - 服务端根据关联的 tmux 会话与 pane 标题，自动解析发信者身份（Leader 会话自动推导为 `Leader`，各执行角色自动推导为角色名）；
-     - 规范化 macOS `/private/tmp` 路径别名，确保会话 Ref 100% 精确匹配；
-     - 全局 Skill `corral-notify` 已在全环境（`~/.agents/skills/`、`~/.pi/agent/skills/`、`~/.claude/skills/`）安装生效；
-  2. **生产环境 9900 服务端平滑热更完毕**：
-     - 包含 whoami 200、nodeprobe 工作状态实时感知（15 工作区 65 会话，working_count 正常统计）、4 项 Agent 启动器（`+ Agent` 按钮可用）、快照鼠标前缀与桌面端原子滚轮防碎割；
-     - 挂载通知管道 `/Users/alauda/Library/Application Support/agentmirror/notify.sock`；
-  3. **Android 客户端（用户手机已实测验收通过）**：
-     - 手机在后台实时收到系统通知大横幅（Heads-up）；
-     - 消息中心全新精致 UI（消除“任/A”大白块首字，展示真实 Agent 品牌徽章与工作区路径，全文无截断展开）；
-     - 点击卡片任意位置一键秒级跳转直达对应 Agent 终端 CLI；
-     - 输入框展开无重叠动效、快捷命令「同步全部」、前后台即刻重连与 15s WebSocket Ping 低代价保活 100% 完好。
-- **权威交付包信息（全量实测 PASS）**：
-  * 本地路径：`/Users/alauda/Downloads/corral-app-final-5530953.apk`
-  * 115 专属提取码：**`e5dc26mq9oorkzw2p`**
-  * 115 通用覆盖包：**`biq1a94zjkpy183ar`**
-  * 精确 SHA-256：`c982bcec68e0aec9a090b7959031d80a057dac51316eb97798d8492e085295b1`
-  * 大小：45,231,629 bytes
+### 全局黄金基线状态（全量新特性、契约完全体与生产服务已对齐，权威终极黄金基线！）
+- **App 客户端黄金基线**：**Commit `9374df29ccb706a7b946b5d2a909f84c811a5efc`**
+  * 高级视觉模型 Opus 5.5 全量 30 套主题（60 个深浅色槽）自适应消息气泡重构落地，彻底消灭浅色塌缩与深色死板灰；
+  * 保持经典原版底部 Dock UI（用户喜爱且最稳定，彻底废止有争议的重构）；
+  * 包含 Issue #47 消息中心一级展示全量通知、二级按当前工作区目录严格过滤与专属未读角标；
+  * 包含放宽至 2,000 字符 / 100 行的超长文本自动打包上传为文件与终端安全单引号路径引用（Issue #45 / PR #46）；
+  * 包含前台服务后台配置自愈（kill 杀进程后系统自然重启自动拉起长连接，100% 自动连通）；
+  * 包含切前台 5 秒防误掐死全套保活（持续高频数据流零断开，永不换代）；
+  * 包含常驻通知文案稳定对齐（处于 READY 始终稳定显示“已连接”，无端“正在连接…”闪烁彻底消除）。
+- **Go 服务端黄金基线**：**Commit `017836a43093c93f5d555f30e076e293ed2de5cb`**
+  * 引入全局原子单调递增 reflow epoch 分配器，彻底消除重订阅时 delta 流被误杀丢弃的 P0 冻屏死锁；
+  * 生产环境 9900 全网卡 `0.0.0.0:9900` 监听，PID `86757` 稳定运行；
+  * 本地回环与 Tailscale IP（`100.75.207.88`）双通（`/pair/whoami` 200 OK，WebSocket 握手正常）。
+- **多端契约完全体合流入库**：
+  * [01 号 Agent 任务通知契约（含全自动身份推导与多端适配）](docs/contracts/01-agent-notification-contract.md)
+  * [02 号 桌面滚轮与裸输入防碎割契约](docs/contracts/02-desktop-mouse-wheel-and-raw-input-contract.md)
+  * [03 号 文件与超长文本上传及终端引用契约](docs/contracts/03-file-upload-and-long-text-reference-contract.md)
+  * 主协议 `docs/protocol.md` §8 与 §9 升级校准。
+- **跨端完备交接资产包**：`/Volumes/nvme/Projects/远控-ios/android-notifications-and-pipeline-handoff/`（40 文件全量通过对账核验）。
+
+---
+
+### 新任务追踪
+- **GitHub Issue #47**：[feat(notify): 一级入口展示全量通知，二级入口按当前工作区目录过滤](https://github.com/Florious95/corral-app/issues/47)
+- **目标文档**：`.team/fixed-workflow/MESSAGE-CENTER-LEVEL1-LEVEL2-FILTERING-GOAL.md`
 
 ---
 
