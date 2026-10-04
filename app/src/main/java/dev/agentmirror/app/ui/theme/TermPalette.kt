@@ -25,6 +25,7 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.math.roundToInt
 
 /**
  * 终端自绘色板的取色入口（078 §2 / 080 / 083 §2 / 085 §1.5）。
@@ -62,6 +63,25 @@ object TermPalette {
     private const val TIE_EPS = 1e-6
     private const val CONTRAST_MIN = 3.0
 
+    /** 外部 CLI 用户消息气泡的真彩底（48;2;30;30;46）。任何纸色下都是语义块，不是屏幕黑。 */
+    private const val MESSAGE_RGB = 0xFF1E1E2E.toInt()
+
+    /** 块内正文最低对比度（WCAG AA）。 */
+    internal const val BLOCK_TEXT_CONTRAST_MIN = 4.5
+
+    /** 气泡与纸色的 WCAG 亮度比：深纸抬升、浅纸压低，所有主题同一层级感。 */
+    internal const val BLOCK_RATIO_DARK = 1.38
+    internal const val BLOCK_RATIO_LIGHT = 1.18
+
+    /** OkLab 彩度门槛：低于此值的纸色/字色/强调色视为无色相，不能给气泡定色相。 */
+    private const val HUE_MIN_PAPER = 0.006
+    private const val HUE_MIN_TEXT = 0.012
+    private const val HUE_MIN_ACCENT = 0.04
+    /** 有色相时气泡至少带这么多彩度，近灰的主题也能看出自己的冷暖。 */
+    private const val BLOCK_CHROMA_MIN = 0.016
+    private const val BLACK = 0xFF000000.toInt()
+    private const val WHITE = 0xFFFFFFFF.toInt()
+
     data class Scheme(
         val defaultBg: Int,
         val defaultFg: Int,
@@ -71,6 +91,9 @@ object TermPalette {
         val cursor: Int? = null,
         val selection: Int? = null,
     ) {
+        /** 气泡内的默认正文色；主题字色在气泡上已够 4.5:1 时就是 [defaultFg]。 */
+        val userBlockFg: Int = userBlockForeground(defaultFg, userBlockBg)
+
         val xterm256: IntArray = IntArray(256) { i ->
             fun cube(v: Int): Int = if (v == 0) 0 else 55 + 40 * v
             when {
@@ -98,6 +121,7 @@ object TermPalette {
             add(defaultBg)
             add(defaultFg)
             add(userBlockBg)
+            add(userBlockFg)
             ansi16.values.forEach { add(it) }
         }
 
@@ -232,7 +256,7 @@ object TermPalette {
             background = argbColor(pal.defaultBg),
             foreground = argbColor(pal.defaultFg),
             userBlockBackground = argbColor(pal.userBlockBg),
-            userBlockForeground = argbColor(pal.defaultFg),
+            userBlockForeground = argbColor(pal.userBlockFg),
             cursor = argbColor(pal.cursor ?: app.cursor.toArgb()),
             selection = pal.selection?.let { argbColor(it) } ?: app.selection,
             ansi = (0..15).map { i -> argbColor(pal.ansi16[i] ?: pack(128, 128, 128)) },
@@ -260,7 +284,7 @@ object TermPalette {
         val tables = if (dark) tablesDark else tablesLight
         val against = againstBg ?: pal.defaultBg
         val defaultAgainst = against == pal.defaultBg
-        return when (color) {
+        val resolved = when (color) {
             TerminalColor.Default -> if (background) pal.defaultBg else pal.defaultFg
             is TerminalColor.Indexed -> {
                 val i = color.index
@@ -292,6 +316,8 @@ object TermPalette {
                 }
             }
         }
+        // 气泡内的默认正文换成块字色；其他底上的主题字色不变。
+        return if (!background && resolved == pal.defaultFg && against == pal.userBlockBg) pal.userBlockFg else resolved
     }
 
     private fun buildTables(pal: Scheme): RemapTables {
@@ -314,7 +340,7 @@ object TermPalette {
     }
 
     /**
-     * 真彩 / 256 扩展底：近黑保持屏幕底；明确的暗色消息底先映射语义块，不能被投影吞回纸色。
+     * 真彩 / 256 扩展底：近黑保持屏幕底；明确的消息底（浅/深纸都）先映射语义块，不能被投影吞回纸色。
      */
     private fun guardRgbBg(raw: Int, pal: Scheme, againstBg: Int?): Int {
         val y = luma(raw)
@@ -323,7 +349,7 @@ object TermPalette {
         val b = raw and 0xFF
         val chroma = maxOf(r, g, b) - minOf(r, g, b)
         return when {
-            raw == 0xFF1E1E2E.toInt() && luma(pal.defaultBg) < luma(pal.defaultFg) -> pal.userBlockBg
+            raw == MESSAGE_RGB -> pal.userBlockBg
             y <= SCREEN_BLACK_LUMA_MAX -> pal.defaultBg
             y >= HIGHLIGHT_WHITE_LUMA_MIN && chroma <= ACHROMA_MAX -> pal.userBlockBg
             y >= HIGHLIGHT_WHITE_LUMA_MIN -> pal.userBlockBg
@@ -424,30 +450,66 @@ object TermPalette {
     }
 
     /**
-     * 用户块是终端主题的语义表面，不是外壳的品牌色。只在 Scheme 装配时计算，
+     * 用户块是终端主题的语义表面，不是外壳的品牌色，也不是统一的灰。只在 Scheme 装配时计算，
      * 之后由既有的索引表/真彩缓存复用；不在逐格绘制中混色或计算对比度。
      *
-     * 优先复用上游 selection（透明色先铺到主题纸色上）。selection 可能假定另一种
-     * 选中文字色，因此不能无条件当正文底：默认前景至少保留 4.5:1；若主题本身
-     * 不足 4.5:1，则不比原纸色更差，不擅改主题字色或 ANSI 调色板。
-     * 缺失、等于纸色或不可读时，从纸色朝字色混入最多 12%，逐步收窄到可读。
-     * 最后退回纸色而非固定绿。判据只读主题原色，深色主题放在浅槽也得到相同结果。
+     * 层级：按纸色与字色的真实亮度定方向——浅纸压低、深纸抬升，到 WCAG 亮度比
+     * [BLOCK_RATIO_LIGHT]/[BLOCK_RATIO_DARK] 为止；纸色已到端点走不到时反向，永不等于纸色。
+     * 色相（OkLab）：纸色自带色相就延续并略加浓（Solarized 奶油/青、Tokyo Night 靛蓝）；
+     * 纸色无色相取字色色相（Gruvbox、Flexoki 的暖）；两者都无色相才借 [accents] 中
+     * 第一个有彩度的颜色（选区/光标/蓝，如 Vesper 的琥珀），避免死灰。
+     * 判据只读主题原色，深色主题放在浅槽也得到相同结果。正文可读性由 [userBlockForeground] 保证。
      */
-    internal fun userBlockBackground(background: Int, foreground: Int, selection: Int?): Int {
-        val requiredContrast = min(4.5, contrast(foreground, background))
-        if (selection != null) {
-            val candidate = mixRgb(background, selection, selection ushr 24, 255)
-            if (candidate != background && contrast(foreground, candidate) >= requiredContrast) {
-                return candidate
-            }
+    internal fun userBlockBackground(background: Int, foreground: Int, vararg accents: Int?): Int {
+        val paper = toOkLab(background)
+        val text = toOkLab(foreground)
+        val paperC = hypot(paper.a, paper.b)
+        val textC = hypot(text.a, text.b)
+        val paperY = relativeLuma(background)
+        val lightPaper = paperY > relativeLuma(foreground)
+        val accent = accents.firstNotNullOfOrNull { c ->
+            if (c == null || c ushr 24 == 0) null
+            else toOkLab(mixRgb(background, c, c ushr 24, 255)).takeIf { hypot(it.a, it.b) >= HUE_MIN_ACCENT }
         }
-        for (percent in 12 downTo 1) {
-            val candidate = mixRgb(background, foreground, percent, 100)
-            if (candidate != background && contrast(foreground, candidate) >= requiredContrast) {
-                return candidate
-            }
+        val (hue, chroma) = when {
+            paperC >= HUE_MIN_PAPER -> paper to max(
+                paperC,
+                (paperC * if (lightPaper) 1.1 else 1.4).coerceIn(BLOCK_CHROMA_MIN, if (lightPaper) 0.07 else 0.055),
+            )
+            textC >= HUE_MIN_TEXT -> text to (textC * 0.4).coerceIn(BLOCK_CHROMA_MIN, 0.028)
+            accent != null -> accent to if (lightPaper) 0.022 else 0.018
+            else -> paper to 0.0
         }
-        return background
+        val target = if (lightPaper) BLOCK_RATIO_LIGHT else BLOCK_RATIO_DARK
+        val lift = if (lightPaper) (paperY + 0.05) / 0.05 < target else 1.05 / (paperY + 0.05) >= target
+        // far 端始终满足目标亮度比；二分收敛到满足目标的最小一步。
+        var near = paper.L
+        var far = if (lift) 1.0 else 0.0
+        repeat(32) {
+            val mid = (near + far) / 2
+            if (contrast(fromOkLab(mid, hue, chroma), background) >= target) far = mid else near = mid
+        }
+        return fromOkLab(far, hue, chroma)
+    }
+
+    /**
+     * 气泡内正文：主题字色在气泡上已达 [BLOCK_TEXT_CONTRAST_MIN] 就原样保留；否则保持色相，
+     * 只沿 OkLab L 远离气泡到刚好可读（Solarized 正文 base00 → 接近 base01）。
+     */
+    internal fun userBlockForeground(foreground: Int, block: Int): Int {
+        if (contrast(foreground, block) >= BLOCK_TEXT_CONTRAST_MIN) return foreground
+        val lab = toOkLab(foreground)
+        val chroma = hypot(lab.a, lab.b)
+        var near = lab.L
+        var far = if (relativeLuma(foreground) < relativeLuma(block)) 0.0 else 1.0
+        if (contrast(fromOkLab(far, lab, chroma), block) < BLOCK_TEXT_CONTRAST_MIN) {
+            return if (contrast(BLACK, block) >= contrast(WHITE, block)) BLACK else WHITE
+        }
+        repeat(32) {
+            val mid = (near + far) / 2
+            if (contrast(fromOkLab(mid, lab, chroma), block) >= BLOCK_TEXT_CONTRAST_MIN) far = mid else near = mid
+        }
+        return fromOkLab(far, lab, chroma)
     }
 
     /** 不透明 sRGB 表面；整数舍入使装配、缓存与 Compose 导出得到完全相同的 ARGB。 */
@@ -477,7 +539,9 @@ object TermPalette {
         return Scheme(
             defaultBg = colors.background,
             defaultFg = colors.foreground,
-            userBlockBg = userBlockBackground(colors.background, colors.foreground, colors.selection),
+            userBlockBg = userBlockBackground(
+                colors.background, colors.foreground, colors.selection, colors.cursor, colors.ansi[4],
+            ),
             ansi16 = colors.ansi.mapIndexed { i, c -> i to c }.toMap(),
             source = colors.sourceFile,
             cursor = colors.cursor,
@@ -502,7 +566,9 @@ object TermPalette {
     private fun schemeFrom(p: TerminalPalette): Scheme = Scheme(
         defaultBg = p.background.toArgb(),
         defaultFg = p.foreground.toArgb(),
-        userBlockBg = userBlockBackground(p.background.toArgb(), p.foreground.toArgb(), p.selection.toArgb()),
+        userBlockBg = userBlockBackground(
+            p.background.toArgb(), p.foreground.toArgb(), p.selection.toArgb(), p.cursor.toArgb(), p.ansi[4].toArgb(),
+        ),
         ansi16 = p.ansi.mapIndexed { i, c -> i to c.toArgb() }.toMap(),
         cursor = p.cursor.toArgb(),
         selection = p.selection.toArgb(),
@@ -538,6 +604,40 @@ object TermPalette {
             a = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
             b = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
         )
+    }
+
+    /** OkLab → 不透明 sRGB：保持 L 与 [hue] 的色相方向，超出 sRGB 时只收彩度。 */
+    private fun fromOkLab(L: Double, hue: OkLab, chroma: Double): Int {
+        val n = hypot(hue.a, hue.b)
+        val ua = if (n > 0) hue.a / n else 0.0
+        val ub = if (n > 0) hue.b / n else 0.0
+        fun linear(c: Double): DoubleArray {
+            val l = (L + 0.3963377774 * ua * c + 0.2158037573 * ub * c).pow(3)
+            val m = (L - 0.1055613458 * ua * c - 0.0638541728 * ub * c).pow(3)
+            val s = (L - 0.0894841775 * ua * c - 1.2914855480 * ub * c).pow(3)
+            return doubleArrayOf(
+                4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+                -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+                -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+            )
+        }
+        fun inGamut(rgb: DoubleArray) = rgb.all { it in -1e-7..1 + 1e-7 }
+        var rgb = linear(chroma)
+        if (!inGamut(rgb)) {
+            var lo = 0.0
+            var hi = chroma
+            repeat(24) {
+                val mid = (lo + hi) / 2
+                if (inGamut(linear(mid))) lo = mid else hi = mid
+            }
+            rgb = linear(lo)
+        }
+        fun encode(x: Double): Int {
+            val v = x.coerceIn(0.0, 1.0)
+            val s = if (v <= 0.0031308) 12.92 * v else 1.055 * v.pow(1 / 2.4) - 0.055
+            return (s * 255).roundToInt()
+        }
+        return pack(encode(rgb[0]), encode(rgb[1]), encode(rgb[2]))
     }
 
     private fun linearSrgb(c: Int): Double {

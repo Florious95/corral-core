@@ -37,13 +37,17 @@ class UserBlockThemeTest {
     @Before fun setUp() = TermPalette.resetBindingForTest()
     @After fun tearDown() = TermPalette.resetBindingForTest()
 
-    @Test fun draculaUsesItsReadableSelectionInsteadOfShellGreen() {
+    @Test fun draculaBlockIsARaisedDraculaSurfaceInsteadOfShellGreen() {
         select("dracula")
         for (dark in listOf(false, true)) {
-            val actual = TermPalette.of(dark).userBlockBg
-            assertEquals(0xFF44475A.toInt(), actual)
+            val palette = TermPalette.of(dark)
+            val actual = palette.userBlockBg
             assertNotEquals(0xFF10241F.toInt(), actual)
             assertNotEquals(0xFFE6F5F2.toInt(), actual)
+            assertTrue("比纸色抬升", contrastRatio(actual, palette.defaultBg) >= TermPalette.BLOCK_RATIO_DARK)
+            val paperLab = TermPalette.toOkLab(palette.defaultBg)
+            val blockLab = TermPalette.toOkLab(actual)
+            assertTrue("延续 Dracula 的紫蓝纸色", paperLab.a * blockLab.a + paperLab.b * blockLab.b > 0)
         }
     }
 
@@ -72,7 +76,7 @@ class UserBlockThemeTest {
         forEachSlot { label, dark, palette ->
             val exported = TermPalette.asTerminalPalette(dark)
             assertEquals(label, palette.userBlockBg, exported.userBlockBackground.toArgb())
-            assertEquals(label, palette.defaultFg, exported.userBlockForeground.toArgb())
+            assertEquals(label, palette.userBlockFg, exported.userBlockForeground.toArgb())
             assertEquals(label, palette.defaultBg, exported.background.toArgb())
             assertEquals(label, palette.defaultFg, exported.foreground.toArgb())
             assertEquals(label, palette.cursor, exported.cursor.toArgb())
@@ -80,15 +84,35 @@ class UserBlockThemeTest {
         }
     }
 
-    @Test fun everyCatalogSlotPreservesThemeColorsAndReadableDefaultText() {
+    @Test fun everyCatalogSlotHasAVisibleBubbleWithReadableTextAndUntouchedThemeColors() {
         forEachSlot { label, _, palette ->
             val source = TermSchemeCatalog.colorsBySourceFile.getValue(palette.source)
             assertEquals(label, source.background, palette.defaultBg)
             assertEquals(label, source.foreground, palette.defaultFg)
             for (index in 0..15) assertEquals(label, source.ansi[index], palette.ansi16[index])
             assertEquals(label, 255, palette.userBlockBg ushr 24)
-            val floor = minOf(4.5, contrastRatio(palette.defaultFg, palette.defaultBg))
-            assertTrue(label, contrastRatio(palette.defaultFg, palette.userBlockBg) + 1e-9 >= floor)
+            assertNotEquals("$label:气泡不能塌回纸色", palette.defaultBg, palette.userBlockBg)
+            val lightPaper = contrastRatio(palette.defaultBg, 0xFF000000.toInt()) >
+                contrastRatio(palette.defaultFg, 0xFF000000.toInt())
+            val ratio = if (lightPaper) TermPalette.BLOCK_RATIO_LIGHT else TermPalette.BLOCK_RATIO_DARK
+            assertTrue("$label:气泡层级可见", contrastRatio(palette.userBlockBg, palette.defaultBg) >= ratio)
+            assertTrue("$label:块内正文至少4.5:1",
+                contrastRatio(palette.userBlockFg, palette.userBlockBg) >= TermPalette.BLOCK_TEXT_CONTRAST_MIN)
+            if (contrastRatio(palette.defaultFg, palette.userBlockBg) >= TermPalette.BLOCK_TEXT_CONTRAST_MIN) {
+                assertEquals("$label:可读的主题字色原样保留", palette.defaultFg, palette.userBlockFg)
+            }
+        }
+    }
+
+    @Test fun defaultTextTakesTheBlockForegroundOnlyInsideTheBubble() {
+        forEachSlot { label, dark, palette ->
+            for (against in listOf(null, palette.defaultBg)) {
+                assertEquals(label, palette.defaultFg, TermPalette.colorFor(TerminalColor.Default, false, dark, against))
+            }
+            repeat(2) {
+                assertEquals(label, palette.userBlockFg,
+                    TermPalette.colorFor(TerminalColor.Default, false, dark, palette.userBlockBg))
+            }
         }
     }
 
@@ -113,21 +137,16 @@ class UserBlockThemeTest {
         }
     }
 
-    @Test fun darkTrueColorMessageUsesReadableBlockColdWarmAndUncached() {
+    @Test fun trueColorMessageUsesReadableThemeBubbleInBothModesColdWarmAndUncached() {
         val message = TerminalColor.Rgb(30, 30, 46)
         assertEquals(31, TermPalette.luma(0xFF1E1E2E.toInt()))
-        for (family in listOf("vesper", "catppuccin", "dracula")) {
-            select(family)
-            // Catppuccin的浅槽是Latte；Vesper/Dracula两槽都使用真实暗色方案。
-            for (dark in if (family == "catppuccin") listOf(true) else listOf(false, true)) {
-                val palette = TermPalette.of(dark)
-                for (against in listOf(null, palette.defaultBg, palette.defaultBg xor 0x00010101)) {
-                    repeat(2) {
-                        val actual = TermPalette.colorFor(message, true, dark, against)
-                        assertEquals("$family/dark=$dark", palette.userBlockBg, actual)
-                        assertNotEquals("$family:消息块不能塌回屏幕底", palette.defaultBg, actual)
-                        assertTrue("$family:正文至少4.5:1", contrastRatio(palette.defaultFg, actual) >= 4.5)
-                    }
+        forEachSlot { label, dark, palette ->
+            for (against in listOf(null, palette.defaultBg, palette.defaultBg xor 0x00010101)) {
+                repeat(2) {
+                    val actual = TermPalette.colorFor(message, true, dark, against)
+                    assertEquals(label, palette.userBlockBg, actual)
+                    assertNotEquals("$label:消息块不能塌回屏幕底", palette.defaultBg, actual)
+                    assertTrue("$label:正文至少4.5:1", contrastRatio(palette.userBlockFg, actual) >= 4.5)
                 }
             }
         }

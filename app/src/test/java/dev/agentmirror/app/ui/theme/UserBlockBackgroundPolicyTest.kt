@@ -17,6 +17,9 @@
 package dev.agentmirror.app.ui.theme
 
 import android.app.Application
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.hypot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -28,58 +31,101 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class, manifest = Config.NONE)
 class UserBlockBackgroundPolicyTest {
-    @Test fun readableUpstreamSelectionIsPreservedExactly() {
-        assertEquals(0xFF44475A.toInt(), block(0xFF282A36, 0xFFF8F8F2, 0xFF44475A))
-        assertEquals(0xFFBFDBFE.toInt(), block(0xFFF7F7F7, 0xFF000000, 0xFFBFDBFE))
-    }
-
-    @Test fun unreadableVesperSelectionUsesThemeTintRatherThanAnInvertedTextPair() {
-        assertEquals(0xFF2D2D2D.toInt(), block(0xFF101010, 0xFFFFFFFF, 0xFF988049))
-    }
-
-    @Test fun missingEqualAndFullyTransparentSelectionUseTheSameFallback() {
-        val expected = block(0xFF101010, 0xFFFFFFFF, null)
-        assertEquals(0xFF2D2D2D.toInt(), expected)
-        assertEquals(expected, block(0xFF101010, 0xFFFFFFFF, 0xFF101010))
-        assertEquals(expected, block(0xFF101010, 0xFFFFFFFF, 0x00FF0000))
-        assertEquals(0xFFE0E0E0.toInt(), block(0xFFFEFEFE, 0xFF000000, null))
-    }
-
-    @Test fun translucentSelectionIsCompositedOntoTheActualTerminalBackground() {
-        assertEquals(0xFF404040.toInt(), block(0xFF000000, 0xFFFFFFFF, 0x80808080))
-        assertEquals(0xFF7FBF7F.toInt(), block(0xFFFFFFFF, 0xFF000000, 0x80008000))
-    }
-
-    @Test fun guardDoesNotMakeAnAlreadyLowContrastThemeWorse() {
-        val paper = 0xFF777777.toInt()
-        val foreground = 0xFF888888.toInt()
-        val actual = TermPalette.userBlockBackground(paper, foreground, 0xFF888888.toInt())
-        assertEquals(paper, actual)
-        assertTrue(contrastRatio(foreground, actual) >= contrastRatio(foreground, paper))
-    }
-
-    @Test fun fallbackTapersTintWhenTwelvePercentWouldBreakReadability() {
+    @Test fun neutralVesperBorrowsItsAmberAccentInsteadOfDeadGray() {
         val paper = 0xFF101010.toInt()
-        val foreground = 0xFF808080.toInt()
-        val actual = TermPalette.userBlockBackground(paper, foreground, null)
-        assertNotEquals(0xFF1D1D1D.toInt(), actual)
-        assertTrue(contrastRatio(foreground, actual) >= minOf(4.5, contrastRatio(foreground, paper)))
+        val actual = block(0xFF101010, 0xFFFFFFFF, 0xFF988049)
+        assertNotEquals("不再是统一的死灰", 0xFF2D2D2D.toInt(), actual)
+        assertTrue(chroma(actual) >= 0.012)
+        assertHueNear(0xFF988049.toInt(), actual)
+        assertTrue(contrastRatio(actual, paper) >= TermPalette.BLOCK_RATIO_DARK)
     }
 
-    @Test fun opaqueAndContrastInvariantsHoldAcrossEdgeColorsAndSelections() {
+    @Test fun chromaticPaperKeepsItsOwnHue() {
+        val themes = listOf(
+            Triple(0xFF002B36, 0xFF839496, 0xFF073642), // Solarized Dark
+            Triple(0xFFFDF6E3, 0xFF657B83, 0xFFEEE8D5), // Solarized Light
+            Triple(0xFF1A1B26, 0xFFC0CAF5, 0xFF283457), // Tokyo Night
+            Triple(0xFF282A36, 0xFFF8F8F2, 0xFF44475A), // Dracula
+        )
+        for ((bg, fg, selection) in themes) {
+            val actual = block(bg, fg, selection)
+            assertHueNear(bg.toInt(), actual)
+            assertTrue("bg=$bg", chroma(actual) + 1e-3 >= chroma(bg.toInt()))
+        }
+    }
+
+    @Test fun neutralPaperTakesItsWarmthFromThemeText() {
+        assertHueNear(0xFFEBDBB2.toInt(), block(0xFF282828, 0xFFEBDBB2, 0xFF665C54)) // Gruvbox Dark
+        assertHueNear(0xFFCECDC3.toInt(), block(0xFF100F0F, 0xFFCECDC3, 0xFF403E3C)) // Flexoki Dark
+    }
+
+    @Test fun missingTransparentAndAchromaticAccentsFallThroughToTheNextAccent() {
+        val blue = 0xFF0031A9
+        val expected = block(0xFFFFFFFF, 0xFF000000, null, blue)
+        assertEquals(expected, block(0xFFFFFFFF, 0xFF000000, 0x00FF0000, blue))
+        assertEquals(expected, block(0xFFFFFFFF, 0xFF000000, 0xFFBDBDBD, blue))
+        assertHueNear(blue.toInt(), expected)
+    }
+
+    @Test fun translucentAccentIsCompositedOntoTheActualTerminalBackground() {
+        assertEquals(block(0xFFFFFFFF, 0xFF000000, 0xFF7FBF7F), block(0xFFFFFFFF, 0xFF000000, 0x80008000))
+    }
+
+    @Test fun paperAtTheEndOfItsRangeStepsTheOtherWayInsteadOfCollapsing() {
+        for (paper in listOf(0xFFFFFFFF, 0xFF000000)) {
+            val actual = block(paper, paper, null)
+            assertNotEquals(paper.toInt(), actual)
+            assertTrue(contrastRatio(actual, paper.toInt()) >= TermPalette.BLOCK_RATIO_LIGHT)
+        }
+    }
+
+    @Test fun lowContrastThemeTextIsStrengthenedAlongItsOwnHue() {
+        val paper = 0xFFFDF6E3.toInt()
+        val foreground = 0xFF657B83.toInt()
+        val bubble = TermPalette.userBlockBackground(paper, foreground, 0xFFEEE8D5.toInt())
+        val text = TermPalette.userBlockForeground(foreground, bubble)
+        assertTrue(contrastRatio(foreground, bubble) < TermPalette.BLOCK_TEXT_CONTRAST_MIN)
+        assertTrue(contrastRatio(text, bubble) >= TermPalette.BLOCK_TEXT_CONTRAST_MIN)
+        assertTrue("浅底上只加深", TermPalette.toOkLab(text).L < TermPalette.toOkLab(foreground).L)
+        assertHueNear(foreground, text)
+    }
+
+    @Test fun invariantsHoldAcrossEdgeColorsAndAccents() {
         val colors = listOf(0xFF000000, 0xFFFFFFFF, 0xFF101010, 0xFF777777, 0xFF808080,
             0xFF888888, 0xFF282A36, 0xFFF8F8F2, 0xFF002B36, 0xFFFDF6E3,
             0xFFFF0000, 0xFF00FF00, 0xFF0000FF)
         val selections = listOf<Long?>(null, 0x00000000, 0x00FF0000, 0x80808080,
             0xFF000000, 0xFFFFFFFF, 0xFF44475A, 0xFFF5E0DC)
         for (bg in colors) for (fg in colors) for (selection in selections) {
+            val label = "bg=$bg fg=$fg selection=$selection"
             val actual = block(bg, fg, selection)
-            assertEquals(255, actual ushr 24)
-            val floor = minOf(4.5, contrastRatio(fg.toInt(), bg.toInt()))
-            assertTrue("bg=$bg fg=$fg selection=$selection", contrastRatio(fg.toInt(), actual) + 1e-9 >= floor)
+            assertEquals(label, 255, actual ushr 24)
+            assertNotEquals(label, bg.toInt(), actual)
+            val target = if (luminance(bg.toInt()) > luminance(fg.toInt())) {
+                TermPalette.BLOCK_RATIO_LIGHT
+            } else {
+                TermPalette.BLOCK_RATIO_DARK
+            }
+            assertTrue(label, contrastRatio(actual, bg.toInt()) >= target)
+            val text = TermPalette.userBlockForeground(fg.toInt(), actual)
+            assertTrue(label, contrastRatio(text, actual) >= TermPalette.BLOCK_TEXT_CONTRAST_MIN)
+            if (contrastRatio(fg.toInt(), actual) >= TermPalette.BLOCK_TEXT_CONTRAST_MIN) {
+                assertEquals("可读的主题字色原样保留 $label", fg.toInt(), text)
+            }
         }
     }
 
-    private fun block(bg: Long, fg: Long, selection: Long?): Int =
-        TermPalette.userBlockBackground(bg.toInt(), fg.toInt(), selection?.toInt())
+    private fun block(bg: Long, fg: Long, vararg accents: Long?): Int =
+        TermPalette.userBlockBackground(bg.toInt(), fg.toInt(), *accents.map { it?.toInt() }.toTypedArray())
+
+    private fun chroma(argb: Int): Double = TermPalette.toOkLab(argb).let { hypot(it.a, it.b) }
+
+    private fun assertHueNear(expected: Int, actual: Int) {
+        fun hue(argb: Int) = TermPalette.toOkLab(argb).let { Math.toDegrees(atan2(it.b, it.a)) }
+        val delta = abs(((hue(actual) - hue(expected)) % 360 + 540) % 360 - 180)
+        assertTrue("hue Δ=$delta expected=${Integer.toHexString(expected)} actual=${Integer.toHexString(actual)}", delta <= 15)
+    }
+
+    /** 与 [contrastRatio] 同一独立 WCAG 公式；只用来判浅/深纸。 */
+    private fun luminance(color: Int): Double = contrastRatio(color, 0xFF000000.toInt())
 }
