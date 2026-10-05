@@ -61,7 +61,6 @@ func TestNativeGrokBridgeLifecycle(t *testing.T) {
 	if run("list-sessions", "-F", "#{socket_path} #{session_name}") != sock+" grok-native" {
 		t.Fatal("socket identity mismatch")
 	}
-	pane := discovery.Pane{Socket: sock, PaneID: "%0", CWD: root, Command: "grok"}
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	b := bridge.NewPane(sock, "%0")
@@ -85,6 +84,24 @@ func TestNativeGrokBridgeLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Read discovery's actual tmux command field, never an assumed name.
+	// The normal discovery scanner deliberately excludes project-owned test
+	// sockets; querying this exact socket preserves that production boundary.
+	observedPane := func(id string) discovery.Pane {
+		t.Helper()
+		for until := time.Now().Add(10 * time.Second); time.Now().Before(until); {
+			process, err := bridge.NewPane(sock, id).NativeAgent(ctx)
+			if err == nil && process.Provider == "grok" {
+				command := run("display-message", "-p", "-t", id, "#{pane_current_command}")
+				t.Logf("actual tmux pane=%s command=%s", id, command)
+				return discovery.Pane{Socket: sock, PaneID: id, CWD: root, Command: command}
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		t.Fatal("native Grok pane did not start")
+		return discovery.Pane{}
+	}
+	pane := observedPane("%0")
 	manager := NewManager()
 	defer manager.Close()
 	if manager.Detect(ctx, pane) != "grok" {
@@ -151,8 +168,9 @@ func TestNativeGrokBridgeLifecycle(t *testing.T) {
 	var header struct {
 		Model    modelSummary `json:"model"`
 		Thinking string       `json:"thinkingLevel"`
+		Agent    string       `json:"agentProvider"`
 	}
-	if json.Unmarshal(state["data"], &header) != nil || header.Model.Provider != "grok" || header.Model.ID == "" {
+	if json.Unmarshal(state["data"], &header) != nil || header.Agent != "grok" || header.Model.Provider != "grok" || header.Model.ID == "" {
 		t.Fatal("model projection missing")
 	}
 	send(map[string]any{"type": "get_available_models", "id": "models"})
@@ -303,7 +321,10 @@ func TestNativeGrokBridgeLifecycle(t *testing.T) {
 	// A pure TUI has no known ACP identity. It stays untouched until explicit
 	// consent, then official session/new creates a genuinely new GUI session.
 	freshID := run("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", "%0", "-c", root, grok, "--no-leader", "--leader-socket", leader)
-	freshPane := discovery.Pane{Socket: sock, PaneID: freshID, CWD: root, Command: "grok"}
+	freshPane := observedPane(freshID)
+	if manager.Detect(ctx, freshPane) != "grok" {
+		t.Fatal("pure TUI absent from native listing capability")
+	}
 	fresh, err := manager.Open(ctx, freshPane)
 	if err != nil {
 		t.Fatal(err)

@@ -91,7 +91,7 @@ func (m *Manager) Detect(ctx context.Context, p discovery.Pane) string {
 		s.mu.Unlock()
 		return provider
 	}
-	if p.Command != "node" && p.Command != "pi" && p.Command != "pi-rpc" && p.Command != "bun" && p.Command != "grok" && s == nil {
+	if p.Command != "node" && p.Command != "pi" && p.Command != "pi-rpc" && p.Command != "bun" && p.Command != "grok" && p.Command != "grok-native" && s == nil {
 		return ""
 	}
 	process, err := bridge.NewPane(p.Socket, p.PaneID).NativeAgent(ctx)

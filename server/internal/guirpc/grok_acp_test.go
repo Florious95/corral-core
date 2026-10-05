@@ -150,6 +150,40 @@ func TestGrokACPBoundsRequestsAndRequiresJSONRPCEnvelope(t *testing.T) {
 	}
 }
 
+func TestGrokACPStateIdentitySurvivesWorkerProjection(t *testing.T) {
+	g, _, _ := acpTestBridge(t)
+	w := newWorker(&syncBuffer{})
+	defer w.shutdown()
+	_, _, client := w.attach(Hello{Type: "hello"}, true)
+	g.emit = w.ingest // exercise the real projection, not just the adapter output
+	if _, err := g.Write([]byte(`{"type":"get_state","id":"projected-state"}`)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case raw := <-client.ch:
+		r := decode(t, [][]byte{raw})[0]
+		var response struct {
+			Data struct {
+				AgentProvider string `json:"agentProvider"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(r.Event, &response) != nil || response.Data.AgentProvider != "grok" {
+			t.Fatalf("native CLI identity lost on client stream: %s", r.Event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("client state never published")
+	}
+	w.ingest([]byte(`{"type":"response","command":"get_state","success":true,"data":{"model":{"id":"native-model","provider":"grok","apiKey":"must-stay-private"}}}`))
+	select {
+	case raw := <-client.ch:
+		if strings.Contains(string(raw), "agentProvider") || strings.Contains(string(raw), "must-stay-private") {
+			t.Fatal("legacy state invented a CLI identity or leaked model metadata")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("legacy client state never published")
+	}
+}
+
 func TestGrokACPNewSessionPersistsIdentityBeforeSuccess(t *testing.T) {
 	g, wire, events := acpTestBridge(t)
 	g.cwd = "/owned-test-cwd"

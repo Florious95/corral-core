@@ -789,6 +789,7 @@ func projectState(raw []byte) []byte {
 		Error   string `json:"error,omitempty"`
 		Data    struct {
 			Model               *modelSummary `json:"model,omitempty"`
+			AgentProvider       string        `json:"agentProvider,omitempty"`
 			ThinkingLevel       string        `json:"thinkingLevel,omitempty"`
 			IsStreaming         bool          `json:"isStreaming"`
 			IsCompacting        bool          `json:"isCompacting"`
