@@ -328,6 +328,11 @@ func (s *session) attachRPC(ctx context.Context) error {
 	s.mu.Lock()
 	s.w.mu.Lock()
 	s.w.resetHistory()
+	if s.w.seq > 0 {
+		// The clients key messages by stream seq, not Pi timestamps. Clearing
+		// server history alone would duplicate the pre-TUI transcript on replay.
+		s.w.publish([]byte(`{"type":"session_reset"}`), entry{kind: "session_reset"}, true)
+	}
 	s.w.mu.Unlock()
 	for _, msg := range snapshot.Messages {
 		for _, kind := range []string{"message_start", "message_end"} {

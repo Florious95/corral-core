@@ -123,6 +123,8 @@ func TestNativeBridgeRealPiLifecycle(t *testing.T) {
 	}
 	response := func(id string) map[string]any {
 		t.Helper()
+		returningRPC := id == "to-rpc" || id == "empty-rpc"
+		sawReset := false
 		for {
 			line, err := reader.ReadBytes('\n')
 			if err != nil {
@@ -134,7 +136,16 @@ func TestNativeBridgeRealPiLifecycle(t *testing.T) {
 			}
 			var event map[string]any
 			json.Unmarshal(r.Event, &event)
+			if event["type"] == "session_reset" {
+				sawReset = true
+			}
+			if returningRPC && event["type"] == "message_start" && !sawReset {
+				t.Fatal("native history replay preceded client transcript reset")
+			}
 			if event["type"] == "response" && event["id"] == id {
+				if returningRPC && event["success"] == true && !sawReset {
+					t.Fatal("RPC return never reset client transcript")
+				}
 				return event
 			}
 		}
