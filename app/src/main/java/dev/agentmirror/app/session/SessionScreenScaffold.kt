@@ -39,7 +39,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -205,6 +208,8 @@ fun SessionScreenScaffold(
     onInputFocusedChanged: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier,
     inputExpandedLines: Int = 3,
+    /** Floats on the dock's top edge (slash suggestions); never part of the terminal's layout. */
+    dockOverlay: @Composable () -> Unit = {},
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -260,6 +265,7 @@ fun SessionScreenScaffold(
     val palette = LocalAppPalette.current
     val kit = LocalThemeSuite.current
     val terminalCard = currentTerminalPalette()
+    val dockHeight = remember { mutableIntStateOf(0) }
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -314,7 +320,10 @@ fun SessionScreenScaffold(
                 }
             }
             Column(
-                modifier = Modifier.fillMaxWidth().padding(start = 11.dp, end = 11.dp, bottom = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onSizeChanged { dockHeight.intValue = it.height }
+                    .padding(start = 11.dp, end = 11.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 // 快捷键条常驻展示，无多余返回按钮
@@ -342,6 +351,17 @@ fun SessionScreenScaffold(
                     onCollapseRequested = { requestDockCollapse("editor-focus-loss") },
                 )
             }
+        }
+        // Read at placement time: the dock rising with focus or the IME moves the overlay with it
+        // in the same frame, without resizing the terminal (no PTY reflow).
+        Box(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .offset { IntOffset(0, -dockHeight.intValue) }
+                .padding(start = 11.dp, end = 11.dp, bottom = 6.dp),
+        ) {
+            dockOverlay()
         }
     }
 }

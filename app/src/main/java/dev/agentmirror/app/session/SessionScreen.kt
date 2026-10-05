@@ -88,6 +88,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
+import dev.agentmirror.app.conversation.ConversationCenter
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -295,6 +296,17 @@ fun SessionScreen(
         mutableStateOf(SharedPreferencesShortcutCommandStore(context).load())
     }
     var shortcutMenuOpen by remember { mutableStateOf(false) }
+    // Slash suggestions for the local draft (input sync off): derived from the mirror, dismissed
+    // per draft text, built-ins from the CLI that actually runs in this pane.
+    var slashDismissedFor by remember { mutableStateOf<String?>(null) }
+    val slashQuery = if (!viewModel.inputSyncEnabled && inputFocused) slashQuery(mirror) else null
+    val slashOpen = slashQuery != null && slashDismissedFor != mirror.text && !shortcutMenuOpen
+    val slashShortcuts = remember(slashOpen) {
+        if (slashOpen) SharedPreferencesShortcutCommandStore(context).load() else emptyList()
+    }
+    val managedConsole = remember(viewModel.ref) { ConversationCenter.hub.isConversation(viewModel.ref) }
+    val slashBuiltins = if (managedConsole) ManagedConsoleBuiltins else ProviderSlashBuiltins[provider.trim().lowercase()].orEmpty()
+    val slashList = if (slashOpen) slashCandidates(slashQuery.orEmpty(), slashBuiltins, slashShortcuts, provider) else emptyList()
     SessionScreenBackHandler(
         focused = { inputFocused },
         onCollapseFocused = { requestDockCollapse("system-back") },
@@ -302,6 +314,8 @@ fun SessionScreen(
         onCloseOverlay = viewModel::closeOverlay,
         onBack = onBack,
     )
+    // Registered later, so it wins while suggestions show: Back dismisses them, keeps the draft.
+    BackHandler(enabled = slashOpen) { slashDismissedFor = mirror.text }
     var attachMenu by remember { mutableStateOf(false) }
     val pickImage = {
         pickMedia.launch(
@@ -472,6 +486,25 @@ fun SessionScreen(
                     onPickAttachment = { attachMenu = true },
                     onKeyToken = { viewModel.sendKey(it.toInputKey()) },
                     modifier = Modifier.statusBarsPadding().navigationBarsPadding(),
+                    dockOverlay = {
+                        SlashSuggestionPanel(
+                            visible = slashOpen,
+                            query = slashQuery.orEmpty(),
+                            candidates = slashList,
+                            hint = when {
+                                slashList.isNotEmpty() -> null
+                                slashBuiltins.isEmpty() && slashShortcuts.isEmpty() -> "未登记 $provider 的内置命令；可在 设置 › 快捷命令 中添加"
+                                else -> "没有匹配 /${slashQuery.orEmpty()} 的命令"
+                            },
+                            onPick = { candidate ->
+                                // Fill only: the same controlled write as a shortcut; nothing is sent.
+                                val next = TextFieldValue(candidate.insert, TextRange(candidate.insert.length))
+                                viewModel.onPassthroughInput(mirror, next)
+                                mirror = next
+                                slashDismissedFor = next.text
+                            },
+                        )
+                    },
                 )
                 SessionSwitchSheet(
                     visible = viewModel.overlayOpen,

@@ -90,6 +90,7 @@ import com.kyant.backdrop.Backdrop
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
 import dev.agentmirror.app.session.SessionDockMotion
+import dev.agentmirror.app.session.slashRank
 import kotlin.math.roundToInt
 
 /** An image picked for the next prompt: shown as a thumbnail while it uploads to the host. */
@@ -111,13 +112,7 @@ fun slashEntries(query: String, commands: List<SlashCommand>): List<SheetEntry> 
     return (builtIn + commands).distinctBy { it.name }
         .mapNotNull { c ->
             val name = c.name.lowercase()
-            val rank = when {
-                q.isEmpty() -> 1
-                name.startsWith(q) -> 0
-                name.contains(q) -> 1
-                c.description.lowercase().contains(q) -> 2
-                else -> return@mapNotNull null
-            }
+            val rank = slashRank(q, c.name, c.description) ?: return@mapNotNull null
             SheetEntry(
                 key = "/${c.name}",
                 title = "/${c.name}",
