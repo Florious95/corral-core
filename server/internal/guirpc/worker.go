@@ -289,13 +289,17 @@ func run(ctx context.Context, dir, ref, name string, input io.Reader, output io.
 	}()
 	// The pane stays a readable terminal for this session. It never shows raw
 	// JSON and never receives JSON through tmux; GUI input uses the socket.
-	fmt.Fprintf(output, "Pi · native conversation · %s\nType a prompt and press Enter; /compact, /new and /help are available.\n", name)
+	// Bracketed paste is requested so tmux wraps a multi-line paste and the
+	// console submits it as one prompt instead of one prompt per line.
+	fmt.Fprintf(output, "%sPi · native conversation · %s\nType a prompt and press Enter; /compact, /new and /help are available.\n", pasteOn, name)
+	defer fmt.Fprint(output, pasteOff)
 	go func() {
 		scan := bufio.NewScanner(input)
 		scan.Buffer(make([]byte, 4096), 1<<20)
+		var paste pasteJoiner
 		for scan.Scan() {
-			text := strings.TrimSuffix(strings.TrimPrefix(scan.Text(), "\x1b[200~"), "\x1b[201~")
-			if strings.TrimSpace(text) == "" {
+			text, complete := paste.line(scan.Text())
+			if !complete || strings.TrimSpace(text) == "" {
 				continue
 			}
 			command := map[string]any{"type": "prompt", "message": text}
@@ -352,6 +356,42 @@ func writeState(path string, running bool) {
 	if os.WriteFile(tmp, []byte(state), 0o600) == nil {
 		_ = os.Rename(tmp, path)
 	}
+}
+
+const (
+	pasteOn    = "\x1b[?2004h"
+	pasteOff   = "\x1b[?2004l"
+	pasteStart = "\x1b[200~"
+	pasteEnd   = "\x1b[201~"
+	// maxPaste bounds one buffered paste; a longer one is submitted as is.
+	maxPaste = 1 << 20
+)
+
+// pasteJoiner folds the lines of one bracketed paste back into a single
+// message: the cooked tty delivers a paste line by line, but the user sent
+// one prompt. Text typed after the paste joins it until Enter.
+type pasteJoiner struct {
+	lines []string
+	size  int
+	open  bool
+}
+
+func (j *pasteJoiner) line(text string) (string, bool) {
+	if rest, ok := strings.CutPrefix(text, pasteStart); ok {
+		j.lines, j.size, j.open = j.lines[:0], 0, true
+		text = rest
+	}
+	if !j.open {
+		return text, true
+	}
+	before, after, closed := strings.Cut(text, pasteEnd)
+	j.lines = append(j.lines, before)
+	j.size += len(before) + 1
+	if !closed && j.size < maxPaste {
+		return "", false
+	}
+	j.open = false
+	return strings.Join(j.lines, "\n") + after, true
 }
 
 func (w *worker) isRunning() bool {

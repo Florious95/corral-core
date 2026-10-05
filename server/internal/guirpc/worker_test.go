@@ -424,3 +424,21 @@ func TestWriteClientGoldens(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestBracketedPasteIsOnePrompt(t *testing.T) {
+	var j pasteJoiner
+	var got []string
+	for _, line := range []string{
+		"plain",
+		"\x1b[200~first", "", "  indented", "last\x1b[201~ and typed",
+		"\x1b[200~single\x1b[201~",
+	} {
+		if text, ok := j.line(line); ok {
+			got = append(got, text)
+		}
+	}
+	want := []string{"plain", "first\n\n  indented\nlast and typed", "single"}
+	if fmt.Sprintf("%q", got) != fmt.Sprintf("%q", want) {
+		t.Fatalf("prompts = %q\nwant      %q", got, want)
+	}
+}

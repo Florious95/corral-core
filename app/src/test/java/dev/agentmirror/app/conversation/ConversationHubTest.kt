@@ -156,6 +156,27 @@ class ConversationHubTest {
     }
 
     @Test
+    fun multilinePromptIsOneCommandWithEveryLine() {
+        val (socket, _, _) = connect()
+        hub.attach("r1")
+        settle()
+        socket.listener.onText("""{"v":1,"type":"conversation_ready","payload":{"ref":"r1","stream":"s","head_seq":0,"reset":true,"history_truncated":false,"running":false,"server_time_ms":1}}""")
+        settle()
+        val before = frames(socket, "conversation_command").size
+        val typed = "\n\n  fun main() {\n\n    println(\"你好 👋\")\n  }\nthen explain\n\n"
+        val prompt = promptText(typed)
+        assertEquals("  fun main() {\n\n    println(\"你好 👋\")\n  }\nthen explain", prompt)
+        hub.send("r1", "prompt", prompt)
+        settle()
+        val commands = frames(socket, "conversation_command").drop(before)
+        assertEquals(1, commands.size)
+        val command = commands.single()["payload"]!!.jsonObject["command"]!!.jsonObject
+        assertEquals("prompt", command["type"]!!.jsonPrimitive.content)
+        assertEquals(prompt, command["message"]!!.jsonPrimitive.content)
+        assertEquals(prompt, (hub.session("r1").state.value.items.single() as UserTurn).text)
+    }
+
+    @Test
     fun listingMarkersDriveTheConversationRefSet() {
         val (socket, _, core) = connect()
         socket.listener.onText("""{"v":1,"type":"listing","payload":{"req_id":1,"seq":1,"workspaces":[{"cwd":"/w","sessions":[{"ref":"a","conversation":true},{"ref":"b"}]}]}}""")

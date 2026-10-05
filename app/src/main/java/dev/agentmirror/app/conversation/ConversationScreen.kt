@@ -328,7 +328,7 @@ private fun ConversationScreen(
     fun scrollToLatest() = scope.launch { if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0) listState.animateScrollToItem(0) }
 
     fun send() {
-        val text = draft.text.trim()
+        val text = promptText(draft.text)
         val paths = images.mapNotNull { it.hostPath }
         if (text.isEmpty() && paths.isEmpty()) return
         val restore = draft
@@ -794,6 +794,14 @@ private fun headerStatus(state: ConversationState, phase: LinkPhase): String = w
         else -> listOfNotNull("Pi", state.model, state.thinkingLevel?.takeIf { it != "off" }).joinToString(" · ")
     }
 }
+
+/**
+ * The prompt exactly as typed, sent as one command: inner newlines, blank lines and the first
+ * line's indentation survive; only blank leading lines and trailing whitespace are dropped.
+ */
+internal fun promptText(draft: String): String = draft.trimEnd().replaceFirst(LeadingBlankLines, "")
+
+private val LeadingBlankLines = Regex("""^(?:[ \t]*\r?\n)+""")
 
 private fun uploadToHost(attachment: Attachment): UploadOutcome {
     val base = ServiceWire.uploadBaseUrl ?: return UploadOutcome.Failure("未配置上传地址")
