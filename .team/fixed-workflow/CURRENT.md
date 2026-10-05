@@ -23,26 +23,20 @@
   * 包含前台服务后台配置自愈（kill 杀进程后系统自然重启自动拉起长连接，100% 自动连通）；
   * 包含切前台 5 秒防误掐死全套保活（持续高频数据流零断开，永不换代）；
   * 包含常驻通知文案稳定对齐（处于 READY 始终稳定显示“已连接”，无端“正在连接…”闪烁彻底消除）。
-- **新基线 Tag**：**`baseline-20261005-native-gui-v1`**（Commit `2c219b594`，分支 `feat/issue50-native-gui-session-mode`，PR #53）
-  * **用户真机实测定调**：“虽然还有优化点，但是它依然是可用的”；
-  * **App 客户端**：全套 Opus 5.5 高保真原生对话流（`ConversationScreen`）、逆向布局防震荡、液态玻璃胶囊底栏（`ConversationDock`）、带弹簧阻尼的 `ToolCallCard`、斜杠补全 Sheet、OkLab 30套主题全色阶对比度算法（正文 $\ge 7:1$，次要 $\ge 4.5:1$）、`MainActivity` 原生分流与设置「会话展示方式」持久化；
-  * **Go 服务端**：生产 9900 端口已热更上线（**PID `22168`**，二进制 SHA-256 `dfa618a5bef5c7d578452d03e8b009af7e01ae9f0a5155aff3632e0bd6bb7707`）；支持 `conversation_v1` 协议扩展，具备协议投影瘦身引擎，并包含 7 行 `/tmp` ↔ `/private/tmp` 符号链接规范化修复（彻底消灭 5 秒超时假死）。
-  * **官方基线 APK**：`corral-app-opus-gui-baseline-8cb4caa.apk`（SHA-256 `95759945433a86d850a1e7c153cef5f5e3e64eaa7bedc04a1a7cc538a311b881`，115 提取码 `d1eni8mrsffzjx2so` / 通用 `biuhwrjodd9f083ar`）。
+### 全局黄金基线状态（全主流 Agent 原生 GUI v2 权威神圣基线！）
+- **神圣基线 Tag**：**`baseline-20261005-native-gui-v2`**（Commit `a502fbff6`，分支 `feat/issue50-native-gui-session-mode`，PR #53）
+  * **用户真机实测定调**：“把当前的我手上的 APK 当做基线，除了这些小问题，其他我都是满意的。”
+  * **App 客户端产物**：`corral-app-issue50-phase2-final-a502fb.apk`（大小 41,517,206 字节，SHA-256 `1db6a2621cbf917c56ba709e84b8609688f4165bb51ef93bed129f1d5c4c6582`）；
+  * **Go 生产服务端**：生产 9900 端口稳定驻留（**PID `39238`**，二进制 SHA-256 `dfa618a5bef5c7d578452d03e8b009af7e01ae9f0a5155aff3632e0bd6bb7707`）；
+  * **功能基石**：涵盖 Skill 折叠卡片、多行原子发送、回底防抖防闪、顶部切模型、双主题全量适配（液态玻璃 vs 现代主义）、二段式输入底栏、以及 TUI 斜杠自动补全。
 
 ---
 
 ### 新任务追踪
-- **GitHub Issue #50（第二阶段：高保真深化与交互完善）**：[feat(session): 原生 GUI 会话模式全量演进（跨主流 Agent 适配与 Codex/Muse 级高保真体验）](https://github.com/Florious95/corral-app/pull/53)
-- **权威设计总卷**：`docs/contracts/04-native-gui-conversation-spec.md`
-- **视觉意象总卷**：`docs/contracts/05-codex-muse-visual-reference.md`
-- **全景攻坚提示词任务书**：`.team/fixed-workflow/OPUS-GUI-SESSION-MODE-COMPREHENSIVE-PROMPT.md`
-- **六大深化交付项**：
-  1. Skill 调用大段文本折叠卡片化；
-  2. 多行文本原子发送（保留 `\n` 不拆包）；
-  3. 回到底部按钮与手势滑到底部防抖防闪；
-  4. 顶部浮动条切换模型与思维强度（Effort）；
-  5. 原生 GUI 与真实 TUI 同 Pane 进程置换（带运行中警告弹窗）；
-  6. 双主题体系全量适配：液态玻璃（Liquid Glass）vs 现代主义（Modernism）。
+- **GitHub Issue #54**：[bug(session): GUI 与 TUI 双向切换报错及视图状态残留缺陷（switch_mode 未知命令与简陋占位）](https://github.com/Florious95/corral-app/issues/54)
+  * **任务纪律**：**先复现、留现场、出日志、做分析，严禁直接改代码！** 由 Codex 高级模型（Sol）协同 Luna 进行全黑盒复现与根因诊断。
+- **GitHub Issue #55**：[feat(rpc): 支持 Pi RPC 模式下的历史会话 Resume 恢复与对话无缝切换](https://github.com/Florious95/corral-app/issues/55)
+  * **规划方向**：补充 Pi RPC 模式下的 session resume 启动与交互协议，支持历史会话列表与上下文无缝载入。
 
 ---
 
