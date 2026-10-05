@@ -22,6 +22,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -174,6 +175,27 @@ class ConversationHubTest {
         assertEquals("prompt", command["type"]!!.jsonPrimitive.content)
         assertEquals(prompt, command["message"]!!.jsonPrimitive.content)
         assertEquals(prompt, (hub.session("r1").state.value.items.single() as UserTurn).text)
+    }
+
+    @Test
+    fun controlCallbackSeesTheStateItsResponseProduced() {
+        val (socket, _, _) = connect()
+        hub.attach("r1")
+        settle()
+        socket.listener.onText("""{"v":1,"type":"conversation_ready","payload":{"ref":"r1","stream":"s","head_seq":0,"reset":true,"history_truncated":false,"running":false,"server_time_ms":1}}""")
+        settle()
+        var seen: String? = null
+        hub.control("r1", kotlinx.serialization.json.buildJsonObject { put("type", "set_thinking_level"); put("level", "high") }) { ok, _ ->
+            if (ok) seen = hub.session("r1").state.value.thinkingLevel
+        }
+        settle()
+        val command = frames(socket, "conversation_command").last()["payload"]!!.jsonObject
+        assertEquals("set_thinking_level", command["command"]!!.jsonObject["type"]!!.jsonPrimitive.content)
+        val id = command["id"]!!.jsonPrimitive.content
+        socket.listener.onText("""{"v":1,"type":"conversation_event","payload":{"ref":"r1","seq":1,"ts":1,"event":{"type":"thinking_level_changed","level":"high"}}}""")
+        socket.listener.onText("""{"v":1,"type":"conversation_event","payload":{"ref":"r1","event":{"id":"$id","type":"response","command":"set_thinking_level","success":true}}}""")
+        settle()
+        assertEquals("high", seen)
     }
 
     @Test

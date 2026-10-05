@@ -182,3 +182,25 @@ func TestListingMarksManagedConversationPanes(t *testing.T) {
 		t.Fatalf("managed pane = %+v", session)
 	}
 }
+
+func TestConversationModelCommandsAreValidatedAndMinimal(t *testing.T) {
+	s := &Server{maxInput: 1 << 20}
+	for _, tc := range []struct {
+		raw, reason, forwarded string
+	}{
+		{`{"type":"get_available_models"}`, "", `{"id":"c1","type":"get_available_models"}`},
+		{`{"type":"get_available_thinking_levels"}`, "", `{"id":"c1","type":"get_available_thinking_levels"}`},
+		{`{"type":"set_model","provider":"openai-codex","modelId":"gpt-6-luna","baseUrl":"http://evil"}`, "",
+			`{"id":"c1","modelId":"gpt-6-luna","provider":"openai-codex","type":"set_model"}`},
+		{`{"type":"set_model","provider":"a b","modelId":"x"}`, "model is missing or malformed", ""},
+		{`{"type":"set_model","provider":"p"}`, "model is missing or malformed", ""},
+		{`{"type":"set_thinking_level","level":"max"}`, "", `{"id":"c1","level":"max","type":"set_thinking_level"}`},
+		{`{"type":"set_thinking_level","level":"ultra"}`, "thinking level is not supported", ""},
+		{`{"type":"cycle_model"}`, "command is not available from the phone", ""},
+	} {
+		_, forwarded, reason := s.conversationCommand("c1", json.RawMessage(tc.raw))
+		if reason != tc.reason || string(forwarded) != tc.forwarded {
+			t.Fatalf("%s → %q %q, want %q %q", tc.raw, forwarded, reason, tc.forwarded, tc.reason)
+		}
+	}
+}

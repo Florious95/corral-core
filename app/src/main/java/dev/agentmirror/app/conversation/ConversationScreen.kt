@@ -88,6 +88,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
@@ -141,6 +142,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.atomic.AtomicLong
 
@@ -234,6 +237,9 @@ private fun ConversationScreen(
     var sheet by remember { mutableStateOf(ComposerSheet.None) }
     var slashDismissedFor by remember { mutableStateOf<String?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
+    var pickerOpen by remember { mutableStateOf(false) }
+    var pendingModel by remember(ref) { mutableStateOf<ModelChoice?>(null) }
+    var pendingLevel by remember(ref) { mutableStateOf<String?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
     // Geometry is read at layout time only (list padding, overlay offsets): the dock rising or the
     // IME sliding re-measures, it never recomposes the screen.
@@ -418,16 +424,51 @@ private fun ConversationScreen(
         sheet = ComposerSheet.None
     }
 
-    // Back peels one layer at a time: menu → panel → composer → leave.
-    BackHandler(enabled = activeSheet != ComposerSheet.None || menuOpen || editorFocused) {
+    // ---- model & thinking ------------------------------------------------------------------
+    fun command(type: String, vararg fields: Pair<String, String>) = buildJsonObject {
+        put("type", type)
+        fields.forEach { (k, v) -> put(k, v) }
+    }
+    fun openPicker() {
+        menuOpen = false
+        pickerOpen = !pickerOpen
+        if (pickerOpen) {
+            hub.control(ref, command("get_available_models"))
+            hub.control(ref, command("get_available_thinking_levels"))
+        }
+    }
+    fun chooseModel(choice: ModelChoice) {
+        pendingModel = choice
+        hub.control(ref, command("set_model", "provider" to choice.provider, "modelId" to choice.id)) { ok, reason ->
+            pendingModel = null
+            if (ok) {
+                // The new model decides which levels exist and may clamp the current one.
+                hub.control(ref, command("get_available_thinking_levels"))
+                hub.control(ref, command("get_state"))
+            } else {
+                toast = "未切换到 ${choice.name}：${reason ?: "主机没有确认"}"
+            }
+        }
+    }
+    fun chooseLevel(level: String) {
+        pendingLevel = level
+        hub.control(ref, command("set_thinking_level", "level" to level)) { ok, reason ->
+            pendingLevel = null
+            if (!ok) toast = "思考强度未调整：${reason ?: "主机没有确认"}"
+        }
+    }
+
+    // Back peels one layer at a time: picker/menu → panel → composer → leave.
+    BackHandler(enabled = activeSheet != ComposerSheet.None || menuOpen || pickerOpen || editorFocused) {
         when {
+            pickerOpen -> pickerOpen = false
             menuOpen -> menuOpen = false
             sheet != ComposerSheet.None -> sheet = ComposerSheet.None
             activeSheet == ComposerSheet.Slash -> slashDismissedFor = draft.text
             else -> collapseComposer("back")
         }
     }
-    BackHandler(enabled = activeSheet == ComposerSheet.None && !menuOpen && !editorFocused, onBack = onBack)
+    BackHandler(enabled = activeSheet == ComposerSheet.None && !menuOpen && !pickerOpen && !editorFocused, onBack = onBack)
 
     // ---- layout -----------------------------------------------------------------------------
     val backdrop = rememberLayerBackdrop {
@@ -549,7 +590,9 @@ private fun ConversationScreen(
             p = p,
             backdrop = backdrop,
             onBack = onBack,
-            onMore = { menuOpen = !menuOpen },
+            onMore = { pickerOpen = false; menuOpen = !menuOpen },
+            onModel = ::openPicker,
+            pickerOpen = pickerOpen,
             modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { headerPx.intValue = it.height }.zIndex(2f),
         )
 
@@ -571,6 +614,19 @@ private fun ConversationScreen(
                 onOpenTerminal = onOpenTerminal,
             )
         }
+
+        ModelPicker(
+            open = pickerOpen,
+            state = state,
+            pendingModel = pendingModel,
+            pendingLevel = pendingLevel,
+            p = p,
+            backdrop = backdrop,
+            topPx = { headerPx.intValue },
+            onDismiss = { pickerOpen = false },
+            onModel = ::chooseModel,
+            onLevel = ::chooseLevel,
+        )
 
         // Header overflow menu.
         HeaderMenu(
@@ -747,6 +803,8 @@ private fun ConversationHeader(
     backdrop: Backdrop,
     onBack: () -> Unit,
     onMore: () -> Unit,
+    onModel: () -> Unit,
+    pickerOpen: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -758,12 +816,16 @@ private fun ConversationHeader(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             GlassCircleButton(Glyph.Back, p, backdrop, "conversation-back", onClick = onBack)
+            val chevron by androidx.compose.animation.core.animateFloatAsState(if (pickerOpen) 180f else 0f, disclosureSpring(), label = "header-chevron")
             Row(
                 Modifier
                     .weight(1f)
                     .padding(horizontal = 10.dp)
                     .frostedGlass(backdrop, Capsule(), p)
-                    .padding(horizontal = 16.dp, vertical = 7.dp),
+                    .clip(Capsule())
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onModel)
+                    .padding(start = 16.dp, end = 12.dp, top = 7.dp, bottom = 7.dp)
+                    .testTag("conversation-model"),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
@@ -785,6 +847,7 @@ private fun ConversationHeader(
                         )
                     }
                 }
+                GlyphIcon(Glyph.Chevron, p.inkSoft, 16.dp, Modifier.padding(start = 6.dp).graphicsLayer { rotationZ = chevron })
             }
             GlassCircleButton(Glyph.More, p, backdrop, "conversation-more", onClick = onMore)
         }
@@ -905,7 +968,7 @@ private fun headerStatus(state: ConversationState, phase: LinkPhase): String = w
         state.compacting -> "正在压缩上下文"
         state.retry != null -> "正在重试"
         state.running -> "工作中" + (state.model?.let { " · $it" } ?: "")
-        else -> listOfNotNull("Pi", state.model, state.thinkingLevel?.takeIf { it != "off" }).joinToString(" · ")
+        else -> listOfNotNull("Pi", state.model, state.thinkingLevel?.takeIf { it != "off" }?.let { "思考 ${thinkingLabel(it)}" }).joinToString(" · ")
     }
 }
 

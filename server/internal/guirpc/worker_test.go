@@ -442,3 +442,24 @@ func TestBracketedPasteIsOnePrompt(t *testing.T) {
 		t.Fatalf("prompts = %q\nwant      %q", got, want)
 	}
 }
+
+func TestModelResponsesAreSlimmed(t *testing.T) {
+	raw, err := os.ReadFile("testdata/pi-1.0.0-available-models.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(projectModels(bytes.TrimSpace(raw)))
+	want := `{"id":"a","type":"response","command":"get_available_models","success":true,"data":{"models":[` +
+		`{"id":"probe-reasoner","name":"Probe Reasoner","provider":"probe","reasoning":true},{"id":"probe-plain","name":"Probe Plain","provider":"probe"}]}}`
+	if got != want {
+		t.Fatalf("projected\n%s\nwant\n%s", got, want)
+	}
+	set := string(projectModels([]byte(`{"id":"b","type":"response","command":"set_model","success":true,"data":{"id":"m","name":"M","provider":"p","reasoning":true,"baseUrl":"https://x","cost":{"input":1}}}`)))
+	if set != `{"id":"b","type":"response","command":"set_model","success":true,"data":{"id":"m","name":"M","provider":"p","reasoning":true}}` {
+		t.Fatalf("set_model projected %s", set)
+	}
+	failed := string(projectModels([]byte(`{"id":"c","type":"response","command":"set_model","success":false,"error":"No API key for provider"}`)))
+	if failed != `{"id":"c","type":"response","command":"set_model","success":false,"error":"No API key for provider"}` {
+		t.Fatalf("failure projected %s", failed)
+	}
+}

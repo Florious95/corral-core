@@ -262,7 +262,25 @@ func (s *Server) conversationCommand(id string, raw json.RawMessage) (string, []
 	var kind string
 	_ = json.Unmarshal(command["type"], &kind)
 	switch kind {
-	case "prompt", "steer", "follow_up", "abort", "clear_queue", "compact", "new_session", "get_state", "get_commands":
+	case "prompt", "steer", "follow_up", "abort", "clear_queue", "compact", "new_session", "get_state", "get_commands",
+		"get_available_models", "get_available_thinking_levels":
+	case "set_model":
+		// Only a model Pi already lists can be named; Pi itself checks the provider's auth.
+		var provider, modelID string
+		if json.Unmarshal(command["provider"], &provider) != nil || json.Unmarshal(command["modelId"], &modelID) != nil ||
+			!modelToken(provider) || !modelToken(modelID) {
+			return kind, nil, "model is missing or malformed"
+		}
+		command = map[string]json.RawMessage{"type": command["type"], "provider": command["provider"], "modelId": command["modelId"]}
+	case "set_thinking_level":
+		var level string
+		_ = json.Unmarshal(command["level"], &level)
+		switch level {
+		case "off", "minimal", "low", "medium", "high", "xhigh", "max":
+		default:
+			return kind, nil, "thinking level is not supported"
+		}
+		command = map[string]json.RawMessage{"type": command["type"], "level": command["level"]}
 	default:
 		return kind, nil, "command is not available from the phone"
 	}
@@ -287,6 +305,19 @@ func (s *Server) conversationCommand(id string, raw json.RawMessage) (string, []
 		return kind, nil, "command is too large"
 	}
 	return kind, encoded, ""
+}
+
+// modelToken accepts a provider or model id as Pi names them: short, printable, no spaces.
+func modelToken(value string) bool {
+	if value == "" || len(value) > 128 {
+		return false
+	}
+	for _, r := range value {
+		if r <= ' ' || r == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Server) conversationImages(kind string, raw json.RawMessage) (json.RawMessage, string) {

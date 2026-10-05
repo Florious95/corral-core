@@ -101,6 +101,9 @@ data class Notice(
     val detail: String? = null,
 ) : ConversationItem
 
+/** A model the session can switch to (worker-projected get_available_models entry). */
+data class ModelChoice(val id: String, val name: String, val provider: String, val reasoning: Boolean)
+
 data class RetryStatus(val attempt: Int, val maxAttempts: Int, val delayMs: Long, val reason: String, val since: Long)
 
 /** The message currently streaming; [blocks] maps contentIndex → item key. */
@@ -118,6 +121,13 @@ data class ConversationState(
     val retry: RetryStatus? = null,
     val queued: Int = 0,
     val model: String? = null,
+    /** Identity of [model] for set_model; the display name alone cannot address it. */
+    val modelId: String? = null,
+    val modelProvider: String? = null,
+    /** Switchable models; null until the picker asked for them. */
+    val models: List<ModelChoice>? = null,
+    /** Levels the current model supports, in Pi's order; ["off"] for a non-reasoning model. */
+    val thinkingLevels: List<String> = emptyList(),
     val thinkingLevel: String? = null,
     val sessionName: String? = null,
     val historyTruncated: Boolean = false,
@@ -146,6 +156,10 @@ data class ConversationState(
     fun reset(stream: String, truncated: Boolean): ConversationState = ConversationState(
         items = items.filter { it is UserTurn && it.delivery != Delivery.Delivered },
         model = model,
+        modelId = modelId,
+        modelProvider = modelProvider,
+        models = models,
+        thinkingLevels = thinkingLevels,
         thinkingLevel = thinkingLevel,
         sessionName = sessionName,
         historyTruncated = truncated,
@@ -208,6 +222,10 @@ data class ConversationState(
         "session_reset" -> ConversationState(
             items = items.filter { it is UserTurn && it.delivery != Delivery.Delivered },
             model = model,
+            modelId = modelId,
+            modelProvider = modelProvider,
+            models = models,
+            thinkingLevels = thinkingLevels,
             thinkingLevel = thinkingLevel,
             stream = stream,
         )
@@ -445,13 +463,23 @@ data class ConversationState(
             "get_state" -> {
                 val data = e.obj("data") ?: return this
                 val model = data.obj("model")
-                copy(
-                    model = model?.let { it.str("name").ifBlank { it.str("id") } }?.ifBlank { null } ?: this.model,
+                (model?.let(::withModel) ?: this).copy(
                     thinkingLevel = data.str("thinkingLevel").ifBlank { null } ?: thinkingLevel,
                     sessionName = data.str("sessionName").ifBlank { null } ?: sessionName,
                     running = if (data.bool("isStreaming") == true) true else running,
                 )
             }
+            "set_model" -> if (ok) e.obj("data")?.let(::withModel) ?: this else this
+            "get_available_models" -> if (!ok) this else copy(
+                models = e.obj("data")?.arr("models").orEmpty().mapNotNull { m ->
+                    val o = m as? JsonObject ?: return@mapNotNull null
+                    val id = o.str("id").ifBlank { return@mapNotNull null }
+                    ModelChoice(id, o.str("name").ifBlank { id }, o.str("provider"), o.bool("reasoning") == true)
+                },
+            )
+            "get_available_thinking_levels" -> if (!ok) this else copy(
+                thinkingLevels = e.obj("data")?.arr("levels").orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull },
+            )
             "prompt", "steer", "follow_up" -> when {
                 items.none { it.key == echo } -> this
                 !ok -> dropLocalEcho(id)
@@ -463,6 +491,12 @@ data class ConversationState(
             else -> this
         }
     }
+
+    private fun withModel(model: JsonObject): ConversationState = copy(
+        model = model.str("name").ifBlank { model.str("id") }.ifBlank { null } ?: this.model,
+        modelId = model.str("id").ifBlank { null } ?: modelId,
+        modelProvider = model.str("provider").ifBlank { null } ?: modelProvider,
+    )
 
     // ---- item helpers ----------------------------------------------------------------
 

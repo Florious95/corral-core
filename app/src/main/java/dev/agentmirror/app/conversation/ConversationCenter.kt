@@ -243,6 +243,24 @@ class ConversationHub(
             if (streamingBehavior != null) put("streamingBehavior", streamingBehavior)
             if (attachmentPaths.isNotEmpty()) putJsonArray("attachment_paths") { attachmentPaths.forEach { add(JsonPrimitive(it)) } }
         }
+        dispatch(l, ref, id, command, echo, onResult)
+    }
+
+    /**
+     * A non-prompt agent command with its own fields (set_model, set_thinking_level, …): same
+     * correlation id, 15 s deadline and main-thread [onResult] as [send], no echo.
+     */
+    fun control(ref: String, command: JsonObject, onResult: ((Boolean, String?) -> Unit)? = null) = executor.execute {
+        val s = session(ref)
+        val l = link
+        if (l == null || s.mutablePhase.value != LinkPhase.Live) {
+            onResult?.let { cb -> mainPost { cb(false, "Not connected") } }
+            return@execute
+        }
+        dispatch(l, ref, "c${ids.incrementAndGet()}", command, false, onResult)
+    }
+
+    private fun dispatch(l: Link, ref: String, id: String, command: JsonObject, echo: Boolean, onResult: ((Boolean, String?) -> Unit)?) {
         val timeout = executor.schedule({
             pendingCommands[id]?.let { finishCommand(it, false, "The host did not confirm in time") }
         }, COMMAND_TIMEOUT_MS, TimeUnit.MILLISECONDS)
@@ -285,6 +303,9 @@ class ConversationHub(
         drainScheduled.set(false)
         // Group this burst per session so a token storm costs one state publication.
         val batches = LinkedHashMap<ConversationSession, MutableList<Triple<Long, Long, JsonObject>>>()
+        // Command callbacks run after the burst is reduced, so a caller sees the state its own
+        // response produced (a confirmed model, a clamped thinking level), never the one before.
+        val settled = ArrayList<() -> Unit>()
         while (true) {
             val (from, text) = inbound.poll() ?: break
             if (from !== link) continue
@@ -295,7 +316,7 @@ class ConversationHub(
                 "conversation_event" -> {
                     val s = sessions[ref] ?: continue
                     val event = payload.obj("event") ?: continue
-                    if (event.str("type") == "response") onResponse(s, event)
+                    if (event.str("type") == "response") onResponse(s, event)?.let(settled::add)
                     batches.getOrPut(s) { ArrayList() }.add(Triple(payload.long("seq") ?: 0, payload.long("ts") ?: 0, event))
                 }
                 "conversation_ready" -> {
@@ -310,6 +331,7 @@ class ConversationHub(
             }
         }
         batches.forEach { (s, events) -> flush(s, events) }
+        settled.forEach { it() }
     }
 
     private fun flush(s: ConversationSession, events: List<Triple<Long, Long, JsonObject>>) {
@@ -370,7 +392,7 @@ class ConversationHub(
         mainPost { pending.onResult(ok, ref, payload.str("reason").ifBlank { null }) }
     }
 
-    private fun onResponse(s: ConversationSession, event: JsonObject) {
+    private fun onResponse(s: ConversationSession, event: JsonObject): (() -> Unit)? {
         val id = event.str("id")
         if (event.str("command") == "get_commands" && event.bool("success") == true) {
             s.mutableCommands.value = event.obj("data")?.arr("commands").orEmpty().mapNotNull { c ->
@@ -378,8 +400,8 @@ class ConversationHub(
                 SlashCommand(o.str("name").ifBlank { return@mapNotNull null }, o.str("description"), o.str("source"))
             }
         }
-        val pending = pendingCommands[id] ?: return
-        finishCommand(pending, event.bool("success") == true, event.str("error").ifBlank { null }, settleEcho = false)
+        val pending = pendingCommands[id] ?: return null
+        return { finishCommand(pending, event.bool("success") == true, event.str("error").ifBlank { null }, settleEcho = false) }
     }
 
     private fun finishCommand(pending: PendingCommand, ok: Boolean, reason: String?, settleEcho: Boolean = true) {

@@ -499,6 +499,8 @@ func (w *worker) ingest(raw []byte) {
 			data = projectCommands(raw)
 		case "get_state":
 			data = projectState(raw)
+		case "get_available_models", "set_model":
+			data = projectModels(raw)
 		}
 		w.mu.Lock()
 		w.publish(data, entry{kind: h.Type}, false)
@@ -830,21 +832,64 @@ func projectState(raw []byte) []byte {
 		Success bool   `json:"success"`
 		Error   string `json:"error,omitempty"`
 		Data    struct {
-			Model *struct {
-				ID       string `json:"id"`
-				Name     string `json:"name,omitempty"`
-				Provider string `json:"provider,omitempty"`
-			} `json:"model,omitempty"`
-			ThinkingLevel       string `json:"thinkingLevel,omitempty"`
-			IsStreaming         bool   `json:"isStreaming"`
-			IsCompacting        bool   `json:"isCompacting"`
-			SessionName         string `json:"sessionName,omitempty"`
-			MessageCount        int    `json:"messageCount"`
-			PendingMessageCount int    `json:"pendingMessageCount"`
+			Model               *modelSummary `json:"model,omitempty"`
+			ThinkingLevel       string        `json:"thinkingLevel,omitempty"`
+			IsStreaming         bool          `json:"isStreaming"`
+			IsCompacting        bool          `json:"isCompacting"`
+			SessionName         string        `json:"sessionName,omitempty"`
+			MessageCount        int           `json:"messageCount"`
+			PendingMessageCount int           `json:"pendingMessageCount"`
 		} `json:"data"`
 	}
 	if json.Unmarshal(raw, &resp) != nil {
 		return raw
+	}
+	out, err := json.Marshal(resp)
+	if err != nil {
+		return raw
+	}
+	return out
+}
+
+// modelSummary is what a model picker needs; pricing, endpoints and headers stay on the host.
+type modelSummary struct {
+	ID        string `json:"id"`
+	Name      string `json:"name,omitempty"`
+	Provider  string `json:"provider,omitempty"`
+	Reasoning bool   `json:"reasoning,omitempty"`
+}
+
+// projectModels slims get_available_models (data.models) and set_model (data is one model).
+func projectModels(raw []byte) []byte {
+	var resp struct {
+		ID      string          `json:"id,omitempty"`
+		Type    string          `json:"type"`
+		Command string          `json:"command"`
+		Success bool            `json:"success"`
+		Error   string          `json:"error,omitempty"`
+		Data    json.RawMessage `json:"data,omitempty"`
+	}
+	if json.Unmarshal(raw, &resp) != nil {
+		return raw
+	}
+	if len(resp.Data) > 0 {
+		var data any
+		if resp.Command == "set_model" {
+			var model modelSummary
+			if json.Unmarshal(resp.Data, &model) != nil {
+				return raw
+			}
+			data = model
+		} else {
+			var list struct {
+				Models []modelSummary `json:"models"`
+			}
+			if json.Unmarshal(resp.Data, &list) != nil {
+				return raw
+			}
+			data = list
+		}
+		resp.Data, _ = json.Marshal(data)
 	}
 	out, err := json.Marshal(resp)
 	if err != nil {

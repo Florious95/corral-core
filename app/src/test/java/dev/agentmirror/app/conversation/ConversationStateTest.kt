@@ -183,5 +183,28 @@ class ConversationStateTest {
         assertTrue(turn.skill!!.content.length <= ConversationState.MAX_TEXT + 2)
     }
 
+    @Test
+    fun modelIdentityOptionsAndLevelsComeFromPiResponses() {
+        var state = ConversationState()
+            .apply(0, 0, event("""{"type":"response","command":"get_state","success":true,"data":{"model":{"id":"probe-reasoner","name":"Probe Reasoner","provider":"probe"},"thinkingLevel":"medium","isStreaming":false}}"""))
+        assertEquals("Probe Reasoner", state.model)
+        assertEquals("probe-reasoner", state.modelId)
+        assertEquals("probe", state.modelProvider)
+        state = state.apply(0, 0, event("""{"type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"probe-reasoner","name":"Probe Reasoner","provider":"probe","reasoning":true},{"id":"probe-plain","provider":"probe"}]}}"""))
+        assertEquals(listOf(ModelChoice("probe-reasoner", "Probe Reasoner", "probe", true), ModelChoice("probe-plain", "probe-plain", "probe", false)), state.models)
+        state = state.apply(0, 0, event("""{"type":"response","command":"get_available_thinking_levels","success":true,"data":{"levels":["off","minimal","low","medium","high"]}}"""))
+        assertEquals(listOf("off", "minimal", "low", "medium", "high"), state.thinkingLevels)
+        // A refused switch keeps the confirmed model; an accepted one moves identity and name.
+        val refused = state.apply(0, 0, event("""{"type":"response","command":"set_model","success":false,"error":"No API key"}"""))
+        assertEquals("probe-reasoner", refused.modelId)
+        state = state.apply(0, 0, event("""{"type":"response","command":"set_model","success":true,"data":{"id":"probe-plain","name":"Probe Plain","provider":"probe"}}"""))
+        assertEquals("Probe Plain" to "probe-plain", state.model to state.modelId)
+        state = state.apply(3, 3, event("""{"type":"thinking_level_changed","level":"off"}"""))
+        assertEquals("off", state.thinkingLevel)
+        // A stream restart keeps what the header and picker show.
+        val reset = state.reset("s2", truncated = false)
+        assertEquals(state.modelId to state.models, reset.modelId to reset.models)
+    }
+
     private fun event(json: String) = Json.parseToJsonElement(json).jsonObject
 }
