@@ -401,9 +401,8 @@ func (c *wsConn) handleConversationCreate(req protocol.ConversationCreate) {
 	c.send(&protocol.ConversationCreated{ReqID: result.ReqID, OK: result.OK, Ref: result.Ref, Name: result.Name, Reason: result.Reason})
 }
 
-// identifyConversationWorkers marks panes owned by a managed worker. Their
-// provider, activity and health come from the worker itself: the pane runs
-// the daemon binary, which process-based identification cannot attribute.
+// identifyConversationWorkers marks verified native structured agents. The
+// provider comes from native process identity, never inferred from JSON output.
 func (s *Server) identifyConversationWorkers(model *discovery.Model, observations map[string]nodeprobe.Observation) {
 	if model == nil || s.conversations == nil {
 		return
@@ -411,14 +410,15 @@ func (s *Server) identifyConversationWorkers(model *discovery.Model, observation
 	for _, workspace := range model.Workspaces {
 		for _, pane := range workspace.Panes {
 			ref := sessionRef(pane)
-			if !s.conversations.Detect(s.loopCtx, pane) {
+			provider := s.conversations.Detect(s.loopCtx, pane)
+			if provider == "" {
 				continue
 			}
 			obs, ok := observations[ref]
 			if !ok {
 				obs = nodeprobe.Unknown()
 			}
-			obs.Provider = "pi"
+			obs.Provider = provider
 			obs.Conversation = true
 			if activity := s.conversations.Activity(ref); activity != "" {
 				obs.Activity = activity

@@ -199,7 +199,7 @@ fun ConversationRoute(
             onOpenTerminal(true)
         }
     }
-    // The worker says Pi's own TUI holds the pane (switched here or on another device): show it.
+    // The host confirms the agent's native TUI holds the pane: show it.
     // This is a confirmed mode, not a capability fallback.
     LaunchedEffect(phase, mode) {
         if (phase == LinkPhase.Live && mode == PaneMode.Tui) {
@@ -256,6 +256,7 @@ private fun ConversationScreen(
     var menuOpen by remember { mutableStateOf(false) }
     var pickerOpen by remember { mutableStateOf(false) }
     var confirmSwitch by remember { mutableStateOf(false) }
+    var switchReason by remember(ref) { mutableStateOf<String?>(null) }
     var pendingModel by remember(ref) { mutableStateOf<ModelChoice?>(null) }
     var pendingLevel by remember(ref) { mutableStateOf<String?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
@@ -294,9 +295,9 @@ private fun ConversationScreen(
     val sheetEntries = when (activeSheet) {
         ComposerSheet.Slash -> slashEntries(draft.text, commands)
         ComposerSheet.Shortcuts -> shortcutCommands.mapNotNull { command ->
-            val resolved = resolveShortcutCommand(command, "pi") as? ShortcutResolution.Found ?: return@mapNotNull null
+            val resolved = resolveShortcutCommand(command, state.agentProvider) as? ShortcutResolution.Found ?: return@mapNotNull null
             SheetEntry("shortcut:${command.id}", command.name, resolved.text, Glyph.Bolt)
-        }.ifEmpty { listOf(SheetEntry("shortcut:none", "还没有快捷命令", "在 设置 › 快捷命令 中为 Pi 添加常用指令", Glyph.Bolt)) }
+        }.ifEmpty { listOf(SheetEntry("shortcut:none", "还没有快捷命令", "在 设置 › 快捷命令 中添加常用指令", Glyph.Bolt)) }
         ComposerSheet.Attach -> listOf(
             SheetEntry("attach:camera", "拍照", "拍一张照片附在消息里", Glyph.Camera),
             SheetEntry("attach:photo", "从相册选择", "选择一张图片附在消息里", Glyph.Photo),
@@ -476,17 +477,17 @@ private fun ConversationScreen(
         }
     }
 
-    // ---- in-pane switch to Pi's TUI --------------------------------------------------------
+    // ---- in-pane switch to the native TUI --------------------------------------------------------
     // Real work in flight, read from what the agent reported (not from what is on screen).
     val inFlight = state.running || state.compacting || state.queued > 0 ||
         state.items.any { it is ToolCall && !it.finished }
     fun switchToTerminal(force: Boolean) {
         confirmSwitch = false
-        toast = "正在切换到 Pi 终端…"
+        toast = "正在切换到终端…"
         hub.switchMode(ref, PaneMode.Tui, force) { ok, reason, busy ->
             when {
                 ok -> onOpenTerminal()
-                busy && !force -> { toast = null; collapseComposer("confirm"); confirmSwitch = true }
+                busy && !force -> { toast = null; switchReason = reason; collapseComposer("confirm"); confirmSwitch = true }
                 else -> toast = "未切换到终端：${reason ?: "主机没有确认"}"
             }
         }
@@ -678,6 +679,7 @@ private fun ConversationScreen(
             onTerminal = {
                 menuOpen = false
                 if (inFlight) {
+                    switchReason = null
                     collapseComposer("confirm")
                     confirmSwitch = true
                 } else {
@@ -692,7 +694,8 @@ private fun ConversationScreen(
         ConfirmDialog(
             open = confirmSwitch,
             title = "切换到终端模式",
-            body = "切换模式或升级会话进程将中断并丢弃当前未完成任务，是否确认切换？",
+            body = "切换模式或升级会话进程将中断并丢弃当前未完成任务，是否确认切换？" +
+                (switchReason?.takeIf { it.isNotBlank() }?.let { "\n\n$it" } ?: ""),
             confirm = "确认切换",
             p = p,
             backdrop = backdrop,
@@ -766,8 +769,8 @@ private fun ConversationScreen(
             connected = connected,
             placeholder = when {
                 !connected -> "连接后即可发送"
-                state.running -> "补充指令，Pi 会在下一步看到"
-                else -> "给 Pi 发消息，输入 / 查看命令"
+                state.running -> "补充指令，由主机确认是否接收"
+                else -> "发送消息，输入 / 查看命令"
             },
             onSend = ::send,
             onStop = { hub.send(ref, "abort") { ok, r -> if (!ok) toast = "停止未生效：${r ?: "主机没有确认"}" } },
@@ -997,7 +1000,7 @@ private fun HeaderMenu(
                     .padding(6.dp)
                     .testTag("conversation-menu"),
             ) {
-                MenuRow(Glyph.Terminal, "切换到终端", "同一面板运行 Pi 终端界面，会话不变", p, enabled, "conversation-menu-terminal", onTerminal)
+                MenuRow(Glyph.Terminal, "切换到终端", "同一面板运行对应 CLI 的原生终端", p, enabled, "conversation-menu-terminal", onTerminal)
                 MenuRow(Glyph.Refresh, "压缩上下文", "/compact", p, enabled, "conversation-menu-compact", onCompact)
                 MenuRow(Glyph.Spark, "开始新会话", "/new", p, enabled, "conversation-menu-new", onNewSession)
             }
@@ -1115,7 +1118,7 @@ private fun headerStatus(state: ConversationState, phase: LinkPhase): String = w
         state.compacting -> "正在压缩上下文"
         state.retry != null -> "正在重试"
         state.running -> "工作中" + (state.model?.let { " · $it" } ?: "")
-        else -> listOfNotNull("Pi", state.model, state.thinkingLevel?.takeIf { it != "off" }?.let { "思考 ${thinkingLabel(it)}" }).joinToString(" · ")
+        else -> listOfNotNull("原生对话", state.model, state.thinkingLevel?.takeIf { it != "off" }?.let { "思考 ${thinkingLabel(it)}" }).joinToString(" · ")
     }
 }
 

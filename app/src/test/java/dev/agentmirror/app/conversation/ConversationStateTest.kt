@@ -42,6 +42,18 @@ class ConversationStateTest {
         records(name).fold(start) { state, (seq, ts, event) -> state.apply(seq, ts, event) }
 
     @Test
+    fun nativeAgentIdentityIsIndependentOfModelVendorAndSurvivesReplayReset() {
+        val event = Json.parseToJsonElement("""{"type":"response","command":"get_state","success":true,"data":{"agentProvider":"grok","model":{"id":"grok-4.7","provider":"xai"}}}""").jsonObject
+        val state = ConversationState().apply(1, 1, event)
+        assertEquals("grok", state.agentProvider)
+        assertEquals("xai", state.modelProvider)
+        assertEquals("grok", state.reset("new-stream", false).agentProvider)
+        val reset = Json.parseToJsonElement("""{"type":"session_reset"}""").jsonObject
+        assertEquals("grok", state.apply(2, 2, reset).agentProvider)
+        assertEquals("pi", ConversationState().agentProvider)
+    }
+
+    @Test
     fun realPiTurnReducesToUserToolAndAnswer() {
         val state = reduceAll("pi-tool-turn.live.jsonl")
         val items = state.items

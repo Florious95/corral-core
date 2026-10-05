@@ -124,6 +124,8 @@ data class ConversationState(
     /** Identity of [model] for set_model; the display name alone cannot address it. */
     val modelId: String? = null,
     val modelProvider: String? = null,
+    /** CLI identity, distinct from the model's API vendor; legacy conversation_v1 is Pi. */
+    val agentProvider: String = "pi",
     /** Switchable models; null until the picker asked for them. */
     val models: List<ModelChoice>? = null,
     /** Levels the current model supports, in Pi's order; ["off"] for a non-reasoning model. */
@@ -158,6 +160,7 @@ data class ConversationState(
         model = model,
         modelId = modelId,
         modelProvider = modelProvider,
+        agentProvider = agentProvider,
         models = models,
         thinkingLevels = thinkingLevels,
         thinkingLevel = thinkingLevel,
@@ -224,6 +227,7 @@ data class ConversationState(
             model = model,
             modelId = modelId,
             modelProvider = modelProvider,
+            agentProvider = agentProvider,
             models = models,
             thinkingLevels = thinkingLevels,
             thinkingLevel = thinkingLevel,
@@ -464,6 +468,7 @@ data class ConversationState(
                 val data = e.obj("data") ?: return this
                 val model = data.obj("model")
                 (model?.let(::withModel) ?: this).copy(
+                    agentProvider = data.str("agentProvider").ifBlank { agentProvider },
                     thinkingLevel = data.str("thinkingLevel").ifBlank { null } ?: thinkingLevel,
                     sessionName = data.str("sessionName").ifBlank { null } ?: sessionName,
                     running = if (data.bool("isStreaming") == true) true else running,

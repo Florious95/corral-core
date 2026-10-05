@@ -320,6 +320,7 @@ fun SessionScreen(
     BackHandler(enabled = slashOpen) { slashDismissedFor = mirror.text }
     var nativeSwitching by remember { mutableStateOf(false) }
     var confirmNative by remember { mutableStateOf(false) }
+    var nativeSwitchReason by remember { mutableStateOf<String?>(null) }
     BackHandler(enabled = confirmNative) { confirmNative = false }
     val switchToNative: (Boolean) -> Unit = { force ->
         confirmNative = false
@@ -328,7 +329,7 @@ fun SessionScreen(
             nativeSwitching = false
             when {
                 ok -> Unit
-                busy && !force -> confirmNative = true
+                busy && !force -> { nativeSwitchReason = reason; confirmNative = true }
                 else -> viewModel.transientError = "未切回原生对话：${reason ?: "主机没有确认"}"
             }
         }
@@ -556,6 +557,7 @@ fun SessionScreen(
                     open = confirmNative,
                     onDismiss = { confirmNative = false },
                     onConfirm = { switchToNative(true) },
+                    detail = nativeSwitchReason,
                 )
                 AttachmentGlassMenu(
                     expanded = attachMenu,

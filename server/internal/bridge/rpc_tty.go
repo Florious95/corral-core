@@ -58,7 +58,7 @@ func (p *Pane) readTTYJournal(ctx context.Context) (*ttyJournal, error) {
 	return &record, nil
 }
 
-func (p *Pane) claimRPCTTY(ctx context.Context, process PiProcess, f *os.File) (func(), error) {
+func (p *Pane) claimRPCTTY(ctx context.Context, process NativeProcess, f *os.File) (func(), error) {
 	rpcTTYMu.Lock()
 	defer rpcTTYMu.Unlock()
 	var stat unix.Stat_t
@@ -132,11 +132,11 @@ func (p *Pane) claimRPCTTY(ctx context.Context, process PiProcess, f *os.File) (
 			if err != nil || current == nil || current.Lease != lease {
 				return
 			}
-			now, err := p.NativePi(checkCtx)
+			now, err := p.NativeAgent(checkCtx)
 			if err != nil {
 				return // uncertain identity must retain provenance, not guess
 			}
-			if now.PID == process.PID && now.Started == process.Started && now.TTY == process.TTY && now.Mode == "rpc" && matches(current) {
+			if now.PID == process.PID && now.Started == process.Started && now.TTY == process.TTY && now.Provider == process.Provider && now.Mode == "rpc" && matches(current) {
 				if err := setTTYSettings(int(f.Fd()), current.Original); err != nil {
 					return
 				}

@@ -79,7 +79,7 @@ internal fun NativeSwitchPill(switching: Boolean, onClick: () -> Unit, modifier:
 }
 
 @Composable
-internal fun NativeSwitchConfirm(open: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit, title: String = "切换回原生对话") {
+internal fun NativeSwitchConfirm(open: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit, title: String = "切换回原生对话", detail: String? = null) {
     val p = LocalAppPalette.current
     val kit = LocalThemeSuite.current
     AnimatedVisibility(visible = open, enter = fadeIn(tween(140)), exit = fadeOut(tween(120)), modifier = Modifier.zIndex(30f)) {
@@ -108,6 +108,13 @@ internal fun NativeSwitchConfirm(open: Boolean, onDismiss: () -> Unit, onConfirm
                     style = TextStyle(fontSize = 14.sp, lineHeight = 21.sp, color = p.bodyText),
                     modifier = Modifier.padding(top = 8.dp),
                 )
+                if (!detail.isNullOrBlank()) {
+                    Text(
+                        detail,
+                        style = TextStyle(fontSize = 14.sp, lineHeight = 21.sp, color = p.bodyText),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
                 Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                     val button = kit.geometry.shape(RoundedCornerShape(50))
                     Text(

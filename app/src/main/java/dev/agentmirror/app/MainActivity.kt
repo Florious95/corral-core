@@ -134,7 +134,7 @@ class MainActivity : ComponentActivity() {
             pinnedWorkspaceStore = SharedPreferencesPinnedWorkspaceStore(this),
             conversationCreateRequest = { workspace, anchorRef, provider, name, onResult ->
                 val hub = ConversationCenter.hub
-                provider == "pi" &&
+                provider in setOf("pi", "grok") &&
                     SharedPreferencesDisplayModeStore(this).load() == DisplayMode.GUI &&
                     hub.support.value == ConversationSupport.Supported &&
                     hub.create(workspace, anchorRef, provider, name, onResult)

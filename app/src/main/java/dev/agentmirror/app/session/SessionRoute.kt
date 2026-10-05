@@ -217,7 +217,7 @@ fun SessionRoute(
                 onBack = onBack,
                 onOpenTerminal = { fallback ->
                     if (fallback && !session.everReady) {
-                        switchError = "此会话工作进程不可用，未确认 Pi 终端模式"
+                        switchError = "此会话工作进程不可用，未确认原生终端模式"
                     } else {
                         targetMode = PaneMode.Tui
                         forceSwitch = false
@@ -314,7 +314,8 @@ private fun RouteModeFeedback(
         open = confirm,
         onDismiss = onCancel,
         onConfirm = { onRetry(true) },
-        title = if (target == PaneMode.Tui) "切换到 Pi 终端" else "切换回原生对话",
+        title = if (target == PaneMode.Tui) "切换到终端" else "切换回原生对话",
+        detail = error,
     )
 }
 

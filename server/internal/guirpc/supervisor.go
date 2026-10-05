@@ -35,7 +35,7 @@ const maxBridges = 64
 // in-memory stream, not a filesystem endpoint or an agent lifecycle owner.
 type Transport interface {
 	Open(context.Context, discovery.Pane) (net.Conn, error)
-	Detect(context.Context, discovery.Pane) bool
+	Detect(context.Context, discovery.Pane) string
 	Available(string) bool
 	Activity(string) string
 	Prune(string, time.Time, map[string]struct{})
@@ -80,21 +80,24 @@ func (m *Manager) Activity(ref string) string {
 
 // Detect runs only on the existing listing cadence, never its own timer. It
 // does not attach I/O until a GUI subscriber requests it.
-func (m *Manager) Detect(ctx context.Context, p discovery.Pane) bool {
+func (m *Manager) Detect(ctx context.Context, p discovery.Pane) string {
 	ref := refOf(p)
 	m.mu.Lock()
 	s := m.sessions[ref]
 	m.mu.Unlock()
 	if s != nil && s.isSwitching() {
-		return true
+		s.mu.Lock()
+		provider := s.process.Provider
+		s.mu.Unlock()
+		return provider
 	}
-	if p.Command != "node" && p.Command != "pi" && p.Command != "pi-rpc" && p.Command != "bun" && s == nil {
-		return false
+	if p.Command != "node" && p.Command != "pi" && p.Command != "pi-rpc" && p.Command != "bun" && p.Command != "grok" && s == nil {
+		return ""
 	}
-	process, err := bridge.NewPane(p.Socket, p.PaneID).NativePi(ctx)
+	process, err := bridge.NewPane(p.Socket, p.PaneID).NativeAgent(ctx)
 	if s != nil {
 		s.mu.Lock()
-		same := err == nil && process.PID == s.process.PID && process.Mode == s.process.Mode
+		same := err == nil && process.PID == s.process.PID && process.Started == s.process.Started && process.Mode == s.process.Mode && process.Provider == s.process.Provider
 		s.mu.Unlock()
 		if !same || s.ctx.Err() != nil {
 			m.mu.Lock()
@@ -106,7 +109,10 @@ func (m *Manager) Detect(ctx context.Context, p discovery.Pane) bool {
 			s = nil
 		}
 	}
-	return err == nil && (process.Mode == ModeRPC || s != nil)
+	if err == nil && (process.Mode == ModeRPC || process.Provider == "grok" || s != nil) {
+		return process.Provider
+	}
+	return ""
 }
 
 func (m *Manager) Open(ctx context.Context, p discovery.Pane) (net.Conn, error) {
@@ -205,7 +211,9 @@ type session struct {
 	done         chan struct{}
 	err          error // immutable after ready is closed
 	mu           sync.Mutex
-	process      bridge.PiProcess
+	process      bridge.NativeProcess
+	grok         *grokACP
+	grokSource   bridge.NativeProcess
 	switching    bool
 	tuiFrom      time.Time
 	stopIO       func()
@@ -222,8 +230,19 @@ func (s *session) start() {
 	defer stopShutdown()
 	ctx, cancel := context.WithTimeout(s.ctx, agentStartupTimeout)
 	defer cancel()
-	process, err := s.waitProcess(ctx, ModeRPC, 0)
-	if err == nil {
+	process, err := s.waitProcess(ctx, "", 0)
+	if err == nil && process.Provider == "grok" && process.Mode == ModeTUI {
+		var id string
+		id, err = s.bridge.NativeSession(ctx, process)
+		if err == nil {
+			s.mu.Lock()
+			s.process, s.grokSource = process, process
+			s.mu.Unlock()
+			s.w.mu.Lock()
+			s.w.sessionID, s.w.mode = id, ModeTUI
+			s.w.mu.Unlock()
+		}
+	} else if err == nil {
 		s.mu.Lock()
 		s.process = process
 		s.mu.Unlock()
@@ -239,15 +258,15 @@ func (s *session) start() {
 	s.w.shutdown()
 }
 
-func (s *session) waitProcess(ctx context.Context, mode string, previous int) (bridge.PiProcess, error) {
+func (s *session) waitProcess(ctx context.Context, mode string, previous int) (bridge.NativeProcess, error) {
 	for {
-		process, err := s.bridge.NativePi(ctx)
-		if err == nil && process.Mode == mode && process.PID != previous {
+		process, err := s.bridge.NativeAgent(ctx)
+		if err == nil && (process.Mode == mode || (mode == "" && (process.Mode == ModeRPC || process.Provider == "grok"))) && process.PID != previous {
 			return process, nil
 		}
 		select {
 		case <-ctx.Done():
-			return bridge.PiProcess{}, ctx.Err()
+			return bridge.NativeProcess{}, ctx.Err()
 		case <-time.After(50 * time.Millisecond):
 		}
 	}
@@ -281,6 +300,22 @@ func (s *session) attachRPC(ctx context.Context) error {
 		return err
 	}
 	live, stop := context.WithCancel(s.ctx)
+	var grok *grokACP
+	if process.Provider == "grok" {
+		grok = newGrokACP(live, write, s.ingest, s.cancel)
+		grok.remember = func(id string) error {
+			if err := s.bridge.RememberNativeSession(live, process, id); err != nil {
+				return err
+			}
+			s.w.mu.Lock()
+			s.w.sessionID = id
+			s.w.mu.Unlock()
+			return nil
+		}
+	}
+	s.mu.Lock()
+	s.grok = grok
+	s.mu.Unlock()
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -308,7 +343,11 @@ func (s *session) attachRPC(ctx context.Context) error {
 						return
 					}
 					if json.Valid(line) {
-						s.ingest(append([]byte(nil), line...))
+						if grok != nil {
+							grok.ingest(append([]byte(nil), line...))
+						} else {
+							s.ingest(append([]byte(nil), line...))
+						}
 					}
 					buffered = buffered[at+1:]
 				}
@@ -327,8 +366,33 @@ func (s *session) attachRPC(ctx context.Context) error {
 	}()
 	var once sync.Once
 	s.mu.Lock()
-	s.stopIO = func() { once.Do(func() { stop(); detach(); <-done; restore() }) }
+	s.stopIO = func() {
+		once.Do(func() {
+			stop()
+			if grok != nil {
+				grok.close()
+			}
+			detach()
+			<-done
+			restore()
+		})
+	}
 	s.mu.Unlock()
+	if grok != nil {
+		s.w.setInput(grok)
+		if err = s.startGrok(ctx, process, grok); err != nil {
+			return err
+		}
+		s.mu.Lock()
+		for _, raw := range s.pending {
+			s.w.ingest(raw)
+		}
+		s.pending = nil
+		s.pendingBytes = 0
+		s.hydrating = false
+		s.mu.Unlock()
+		return nil
+	}
 	s.w.setInput(inputFunc(write))
 	deadline := agentStartupTimeout
 	if end, ok := ctx.Deadline(); ok {
@@ -435,9 +499,12 @@ func (s *session) switchTo(target string, force bool) (map[string]any, error) {
 	defer s.w.setSwitching(false)
 	ctx, cancel := context.WithTimeout(s.ctx, agentStartupTimeout+10*time.Second)
 	defer cancel()
-	current, err := s.bridge.NativePi(ctx)
-	if err != nil || current.PID != process.PID {
-		return nil, errors.New("Pi 进程身份已改变，未切换")
+	current, err := s.bridge.NativeAgent(ctx)
+	if err != nil || current.PID != process.PID || current.Started != process.Started {
+		return nil, errors.New("Agent 进程身份已改变，未切换")
+	}
+	if current.Provider == "grok" {
+		return s.switchGrok(ctx, current, target, force)
 	}
 	if target == current.Mode {
 		return map[string]any{"mode": target}, nil
@@ -515,7 +582,7 @@ func (s *session) switchTo(target string, force bool) (map[string]any, error) {
 		args[len(args)-2], args[len(args)-1] = "--session-id", id
 	}
 	s.detachRPC()
-	if err = s.bridge.ReplaceNativePi(ctx, current, s.pane.CWD, args); err != nil {
+	if err = s.bridge.ReplaceNativeAgent(ctx, current, s.pane.CWD, args); err != nil {
 		s.cancel()
 		return nil, err
 	}

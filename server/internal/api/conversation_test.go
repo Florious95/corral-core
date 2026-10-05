@@ -69,8 +69,14 @@ func (f *fakeConversations) Available(ref string) bool {
 	defer f.mu.Unlock()
 	return f.workers[ref] != nil
 }
-func (f *fakeConversations) Detect(_ context.Context, p discovery.Pane) bool {
-	return f.Available(sessionRef(p))
+func (f *fakeConversations) Detect(_ context.Context, p discovery.Pane) string {
+	if !f.Available(sessionRef(p)) {
+		return ""
+	}
+	if p.Command == "grok" {
+		return "grok"
+	}
+	return "pi"
 }
 func (f *fakeConversations) Activity(ref string) string {
 	f.mu.Lock()

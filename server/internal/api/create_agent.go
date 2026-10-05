@@ -115,7 +115,7 @@ func (s *Server) createAgent(ctx context.Context, req protocol.CreateAgent, stru
 		return fail(protocol.CreateAgentInvalidField)
 	}
 	launcher, ok := s.launcher(req.Provider)
-	if !ok || (structured && (req.Provider != "pi" || s.conversations == nil)) {
+	if !ok || (structured && ((req.Provider != "pi" && req.Provider != "grok") || s.conversations == nil)) {
 		return fail(protocol.CreateAgentProviderUnavailable)
 	}
 	if req.Bypass && !launcher.SupportsBypass {
@@ -129,7 +129,11 @@ func (s *Server) createAgent(ctx context.Context, req protocol.CreateAgent, stru
 
 	args := agentCommand(launcher, req.Name, req.Bypass)
 	if structured {
-		args = append(args, "--mode", "rpc", "--name", req.Name)
+		if req.Provider == "grok" {
+			args = append(append([]string{args[0], "agent"}, args[1:]...), "stdio")
+		} else {
+			args = append(args, "--mode", "rpc", "--name", req.Name)
+		}
 	}
 	paneID, err := bridge.CreateWindow(ctx, entry.pane.Socket, entry.pane.Session, entry.pane.CWD, req.Name, args)
 	if err != nil {

@@ -690,7 +690,7 @@ func (w *worker) command(raw []byte) {
 	}
 	if err := w.sendUser(raw); err != nil {
 		if errors.Is(err, errNoAgent) {
-			err = errors.New("Pi 正在终端中运行，切回原生对话后再发送")
+			err = errors.New("Agent 正在终端中运行，切回原生对话后再发送")
 		}
 		w.respond(c.ID, c.Type, nil, err)
 	}

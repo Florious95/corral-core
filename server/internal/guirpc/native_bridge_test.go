@@ -84,7 +84,7 @@ func TestNativeBridgeRealPiLifecycle(t *testing.T) {
 	}
 	manager := NewManager()
 	defer func() { manager.Close() }()
-	if !manager.Detect(ctx, pane) {
+	if manager.Detect(ctx, pane) != "pi" {
 		t.Fatal("native RPC not advertised")
 	}
 	open := func() (net.Conn, *bufio.Reader, Ready) {
