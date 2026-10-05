@@ -23,22 +23,26 @@
   * 包含前台服务后台配置自愈（kill 杀进程后系统自然重启自动拉起长连接，100% 自动连通）；
   * 包含切前台 5 秒防误掐死全套保活（持续高频数据流零断开，永不换代）；
   * 包含常驻通知文案稳定对齐（处于 READY 始终稳定显示“已连接”，无端“正在连接…”闪烁彻底消除）。
-- **Go 服务端黄金基线**：**Commit `017836a43093c93f5d555f30e076e293ed2de5cb`**
-  * 引入全局原子单调递增 reflow epoch 分配器，彻底消除重订阅时 delta 流被误杀丢弃的 P0 冻屏死锁；
-  * 生产环境 9900 全网卡 `0.0.0.0:9900` 监听，PID `86757` 稳定运行；
-  * 本地回环与 Tailscale IP（`100.75.207.88`）双通（`/pair/whoami` 200 OK，WebSocket 握手正常）。
-- **多端契约完全体合流入库**：
-  * [01 号 Agent 任务通知契约（含全自动身份推导与多端适配）](docs/contracts/01-agent-notification-contract.md)
-  * [02 号 桌面滚轮与裸输入防碎割契约](docs/contracts/02-desktop-mouse-wheel-and-raw-input-contract.md)
-  * [03 号 文件与超长文本上传及终端引用契约](docs/contracts/03-file-upload-and-long-text-reference-contract.md)
-  * 主协议 `docs/protocol.md` §8 与 §9 升级校准。
-- **跨端完备交接资产包**：`/Volumes/nvme/Projects/远控-ios/android-notifications-and-pipeline-handoff/`（40 文件全量通过对账核验）。
+- **新基线 Tag**：**`baseline-20261005-native-gui-v1`**（Commit `2c219b594`，分支 `feat/issue50-native-gui-session-mode`，PR #53）
+  * **用户真机实测定调**：“虽然还有优化点，但是它依然是可用的”；
+  * **App 客户端**：全套 Opus 5.5 高保真原生对话流（`ConversationScreen`）、逆向布局防震荡、液态玻璃胶囊底栏（`ConversationDock`）、带弹簧阻尼的 `ToolCallCard`、斜杠补全 Sheet、OkLab 30套主题全色阶对比度算法（正文 $\ge 7:1$，次要 $\ge 4.5:1$）、`MainActivity` 原生分流与设置「会话展示方式」持久化；
+  * **Go 服务端**：生产 9900 端口已热更上线（**PID `22168`**，二进制 SHA-256 `dfa618a5bef5c7d578452d03e8b009af7e01ae9f0a5155aff3632e0bd6bb7707`）；支持 `conversation_v1` 协议扩展，具备协议投影瘦身引擎，并包含 7 行 `/tmp` ↔ `/private/tmp` 符号链接规范化修复（彻底消灭 5 秒超时假死）。
+  * **官方基线 APK**：`corral-app-opus-gui-baseline-8cb4caa.apk`（SHA-256 `95759945433a86d850a1e7c153cef5f5e3e64eaa7bedc04a1a7cc538a311b881`，115 提取码 `d1eni8mrsffzjx2so` / 通用 `biuhwrjodd9f083ar`）。
 
 ---
 
 ### 新任务追踪
-- **GitHub Issue #47**：[feat(notify): 一级入口展示全量通知，二级入口按当前工作区目录过滤](https://github.com/Florious95/corral-app/issues/47)
-- **目标文档**：`.team/fixed-workflow/MESSAGE-CENTER-LEVEL1-LEVEL2-FILTERING-GOAL.md`
+- **GitHub Issue #50（第二阶段：高保真深化与交互完善）**：[feat(session): 原生 GUI 会话模式全量演进（跨主流 Agent 适配与 Codex/Muse 级高保真体验）](https://github.com/Florious95/corral-app/pull/53)
+- **权威设计总卷**：`docs/contracts/04-native-gui-conversation-spec.md`
+- **视觉意象总卷**：`docs/contracts/05-codex-muse-visual-reference.md`
+- **全景攻坚提示词任务书**：`.team/fixed-workflow/OPUS-GUI-SESSION-MODE-COMPREHENSIVE-PROMPT.md`
+- **六大深化交付项**：
+  1. Skill 调用大段文本折叠卡片化；
+  2. 多行文本原子发送（保留 `\n` 不拆包）；
+  3. 回到底部按钮与手势滑到底部防抖防闪；
+  4. 顶部浮动条切换模型与思维强度（Effort）；
+  5. 原生 GUI 与真实 TUI 同 Pane 进程置换（带运行中警告弹窗）；
+  6. 双主题体系全量适配：液态玻璃（Liquid Glass）vs 现代主义（Modernism）。
 
 ---
 
