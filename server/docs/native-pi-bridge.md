@@ -36,7 +36,11 @@ control sequences. Canonical POSIX tty input silently truncates long JSON, so an
 attached, confirmed RPC tty temporarily disables only canonical input and echo.
 Signal handling and output processing remain intact. Detaching the bridge restores
 the original tty state only if the same native process still owns it; a replacement
-TUI's terminal setup is not overwritten. Daemon shutdown does not kill Pi.
+TUI's terminal setup is not overwritten. A pane-local `@corral_rpc_tty` tmux
+option journals the exact original termios and process/tty birth identity before
+adjustment. It contains no command, input or credential. A replacement daemon can
+recover that original state after SIGKILL; live owners cannot be displaced, and
+graceful restoration clears the journal. Daemon shutdown does not kill Pi.
 
 ## Switching modes
 
@@ -62,7 +66,8 @@ also produce a conservative refusal.
 
 ## Bounds and compatibility
 
-- One bridge per pane; at most 64 bridges per daemon.
+- One bridge per pane; at most 64 bridges per daemon. Accepted discovery catalogs
+  retire removed panes; workspace-only scans never retire another workspace.
 - Existing 32 MiB record, 8 MiB / 4,000-record replay and 256-record client queue
   limits remain; loss disconnects explicitly instead of returning corrupt history.
 - No bridge-specific polling loop. Discovery uses the existing listing cadence.
@@ -77,6 +82,11 @@ Pi, without making a cloud prompt:
 ISSUE56_NATIVE_ROOT=/short/project-local/path \
   go test -count=1 -race -run '^TestNativeBridgeRealPiLifecycle$' ./internal/guirpc
 ```
+
+`go test -count=1 -race -run '^TestRPCTTYCrashReattachRestoresExactOriginalState$'
+./internal/bridge` with the same environment additionally kills a separate lease
+owner and verifies exact restoration of both canonical and initially raw tty
+settings, including immediate replacement/late-cleanup ordering.
 
 The lifecycle test covers long JSON, durable history, both native modes, command
 rejection in TUI, an untouched empty session's UUID, bridge shutdown and reattach.

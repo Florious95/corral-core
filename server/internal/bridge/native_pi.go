@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
-	"golang.org/x/term"
 )
 
 // PiProcess binds native launch metadata to a foreground process and its pane.
@@ -28,6 +27,7 @@ import (
 type PiProcess struct {
 	PID, RootPID, Group int
 	TTY, Mode, Session  string
+	Started             string
 	Args                []string
 }
 
@@ -248,7 +248,11 @@ func (p *Pane) NativePi(ctx context.Context) (PiProcess, error) {
 		if mode == "interactive" {
 			mode = "tui"
 		}
-		found = PiProcess{PID: r.pid, RootPID: root, Group: r.group, TTY: tty, Mode: mode, Session: session, Args: args}
+		started, stampErr := processStamp(r.pid)
+		if stampErr != nil {
+			continue
+		}
+		found = PiProcess{PID: r.pid, RootPID: root, Group: r.group, TTY: tty, Mode: mode, Session: session, Args: args, Started: started}
 	}
 	if found.PID == 0 {
 		return found, errors.New("no native foreground Pi")
@@ -282,36 +286,24 @@ func PiCommand(process PiProcess, mode, session string) []string {
 // Restore never overwrites a replacement TUI's own terminal setup.
 func (p *Pane) RPCInput(ctx context.Context, process PiProcess) (func([]byte) error, func(), error) {
 	current, err := p.NativePi(ctx)
-	if err != nil || current.PID != process.PID || current.Mode != "rpc" {
+	if err != nil || current.PID != process.PID || current.Started != process.Started || current.TTY != process.TTY || current.Mode != "rpc" {
 		return nil, nil, errors.New("RPC process changed before attach")
 	}
 	f, err := os.OpenFile(process.TTY, os.O_RDWR|unix.O_NOCTTY|unix.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, nil, errors.New("RPC tty open failed")
 	}
-	state, err := term.GetState(int(f.Fd()))
-	if err == nil {
-		err = setRPCInput(int(f.Fd()))
-	}
+	restore, err := p.claimRPCTTY(ctx, process, f)
 	if err != nil {
 		f.Close()
-		return nil, nil, errors.New("RPC tty setup failed")
-	}
-	// Keep ISIG and stdout's line discipline intact for ordinary tmux attach.
-	restore := func() {
-		checkCtx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-		defer cancel()
-		if now, err := p.NativePi(checkCtx); err == nil && now.PID == process.PID {
-			_ = term.Restore(int(f.Fd()), state)
-		}
-		_ = f.Close()
+		return nil, nil, err
 	}
 	write := func(raw []byte) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		now, err := p.NativePi(ctx)
-		if err != nil || now.PID != process.PID || now.Mode != "rpc" {
+		if err != nil || now.PID != process.PID || now.Started != process.Started || now.TTY != process.TTY || now.Mode != "rpc" {
 			return errors.New("RPC process changed before input")
 		}
 		return p.pasteBytes(ctx, raw)
@@ -341,7 +333,7 @@ func (p *Pane) pasteBytes(ctx context.Context, raw []byte) error {
 // receives a standard native command; a dead root is respawned in the same pane.
 func (p *Pane) ReplaceNativePi(ctx context.Context, expected PiProcess, cwd string, args []string) error {
 	current, err := p.NativePi(ctx)
-	if err != nil || current.PID != expected.PID {
+	if err != nil || current.PID != expected.PID || current.Started != expected.Started {
 		return errors.New("Pi identity changed before replacement")
 	}
 	out, err := runTmux(ctx, p.socket, p.timeout, "display-message", "-p", "-t", p.target, "#{remain-on-exit}")
