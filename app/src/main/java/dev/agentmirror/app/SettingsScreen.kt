@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import android.content.Intent
 import androidx.core.content.FileProvider
+import dev.agentmirror.app.conversation.SharedPreferencesDisplayModeStore
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.diag.DiagLogViewScreen
 import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
@@ -95,6 +96,8 @@ internal fun SettingsScreen(
     var retainPaneSizeEnabled by remember {
         mutableStateOf(retainPaneSizeStore.load())
     }
+    val displayModeStore = remember { SharedPreferencesDisplayModeStore(context) }
+    var displayMode by remember { mutableStateOf(displayModeStore.load()) }
     val paired = remember { SharedPreferencesPairingConfigStore(context).load() != null }
     val buildLabel = remember {
         val info = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -147,6 +150,11 @@ internal fun SettingsScreen(
                 onRetainPaneSizeEnabledChange = { enabled ->
                     retainPaneSizeEnabled = enabled
                     retainPaneSizeStore.save(enabled)
+                },
+                displayMode = displayMode,
+                onDisplayModeChange = { mode ->
+                    displayMode = mode
+                    displayModeStore.save(mode)
                 },
                 shortcutCommands = shortcutCommands,
                 onOpenShortcutCommands = { page = SettingsPage.ShortcutCommands },

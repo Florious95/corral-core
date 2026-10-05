@@ -33,6 +33,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import android.content.Context
 import dev.agentmirror.app.conn.BinaryFrame
+import dev.agentmirror.app.conversation.ConversationCenter
+import dev.agentmirror.app.conversation.ConversationRoute
+import dev.agentmirror.app.conversation.DisplayMode
+import dev.agentmirror.app.conversation.SharedPreferencesDisplayModeStore
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.ConnectionState
@@ -100,11 +104,6 @@ fun SessionRoute(
             id
         }
     }
-    var viewModel by remember(ref) { mutableStateOf<SessionViewModel?>(null) }
-    if (viewModel == null) {
-        viewModel = remember(ref) { createSessionViewModel(ref, sessionContext) }
-    }
-    val vm = viewModel
     DisposableEffect(ref, routeOpenId) {
         onDispose {
             if (routeOpenId != null && PerfTrace.idFor(ref) == routeOpenId) {
@@ -112,6 +111,32 @@ fun SessionRoute(
             }
         }
     }
+    // 原生对话（issue #50）：进入时裁定一次，之后到达的 listing 不会把在屏视图换掉。
+    // 退回终端只有两条路：用户显式点「在终端中打开」，或该 ref 从未就绪过的能力回退。
+    var terminalForced by remember(ref) { mutableStateOf(false) }
+    val nativeConversation = remember(ref) {
+        SharedPreferencesDisplayModeStore(sessionContext).load() == DisplayMode.GUI &&
+            ConversationCenter.hub.let { it.isConversation(ref) || it.session(ref).everReady }
+    }
+    if (nativeConversation && !terminalForced) {
+        val connected = remember(ref) { ensureSessionConnection(sessionContext) != null }
+        if (!connected) {
+            ConnectionNotReady(onBack = onBack)
+            return
+        }
+        ConversationRoute(
+            ref = ref,
+            name = name,
+            onBack = onBack,
+            onOpenTerminal = { terminalForced = true },
+        )
+        return
+    }
+    var viewModel by remember(ref) { mutableStateOf<SessionViewModel?>(null) }
+    if (viewModel == null) {
+        viewModel = remember(ref) { createSessionViewModel(ref, sessionContext) }
+    }
+    val vm = viewModel
 
     if (vm == null) {
         // 连接未配置（配对层未落地）：明确提示，非静默白屏。
@@ -149,21 +174,7 @@ fun SessionRoute(
  *  internal（fix-reconnect-stale-config 同根并案）：上传基地址统一收口锁定的测试缝。
  *  [context] 为前台服务启动所需（进入会话即确保服务在运行，幂等）；纯 JVM 测试传 null。 */
 internal fun createSessionViewModel(ref: String, context: Context? = null): SessionViewModel? {
-    val manager = runCatching {
-        // connListener 传空壳：manager 已存在时被忽略；新建时包装监听把事件经 uiConnector 扇出，
-        // 本 VM 走 uiConnector 收事件（SessionViewModel.init 不自行 setListener，见其 KDoc）。
-        ServiceWire.manager(NoopUiListener)
-    }.getOrNull() ?: return null
-    // 启动连接（幂等）：manager 已存在（startPersistentConnection 已启动）时 start 为 no-op；
-    // 冷启动配对层先于本路径经 startPersistentConnection 启动，此处兜底再 start 一次。
-    manager.start()
-    // 断线时点进会话不等退避（最长 30s）：RECONNECTING 立即重拨，占位层显示重连态直到首帧。
-    ServiceWire.reconnectNow()
-    // feat-fg-service-wiring：进入会话即确保前台服务在运行（幂等）——连接与时钟泵由服务
-    // 承接（后台期间通知栏常驻 + 重连/超时裁决不依赖在屏组合）。若冷启动已启动过服务，
-    // 这里只是再投一次 onStartCommand（系统对已运行服务幂等）。Context 未注入（纯 JVM 测试）
-    // 时跳过——连接已装配，产品功能仍完整（前台服务是体验增强）。
-    context?.let(MirrorForegroundService::start)
+    val manager = ensureSessionConnection(context) ?: return null
     // 上传基地址与认证 token 均取 ServiceWire 的当前配对配置链：HTTP 上传与 WebSocket
     // 认证同源。token 只作为参数下传，禁止日志/回显；配置未落地时 manager() 已阻止建 VM。
     val fontSp = context?.let { SharedPreferencesFontSizeStore(it).load() }
@@ -217,6 +228,29 @@ internal fun createSessionViewModel(ref: String, context: Context? = null): Sess
         retainPaneSizeEnabled = retainPaneSize,
         warmSubscribe = cacheHit,
     )
+}
+
+/**
+ * 进入任一会话（终端或原生对话）共用的连接保障：取共享 manager（未配置返回 null）、启动、
+ * 断线立即重拨、确保前台服务在运行。原生对话不另开连接，全部复用这一条。
+ */
+internal fun ensureSessionConnection(context: Context?): ConnectionManager? {
+    val manager = runCatching {
+        // connListener 传空壳：manager 已存在时被忽略；新建时包装监听把事件经 uiConnector 扇出，
+        // 本 VM 走 uiConnector 收事件（SessionViewModel.init 不自行 setListener，见其 KDoc）。
+        ServiceWire.manager(NoopUiListener)
+    }.getOrNull() ?: return null
+    // 启动连接（幂等）：manager 已存在（startPersistentConnection 已启动）时 start 为 no-op；
+    // 冷启动配对层先于本路径经 startPersistentConnection 启动，此处兜底再 start 一次。
+    manager.start()
+    // 断线时点进会话不等退避（最长 30s）：RECONNECTING 立即重拨，占位层显示重连态直到首帧。
+    ServiceWire.reconnectNow()
+    // feat-fg-service-wiring：进入会话即确保前台服务在运行（幂等）——连接与时钟泵由服务
+    // 承接（后台期间通知栏常驻 + 重连/超时裁决不依赖在屏组合）。若冷启动已启动过服务，
+    // 这里只是再投一次 onStartCommand（系统对已运行服务幂等）。Context 未注入（纯 JVM 测试）
+    // 时跳过——连接已装配，产品功能仍完整（前台服务是体验增强）。
+    context?.let(MirrorForegroundService::start)
+    return manager
 }
 
 /** 连接未配置的明确等待态（halt 纪律：缺字段不猜，不静默白屏）。 */

@@ -126,7 +126,7 @@ class ConversationStateTest {
             .apply(8, 31, event("""{"type":"agent_settled"}"""))
         assertEquals("Plan it", (state.items[0] as Reasoning).text)
         assertEquals(ToolPhase.Interrupted, (state.items[1] as ToolCall).phase)
-        assertEquals("Stopped", (state.items.last() as Notice).title)
+        assertEquals("已停止", (state.items.last() as Notice).title)
         assertFalse(state.running)
     }
 

@@ -116,6 +116,8 @@ data class ConversationState(
     val stream: String? = null,
     val lastSeq: Long = 0,
     val active: ActiveMessage? = null,
+    /** Host clock minus phone clock at the last ready; ticks live elapsed times in host time. */
+    val serverSkewMs: Long = 0,
 ) {
     /** Working, but nothing on screen is visibly moving (between turns, before the first token). */
     val quietlyWorking: Boolean
@@ -170,7 +172,7 @@ data class ConversationState(
             ),
         )
         "auto_retry_end" -> if (e.bool("success") == false) {
-            copy(retry = null).notice(seq, NoticeTone.Error, "Request failed after retries", e.str("finalError").ifBlank { null })
+            copy(retry = null).notice(seq, NoticeTone.Error, "多次重试后仍然失败", e.str("finalError").ifBlank { null })
         } else {
             copy(retry = null)
         }
@@ -182,17 +184,17 @@ data class ConversationState(
                     "warning" -> NoticeTone.Warning
                     else -> NoticeTone.Info
                 },
-                e.str("message").ifBlank { "Extension notice" },
+                e.str("message").ifBlank { "扩展提示" },
             )
             "confirm", "select", "input", "editor" -> notice(
                 seq,
                 NoticeTone.Warning,
-                "An extension asked for input",
-                "${e.str("title").ifBlank { method }} — answer it in the terminal view; it was cancelled here safely.",
+                "扩展请求了确认",
+                "「${e.str("title").ifBlank { method }}」需要在终端中作答，这里已安全取消。",
             )
             else -> this
         }
-        "extension_error" -> notice(seq, NoticeTone.Error, "Extension error", e.str("error").ifBlank { null })
+        "extension_error" -> notice(seq, NoticeTone.Error, "扩展出错", e.str("error").ifBlank { null })
         "session_info_changed" -> copy(sessionName = e.str("name").ifBlank { null })
         "thinking_level_changed" -> copy(thinkingLevel = e.str("level").ifBlank { null })
         "session_reset" -> ConversationState(
@@ -231,9 +233,9 @@ data class ConversationState(
                 copy(items = bounded(base + UserTurn(key, text, images, Delivery.Delivered, message.long("timestamp") ?: ts)))
             }
             "assistant" -> copy(active = ActiveMessage(key))
-            "compactionSummary", "branchSummary" -> notice(seq, NoticeTone.Divider, "Context summarized")
+            "compactionSummary", "branchSummary" -> notice(seq, NoticeTone.Divider, "上下文已摘要")
             "custom" -> if (message.bool("display") == true) {
-                notice(seq, NoticeTone.Info, userContent(message["content"]).first.ifBlank { "Extension message" })
+                notice(seq, NoticeTone.Info, userContent(message["content"]).first.ifBlank { "扩展消息" })
             } else {
                 this
             }
@@ -357,9 +359,9 @@ data class ConversationState(
             }
         state = state.copy(items = items, active = null)
         return when (message.str("stopReason")) {
-            "error" -> state.notice(seq, NoticeTone.Error, "The model returned an error", message.str("errorMessage").ifBlank { null })
-            "aborted" -> state.notice(seq, NoticeTone.Info, "Stopped")
-            "length" -> state.notice(seq, NoticeTone.Warning, "Reply cut off at the output limit")
+            "error" -> state.notice(seq, NoticeTone.Error, "模型返回了错误", message.str("errorMessage").ifBlank { null })
+            "aborted" -> state.notice(seq, NoticeTone.Info, "已停止")
+            "length" -> state.notice(seq, NoticeTone.Warning, "回复达到输出上限被截断")
             else -> state
         }
     }
@@ -417,12 +419,12 @@ data class ConversationState(
                 done.notice(
                     seq,
                     NoticeTone.Divider,
-                    "Context compacted",
+                    "上下文已压缩",
                     if (before != null && after != null) "${tokens(before)} → ${tokens(after)} tokens" else null,
                 )
             }
             e.bool("aborted") == true -> done
-            else -> done.notice(seq, NoticeTone.Error, "Compaction failed", e.str("errorMessage").ifBlank { null })
+            else -> done.notice(seq, NoticeTone.Error, "压缩失败", e.str("errorMessage").ifBlank { null })
         }
     }
 

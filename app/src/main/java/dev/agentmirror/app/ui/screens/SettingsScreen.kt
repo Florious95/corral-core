@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.agentmirror.app.conversation.DisplayMode
 import dev.agentmirror.app.session.ShortcutCommand
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.CardOutlineButton
@@ -100,6 +101,8 @@ fun SettingsScreen(
     onInputSyncEnabledChange: (Boolean) -> Unit = {},
     retainPaneSizeEnabled: Boolean = false,
     onRetainPaneSizeEnabledChange: (Boolean) -> Unit = {},
+    displayMode: DisplayMode = DisplayMode.TUI,
+    onDisplayModeChange: (DisplayMode) -> Unit = {},
     shortcutCommands: List<ShortcutCommand> = emptyList(),
     onOpenShortcutCommands: () -> Unit = {},
     scrollState: ScrollState = rememberScrollState(),
@@ -259,6 +262,18 @@ fun SettingsScreen(
                     trailing = { SettingsValueText(appearance.label()) },
                     below = { AppearanceSegmented(selected = appearance, onSelect = onAppearanceChange) },
                 )
+                SettingsGroupDivider()
+                SettingsRow(
+                    glyph = SettingsGlyph.Conversation,
+                    title = "会话展示方式",
+                    subtitle = if (displayMode == DisplayMode.GUI) {
+                        "原生对话：在本机新建的 Pi Agent 以结构化对话呈现，消息、思考与工具调用原生渲染；其余会话仍是终端。"
+                    } else {
+                        "经典终端：所有会话都以终端镜像呈现，与之前完全一致。"
+                    },
+                    modifier = Modifier.testTag("settings-display-mode-row"),
+                    below = { DisplayModeSegmented(selected = displayMode, onSelect = onDisplayModeChange) },
+                )
             }
 
             // ── 支持 ──
@@ -417,6 +432,17 @@ private fun AppearanceSegmented(
 }
 
 /** 界面风格选择：选项、顺序与文案全部来自 [ThemeRegistry]，点选即时生效。 */
+@Composable
+private fun DisplayModeSegmented(selected: DisplayMode, onSelect: (DisplayMode) -> Unit) {
+    SettingsSegmented(
+        options = DisplayMode.entries,
+        selected = selected,
+        onSelect = onSelect,
+        label = { if (it == DisplayMode.GUI) "原生对话" else "经典终端" },
+        optionTag = { "display-mode-${it.name.lowercase()}" },
+    )
+}
+
 @Composable
 private fun ThemeSuiteSegmented(
     selected: ThemeId,

@@ -468,12 +468,32 @@ internal fun CreateAgentFormContent(
             )
         }
         error?.let {
-            androidx.compose.material3.Text(
-                "创建失败：$it",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.testTag("create-agent-error"),
-            )
+            // Soft inline notice, never a red slab: tinted container, readable body ink.
+            val tone = MaterialTheme.colorScheme.error
+            Row(
+                verticalAlignment = Alignment.Top,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedRectangle(14.dp))
+                    .background(tone.copy(alpha = 0.08f))
+                    .border(0.5.dp, tone.copy(alpha = 0.24f), RoundedRectangle(14.dp))
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .testTag("create-agent-error"),
+            ) {
+                Box(
+                    Modifier
+                        .padding(top = 6.dp)
+                        .size(6.dp)
+                        .clip(RoundedRectangle(3.dp))
+                        .background(tone),
+                )
+                androidx.compose.material3.Text(
+                    "没能创建：$it",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 10.dp),
+                )
+            }
         }
     }
 }

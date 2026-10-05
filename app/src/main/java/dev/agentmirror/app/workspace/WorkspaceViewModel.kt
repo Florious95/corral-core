@@ -142,6 +142,12 @@ class WorkspaceViewModel(
         { workspace, anchorRef, provider, name, bypass ->
             ServiceWire.managerOrNull()?.sendCreateAgent(workspace, anchorRef, provider, name, bypass)
         },
+    /**
+     * Native-conversation launch (issue #50). Returns true when it took the request (GUI display
+     * mode, Pi, host speaks conversation_v1); false falls through to the classic create_agent.
+     * The callback delivers (ok, ref, reason) on the main thread.
+     */
+    private val conversationCreateRequest: ((String, String, String, String, (Boolean, String?, String?) -> Unit) -> Boolean)? = null,
     private val closeSessionRequest: (String) -> Long? =
         { ref ->
             ServiceWire.managerOrNull()?.sendCloseSession(ref)
@@ -495,6 +501,18 @@ class WorkspaceViewModel(
     fun createAgent(anchorRef: String, provider: String, name: String, bypass: Boolean): Boolean {
         if (_uiState.value.createAgent.inFlight) return false
         val workspace = subscribedWorkspace ?: return false
+        val native = conversationCreateRequest?.invoke(workspace, anchorRef, provider, name) { ok, _, reason ->
+            if (ok) {
+                _uiState.update { it.copy(createAgent = CreateAgentUiState()) }
+                refreshLevel2()
+            } else {
+                _uiState.update { it.copy(createAgent = CreateAgentUiState(error = conversationCreateError(reason))) }
+            }
+        } == true
+        if (native) {
+            _uiState.update { it.copy(createAgent = CreateAgentUiState(inFlight = true)) }
+            return true
+        }
         val reqId = createAgentRequest(workspace, anchorRef, provider, name, bypass)
         if (reqId == null) {
             _uiState.update { it.copy(createAgent = CreateAgentUiState(error = "创建请求发送失败")) }
@@ -1043,4 +1061,14 @@ class WorkspaceViewModel(
         ConnectionState.RECONNECTING -> ConnectionUi.RECONNECTING
         ConnectionState.STOPPED -> ConnectionUi.STOPPED
     }
+}
+
+/** Human wording for conversation_create reasons; raw protocol codes never reach the dialog. */
+internal fun conversationCreateError(reason: String?): String = when (reason) {
+    "invalid_field" -> "名称不可用，请换一个名称"
+    "target_not_found" -> "这个工作区暂时找不到可用的会话，请刷新后再试"
+    "provider_unavailable" -> "主机上的 Pi 还不支持原生对话，可在设置中切回经典终端"
+    "launch_failed" -> "Pi 没能在主机上启动，请确认 pi 已安装并可运行"
+    null, "" -> "主机没有响应，请稍后重试"
+    else -> reason
 }

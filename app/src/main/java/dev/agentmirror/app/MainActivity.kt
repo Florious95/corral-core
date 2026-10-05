@@ -22,6 +22,10 @@ import android.view.WindowManager
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import dev.agentmirror.app.conversation.ConversationCenter
+import dev.agentmirror.app.conversation.ConversationSupport
+import dev.agentmirror.app.conversation.DisplayMode
+import dev.agentmirror.app.conversation.SharedPreferencesDisplayModeStore
 import dev.agentmirror.app.diag.DiagLog
 import androidx.activity.enableEdgeToEdge
 import dev.agentmirror.app.notify.NotificationCenter
@@ -128,6 +132,13 @@ class MainActivity : ComponentActivity() {
             },
             favoriteStore = SharedPreferencesFavoriteStore(this),
             pinnedWorkspaceStore = SharedPreferencesPinnedWorkspaceStore(this),
+            conversationCreateRequest = { workspace, anchorRef, provider, name, onResult ->
+                val hub = ConversationCenter.hub
+                provider == "pi" &&
+                    SharedPreferencesDisplayModeStore(this).load() == DisplayMode.GUI &&
+                    hub.support.value == ConversationSupport.Supported &&
+                    hub.create(workspace, anchorRef, provider, name, onResult)
+            },
         )
         // 069：旋转重建不是「进入菜单」，不得再发 list / 重订二级。
         if (savedInstanceState != null) {

@@ -327,7 +327,10 @@ class ConversationHub(
             } else {
                 state
             }
-            base.copy(running = payload.bool("running") == true)
+            base.copy(
+                running = payload.bool("running") == true,
+                serverSkewMs = (payload.long("server_time_ms") ?: nowMs()) - nowMs(),
+            )
         }
         s.everReady = true
         s.lostRetries = 0

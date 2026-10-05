@@ -45,6 +45,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
+import dev.agentmirror.app.conversation.ConversationWarmup
 import dev.agentmirror.app.notify.NotificationCenter
 import dev.agentmirror.app.notify.NotificationHub
 import dev.agentmirror.app.notify.NotificationRecord
@@ -102,6 +103,7 @@ fun AgentMirrorApp(
     workspaceViewModel: WorkspaceViewModel,
 ) {
     val context = LocalContext.current
+    ConversationWarmup()
     val appearanceStore = remember { SharedPreferencesAppearanceStore(context) }
     var appearance by remember { mutableStateOf(appearanceStore.load()) }
     // 界面风格与外观各自独立持久化；切换只改这份 state，整树按新令牌重组，不重建 Activity / 路由 / 会话。

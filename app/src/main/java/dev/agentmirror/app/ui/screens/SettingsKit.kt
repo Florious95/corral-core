@@ -349,6 +349,7 @@ internal enum class SettingsGlyph(val top: Color, val bottom: Color) {
     Appearance(Color(0xFFFBBF24), Color(0xFFEA8A0B)),
     Logs(Color(0xFF94A3B8), Color(0xFF64748B)),
     Style(Color(0xFF4ADE80), Color(0xFF16A34A)),
+    Conversation(Color(0xFF818CF8), Color(0xFF4F46E5)),
 }
 
 @Composable
@@ -463,6 +464,26 @@ private fun DrawScope.drawGlyph(glyph: SettingsGlyph, ink: Color) {
             drawRect(ink, Offset(w * 0.56f, h * 0.08f), Size(w * 0.36f, h * 0.36f), style = stroke)
             drawRect(ink, Offset(w * 0.08f, h * 0.56f), Size(w * 0.36f, h * 0.36f), style = stroke)
             drawRect(ink, Offset(w * 0.56f, h * 0.56f), Size(w * 0.36f, h * 0.36f), style = stroke)
+        }
+        // 对话气泡 + 两行文字：原生对话
+        SettingsGlyph.Conversation -> {
+            val bubble = Path().apply {
+                moveTo(w * 0.22f, h * 0.12f)
+                lineTo(w * 0.78f, h * 0.12f)
+                quadraticTo(w * 0.94f, h * 0.12f, w * 0.94f, h * 0.28f)
+                lineTo(w * 0.94f, h * 0.58f)
+                quadraticTo(w * 0.94f, h * 0.74f, w * 0.78f, h * 0.74f)
+                lineTo(w * 0.42f, h * 0.74f)
+                lineTo(w * 0.22f, h * 0.92f)
+                lineTo(w * 0.24f, h * 0.74f)
+                quadraticTo(w * 0.06f, h * 0.72f, w * 0.06f, h * 0.56f)
+                lineTo(w * 0.06f, h * 0.28f)
+                quadraticTo(w * 0.06f, h * 0.12f, w * 0.22f, h * 0.12f)
+                close()
+            }
+            drawPath(bubble, ink, style = stroke)
+            polyline(0.28f to 0.36f, 0.72f to 0.36f)
+            polyline(0.28f to 0.52f, 0.56f to 0.52f)
         }
         SettingsGlyph.Font -> Unit
     }

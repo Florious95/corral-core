@@ -607,7 +607,7 @@ object TermPalette {
     }
 
     /** OkLab → 不透明 sRGB：保持 L 与 [hue] 的色相方向，超出 sRGB 时只收彩度。 */
-    private fun fromOkLab(L: Double, hue: OkLab, chroma: Double): Int {
+    internal fun fromOkLab(L: Double, hue: OkLab, chroma: Double): Int {
         val n = hypot(hue.a, hue.b)
         val ua = if (n > 0) hue.a / n else 0.0
         val ub = if (n > 0) hue.b / n else 0.0
@@ -663,7 +663,7 @@ object TermPalette {
         return 0.2126 * r + 0.7152 * g + 0.0722 * b
     }
 
-    private fun contrast(a: Int, b: Int): Double {
+    internal fun contrast(a: Int, b: Int): Double {
         val l1 = relativeLuma(a)
         val l2 = relativeLuma(b)
         val hi = max(l1, l2)
