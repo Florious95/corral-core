@@ -166,6 +166,9 @@ type Session struct {
 	Status      string  `json:"status"`
 	Rows        uint16  `json:"rows"`
 	Cols        uint16  `json:"cols"`
+	// Conversation marks a managed structured-agent pane that accepts
+	// conversation_subscribe (conversation_v1). Absent means terminal only.
+	Conversation bool `json:"conversation,omitempty"`
 }
 
 // Closed set for Session.Status (requirement 061). Unknown glyphs stay

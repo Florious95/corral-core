@@ -137,6 +137,22 @@ func decodePayload(env Envelope) (Typed, error) {
 		return decodeTyped[NotificationsSync](env)
 	case TypeNotificationsPage:
 		return decodeTyped[NotificationsPage](env)
+	case TypeConversationCreate:
+		return decodeTyped[ConversationCreate](env)
+	case TypeConversationCreated:
+		return decodeTyped[ConversationCreated](env)
+	case TypeConversationSubscribe:
+		return decodeTyped[ConversationSubscribe](env)
+	case TypeConversationUnsubscribe:
+		return decodeTyped[ConversationUnsubscribe](env)
+	case TypeConversationCommand:
+		return decodeTyped[ConversationCommand](env)
+	case TypeConversationReady:
+		return decodeTyped[ConversationReady](env)
+	case TypeConversationEvent:
+		return decodeTyped[ConversationEvent](env)
+	case TypeConversationClosed:
+		return decodeTyped[ConversationClosed](env)
 	// TypePaneModeChanged is S→C only; a client sending it is a protocol error.
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnknownType, env.Type)

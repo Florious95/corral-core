@@ -225,6 +225,9 @@ type Observation struct {
 	Provider, Activity string
 	SessionName        *string
 	Health             string
+	// Conversation is an API-layer annotation, never sampled by nodeprobe:
+	// the pane is a managed structured-agent worker (conversation_v1).
+	Conversation bool
 }
 
 // Unknown returns the honest four-axis result for a zero/duplicate join.

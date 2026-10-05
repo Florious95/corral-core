@@ -348,6 +348,7 @@ func (q *workspaceCoordinator) scan(job *workspaceJob) (result workspaceResult) 
 		result.err = err
 		return
 	}
+	q.s.identifyConversationWorkers(scoped, observations)
 	if q.s.filterAgents {
 		scoped = filterModelToIdentifiedAgents(scoped, observations)
 	}

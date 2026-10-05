@@ -43,6 +43,8 @@ func sessionFromPane(p discovery.Pane, observation nodeprobe.Observation) protoc
 		Status:      observation.Activity,
 		Rows:        uint16(p.Height),
 		Cols:        uint16(p.Width),
+
+		Conversation: observation.Conversation,
 	}
 }
 

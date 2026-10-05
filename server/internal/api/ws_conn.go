@@ -64,6 +64,12 @@ type wsConn struct {
 	// except auth is refused with error: unauthorized.
 	authed           atomic.Bool
 	notificationsCap atomic.Bool
+	conversationCap  atomic.Bool
+
+	// convSubs are this connection's managed-conversation streams
+	// (conversation.go), torn down with the connection.
+	convMu   sync.Mutex
+	convSubs map[string]*conversationSub
 
 	notificationViewsMu sync.Mutex
 	notificationViews   map[string]notify.View
@@ -202,6 +208,7 @@ func (s *Server) serveConn(conn *websocket.Conn) {
 		staleBefore: make(map[string]uint64),
 
 		notificationViews: make(map[string]notify.View),
+		convSubs:          make(map[string]*conversationSub),
 	}
 	s.trackersMu.Lock()
 	init := s.connInit
@@ -487,6 +494,7 @@ func (c *wsConn) teardown() {
 	for _, sub := range subs {
 		teardownSubscription(sub)
 	}
+	c.closeConversations()
 	c.s.unregisterTracker(c)
 }
 
@@ -735,6 +743,21 @@ func (c *wsConn) handleFrame(data []byte, recvMS int64) bool {
 			break
 		}
 		c.handleNotificationsSync(t)
+	case protocol.ConversationCreate, protocol.ConversationSubscribe, protocol.ConversationUnsubscribe, protocol.ConversationCommand:
+		if !c.conversationCap.Load() {
+			c.sendError(protocol.ErrCodeUnsupportedType, "conversation capability not negotiated")
+			break
+		}
+		switch t := t.(type) {
+		case protocol.ConversationCreate:
+			c.handleConversationCreate(t)
+		case protocol.ConversationSubscribe:
+			c.handleConversationSubscribe(t)
+		case protocol.ConversationUnsubscribe:
+			c.handleConversationUnsubscribe(t)
+		case protocol.ConversationCommand:
+			c.handleConversationCommand(t)
+		}
 	default:
 		// auth_ack, create_agent_result, close_session_result, listing, list_delta,
 		// input_ack, error, pane_mode_changed, level2_frame, level2_heartbeat,

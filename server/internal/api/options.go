@@ -136,6 +136,10 @@ type Options struct {
 	// $HOME/Downloads/agentmirror-uploads (created on demand; last-good).
 	UploadDir string
 
+	// GUIDir holds private managed-agent sockets and run-state files
+	// (guirpc.Dir). Empty disables conversation_v1.
+	GUIDir string
+
 	// MaxUploadBytes caps a single uploaded file. Zero defaults to 20 MiB.
 	MaxUploadBytes int64
 

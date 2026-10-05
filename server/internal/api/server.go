@@ -152,6 +152,8 @@ type Server struct {
 	// AuthAck and used by create_agent. It is computed once so a client cannot
 	// request arbitrary executables or unverified flags.
 	agentLaunchers []agentLauncher
+	// guiDir is the private guirpc socket directory; "" disables conversation_v1.
+	guiDir string
 
 	notifications *notify.Store
 }
@@ -201,6 +203,7 @@ func NewServer(opts Options) *Server {
 		discoverer:      opts.Discoverer,
 		listInterval:    opts.ListInterval,
 		uploadDir:       opts.UploadDir,
+		guiDir:          opts.GUIDir,
 		maxUpload:       opts.MaxUploadBytes,
 		maxUploadDir:    defaultMaxUploadDirBytes,
 		maxInput:        opts.MaxInputBytes,

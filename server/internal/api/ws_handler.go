@@ -98,13 +98,21 @@ func (c *wsConn) handleAuth(a protocol.Auth) bool {
 					ack.Capabilities = append(ack.Capabilities, capability)
 					ack.NotificationState = ptrNotificationState(c.s.notifications.State())
 				}
+				if capability == protocol.ConversationCapability && c.s.guiDir != "" {
+					ack.Capabilities = append(ack.Capabilities, capability)
+				}
 			}
 		}
 		// Queue auth_ack before exposing the capability to the broadcaster: a
 		// concurrent local publish must never overtake the handshake verdict.
 		c.send(ack)
-		if len(ack.Capabilities) > 0 {
-			c.notificationsCap.Store(true)
+		for _, capability := range ack.Capabilities {
+			switch capability {
+			case "notifications_v1":
+				c.notificationsCap.Store(true)
+			case protocol.ConversationCapability:
+				c.conversationCap.Store(true)
+			}
 		}
 		return true
 	}

@@ -21,6 +21,7 @@
 // The internal modules it imports are declared as the dependency surface
 // below so the architecture wiki can derive the graph from code.
 // @consumes internal/config
+// @consumes internal/guirpc
 // @consumes internal/pairing
 // @consumes internal/nodeprobe
 // @consumes internal/tsnetd
@@ -45,6 +46,7 @@ import (
 
 	"github.com/agentmirror/agentmirror/internal/api"
 	"github.com/agentmirror/agentmirror/internal/config"
+	"github.com/agentmirror/agentmirror/internal/guirpc"
 	"github.com/agentmirror/agentmirror/internal/nodeprobe"
 	"github.com/agentmirror/agentmirror/internal/notify"
 	"github.com/agentmirror/agentmirror/internal/pairing"
@@ -70,6 +72,17 @@ func main() {
 // @err 配置加载失败、状态目录解析失败、单实例锁被占、token/host_id 解析失败、LAN 监听器打开失败、引导打印失败、serve 非 ErrServerClosed 失败返回 1；tailnet Up/ListenTailnet 失败仅降级为 LAN 并记录安全诊断
 // @inv 单实例守卫在整个 run 生命周期持有；token 值永不落日志
 func run(args []string) int {
+	// gui-worker runs inside a pane created by conversation_create; it is not a
+	// daemon instance and never touches the daemon's pidfile, token or ports.
+	if len(args) == 3 && args[0] == "gui-worker" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+		defer stop()
+		if err := guirpc.Run(ctx, args[1], args[2]); err != nil && !errors.Is(err, context.Canceled) {
+			fmt.Fprintln(os.Stderr, "structured agent stopped:", err)
+			return 1
+		}
+		return 0
+	}
 	cfg, err := config.Load(args)
 	if err != nil {
 		// A help request is a clean exit, not a failure: the flag package
@@ -173,6 +186,7 @@ func run(args []string) int {
 		ListenPort:     portNumber(port),
 		Token:          token,
 		UploadDir:      cfg.UploadDir,
+		GUIDir:         guirpc.Dir(stateDir),
 		MaxUploadBytes: cfg.MaxUploadBytes,
 		MaxInputBytes:  int(cfg.MaxInputBytes),
 		RetainPaneSize: cfg.RetainPaneSize,

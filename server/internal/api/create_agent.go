@@ -1,11 +1,15 @@
 package api
 
 import (
+	"context"
+	"os"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
+	"github.com/agentmirror/agentmirror/internal/guirpc"
 	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
@@ -98,41 +102,62 @@ func createAgentResult(reqID uint32, ok bool, ref, name, naming string, reason p
 // All semantic failures use a typed create_agent_result and expose no command
 // output or environment details.
 func (c *wsConn) handleCreateAgent(req protocol.CreateAgent) {
-	fail := func(reason protocol.CreateAgentReason) {
-		result := createAgentResult(req.ReqID, false, "", "", "", reason)
-		c.send(&result)
+	result := c.s.createAgent(c.ctx, req, false)
+	c.send(&result)
+}
+
+// createAgent is shared by create_agent and conversation_create. A structured
+// launch runs this daemon's guirpc worker in the new pane instead of the
+// provider TUI and waits until the worker serves its private socket.
+func (s *Server) createAgent(ctx context.Context, req protocol.CreateAgent, structured bool) protocol.CreateAgentResult {
+	fail := func(reason protocol.CreateAgentReason) protocol.CreateAgentResult {
+		return createAgentResult(req.ReqID, false, "", "", "", reason)
 	}
 	if req.Workspace == "" || !validateAgentName(req.Name) || req.Provider == "" || req.AnchorRef == "" {
-		fail(protocol.CreateAgentInvalidField)
-		return
+		return fail(protocol.CreateAgentInvalidField)
 	}
-	launcher, ok := c.s.launcher(req.Provider)
-	if !ok {
-		fail(protocol.CreateAgentProviderUnavailable)
-		return
+	launcher, ok := s.launcher(req.Provider)
+	if !ok || (structured && (req.Provider != "pi" || s.guiDir == "")) {
+		return fail(protocol.CreateAgentProviderUnavailable)
 	}
 	if req.Bypass && !launcher.SupportsBypass {
-		fail(protocol.CreateAgentUnsupportedBypass)
-		return
+		return fail(protocol.CreateAgentUnsupportedBypass)
 	}
 
-	entry := c.s.catalogEntry(req.AnchorRef)
+	entry := s.catalogEntry(req.AnchorRef)
 	if entry == nil || entry.ref != req.AnchorRef || entry.pane.CWD != req.Workspace || entry.pane.Socket == "" || entry.pane.Session == "" {
-		fail(protocol.CreateAgentTargetNotFound)
-		return
+		return fail(protocol.CreateAgentTargetNotFound)
 	}
 
 	args := agentCommand(launcher, req.Name, req.Bypass)
-	paneID, err := bridge.CreateWindow(c.ctx, entry.pane.Socket, entry.pane.Session, entry.pane.CWD, req.Name, args)
+	if structured {
+		executable, err := os.Executable()
+		if err != nil {
+			return fail(protocol.CreateAgentLaunchFailed)
+		}
+		args = []string{executable, "gui-worker", s.guiDir, req.Name}
+	}
+	paneID, err := bridge.CreateWindow(ctx, entry.pane.Socket, entry.pane.Session, entry.pane.CWD, req.Name, args)
 	if err != nil {
-		c.logErr("create agent", err)
-		fail(protocol.CreateAgentLaunchFailed)
-		return
+		s.log.Debug("ws: create agent", "structured", structured, "err", err)
+		return fail(protocol.CreateAgentLaunchFailed)
+	}
+	ref := entry.pane.Socket + "\x1f" + paneID
+	if structured {
+		startup, cancel := context.WithTimeout(ctx, structuredStartupTimeout)
+		err := guirpc.WaitReady(startup, s.guiDir, ref)
+		cancel()
+		if err != nil {
+			s.log.Warn("ws: structured agent not ready", "timeout_ms", structuredStartupTimeout.Milliseconds(), "err", err)
+			_ = bridge.KillPane(entry.pane.Socket, paneID)
+			return fail(protocol.CreateAgentLaunchFailed)
+		}
 	}
 	// The scan coordinator is already the sole owner of catalog publication and
 	// fan-out. Wake it instead of scanning inline or maintaining a second path.
-	c.s.scans.cadence()
-	ref := entry.pane.Socket + "\x1f" + paneID
-	result := createAgentResult(req.ReqID, true, ref, req.Name, launcher.Naming, "")
-	c.send(&result)
+	s.scans.cadence()
+	return createAgentResult(req.ReqID, true, ref, req.Name, launcher.Naming, "")
 }
+
+// structuredStartupTimeout bounds how long create waits for the worker socket.
+const structuredStartupTimeout = 5 * time.Second

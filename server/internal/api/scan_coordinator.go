@@ -299,6 +299,7 @@ func (q *scanCoordinator) scan(ctx context.Context, g *catalogGeneration) catalo
 		result.err = fmt.Errorf("api: nodeprobe: %w", err)
 		return result
 	}
+	q.s.identifyConversationWorkers(model, observations)
 	if q.s.filterAgents {
 		model = filterModelToIdentifiedAgents(model, observations)
 	}
