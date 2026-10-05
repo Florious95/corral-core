@@ -59,6 +59,13 @@ func Dir(stateDir string) string {
 }
 
 func baseName(ref string) string {
+	// Canonicalize only the private IPC key: discovery may use /tmp while
+	// TMUX uses /private/tmp. Public refs and their pane identity stay intact.
+	if socket, pane, ok := strings.Cut(ref, "\x1f"); ok {
+		if canonical, err := filepath.EvalSymlinks(socket); err == nil {
+			ref = canonical + "\x1f" + pane
+		}
+	}
 	sum := sha256.Sum256([]byte(ref))
 	return hex.EncodeToString(sum[:8])
 }
