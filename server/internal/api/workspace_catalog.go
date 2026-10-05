@@ -32,6 +32,7 @@ func (s *Server) publishWorkspaceCatalog(cwd string, started time.Time, catalog 
 		return
 	}
 	s.workspaceCatalogs[cwd] = workspaceCatalog{started: started, catalog: catalog}
+	s.pruneNativeBridgesLocked(cwd, started)
 }
 
 // A global scan that started BEFORE a scoped refresh cannot resurrect removed
@@ -44,6 +45,34 @@ func (s *Server) pruneWorkspaceCatalogsLocked(started time.Time) {
 			delete(s.workspaceCatalogs, cwd)
 		}
 	}
+	s.pruneNativeBridgesLocked("", started)
+}
+
+// Only accepted publications retire native bridges. Scoped inventories cover
+// their own cwd; global inventories honor fresher workspace overlays. Caller
+// holds snapMu so a rejected/stale generation can never cancel a live ref.
+func (s *Server) pruneNativeBridgesLocked(cwd string, started time.Time) {
+	if s.conversations == nil {
+		return
+	}
+	keep := make(map[string]struct{})
+	if cwd != "" {
+		for _, entry := range s.workspaceCatalogs[cwd].catalog.list() {
+			keep[entry.ref] = struct{}{}
+		}
+	} else {
+		for _, entry := range s.catalog.list() {
+			if _, covered := s.workspaceCatalogs[entry.pane.CWD]; !covered {
+				keep[entry.ref] = struct{}{}
+			}
+		}
+		for _, scoped := range s.workspaceCatalogs {
+			for _, entry := range scoped.catalog.list() {
+				keep[entry.ref] = struct{}{}
+			}
+		}
+	}
+	s.conversations.Prune(cwd, started, keep)
 }
 
 func (s *Server) scopedCatalogEntryLocked(ref string) (*sessionEntry, bool) {

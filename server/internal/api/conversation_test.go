@@ -80,6 +80,7 @@ func (f *fakeConversations) Activity(ref string) string {
 	}
 	return ""
 }
+func (f *fakeConversations) Prune(_ string, _ time.Time, _ map[string]struct{}) {}
 func (f *fakeConversations) Close() {
 	f.mu.Lock()
 	defer f.mu.Unlock()

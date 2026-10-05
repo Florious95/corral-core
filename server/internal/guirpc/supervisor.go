@@ -38,6 +38,7 @@ type Transport interface {
 	Detect(context.Context, discovery.Pane) bool
 	Available(string) bool
 	Activity(string) string
+	Prune(string, time.Time, map[string]struct{})
 	Close()
 }
 
@@ -123,7 +124,7 @@ func (m *Manager) Open(ctx context.Context, p discovery.Pane) (net.Conn, error) 
 			return nil, errors.New("native bridge capacity unavailable")
 		}
 		live, cancel := context.WithCancel(m.ctx)
-		s = &session{ctx: live, cancel: cancel, pane: p, bridge: bridge.NewPane(p.Socket, p.PaneID), ready: make(chan struct{}), done: make(chan struct{}), w: newWorker(nil)}
+		s = &session{ctx: live, cancel: cancel, pane: p, created: time.Now(), bridge: bridge.NewPane(p.Socket, p.PaneID), ready: make(chan struct{}), done: make(chan struct{}), w: newWorker(nil)}
 		s.w.onSwitch = s.switchTo
 		m.sessions[ref] = s
 		go s.start()
@@ -145,6 +146,31 @@ func (m *Manager) Open(ctx context.Context, p discovery.Pane) (net.Conn, error) 
 	client, server := net.Pipe()
 	go s.w.serve(s.ctx, server)
 	return client, nil
+}
+
+// Prune retires refs absent from an accepted inventory, not from a partial
+// scan of another workspace. A pane opened after the inventory started is
+// not evidence of deletion. Cleanup finishes before its capacity is reused.
+func (m *Manager) Prune(cwd string, before time.Time, keep map[string]struct{}) {
+	m.mu.Lock()
+	var retired []*session
+	for ref, s := range m.sessions {
+		if cwd != "" && s.pane.CWD != cwd || s.created.After(before) {
+			continue
+		}
+		if _, live := keep[ref]; live {
+			continue
+		}
+		delete(m.sessions, ref)
+		retired = append(retired, s)
+	}
+	m.mu.Unlock()
+	for _, s := range retired {
+		s.cancel()
+	}
+	for _, s := range retired {
+		<-s.done
+	}
 }
 
 func (m *Manager) Close() {
@@ -172,6 +198,7 @@ type session struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	pane         discovery.Pane
+	created      time.Time
 	bridge       *bridge.Pane
 	w            *worker
 	ready        chan struct{}
