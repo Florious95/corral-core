@@ -28,6 +28,7 @@ import dev.agentmirror.app.conn.ListingFrame
 import dev.agentmirror.app.conn.TransportFactory
 import dev.agentmirror.app.conn.TransportListener
 import dev.agentmirror.app.conn.WebSocketTransport
+import dev.agentmirror.app.conversation.ConversationCenter
 import dev.agentmirror.app.notify.NotificationCenter
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.tsnet.TsnetWire
@@ -305,8 +306,9 @@ object ServiceWire {
             if (m != null) return m
             val created = ConnectionManager(
                 config = cfg,
-                // notifications_v1：同一条持久 WebSocket 上声明能力 / 截获通知帧（Core 不认识新 type）。
-                transportFactory = NotificationCenter.wrap(transportFactory),
+                // notifications_v1 / conversation_v1：同一条持久 WebSocket 上声明能力、截获各自的帧
+                // （Core 不认识新 type）。原生对话不另开连接，继承本连接的选路、心跳与重连。
+                transportFactory = NotificationCenter.wrap(ConversationCenter.wrap(transportFactory)),
                 dialCoordinator = hostCoordinator(cfg),
                 beforeGeneration = { dev.agentmirror.app.tsnet.TsnetWire.applyPendingKey() },
                 onReadyTarget = { target ->
