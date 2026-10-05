@@ -182,10 +182,12 @@ fun ConversationDock(
     )
     val auxPresent by remember { derivedStateOf { progress.value > 0f } }
     val oneLine = with(LocalDensity.current) { (BodyStyle.lineHeight.toPx() + 16.dp.toPx()).roundToInt() }
+    val look = LocalConversationLook.current
     Column(
         modifier
             .fillMaxWidth()
-            .frostedGlass(backdrop, RoundedRectangle(26.dp), p)
+            // Modernism: the screen lays a full-bleed ruled bar under the dock instead.
+            .then(if (look.glass) Modifier.panelSurface(look, backdrop, 26.dp, p) else Modifier)
             .testTag("conversation-dock"),
     ) {
         if (auxPresent) {
@@ -281,12 +283,14 @@ private fun DockChip(glyph: Glyph, label: String, p: ConversationPalette, active
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.94f else 1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium), label = "chip-press")
     val fill by animateColorAsState(if (active) p.accent.copy(alpha = 0.16f) else p.ink.copy(alpha = 0.05f), tween(160), label = "chip-fill")
+    val look = LocalConversationLook.current
     Row(
         Modifier
             .height(32.dp)
             .scale(scale)
-            .clip(Capsule())
+            .clip(look.pill())
             .background(fill)
+            .then(if (look.sharp) Modifier.border(look.hairline, if (active) p.accent else p.rule, look.pill()) else Modifier)
             .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
             .padding(start = 10.dp, end = 12.dp)
             .testTag(tag),
@@ -318,7 +322,7 @@ private fun SendButton(action: DockAction, p: ConversationPalette, onSend: () ->
         Modifier
             .size(40.dp)
             .scale(scale)
-            .clip(Capsule())
+            .clip(LocalConversationLook.current.pill())
             .background(fill)
             .clickable(interactionSource = interaction, indication = null, enabled = action != DockAction.Disabled) {
                 if (action == DockAction.Stop) onStop() else onSend()
@@ -350,7 +354,7 @@ private fun DockIconButton(glyph: Glyph, p: ConversationPalette, active: Boolean
         Modifier
             .size(40.dp)
             .scale(scale)
-            .clip(Capsule())
+            .clip(LocalConversationLook.current.pill())
             .background(fill)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .testTag(tag),
@@ -362,7 +366,8 @@ private fun DockIconButton(glyph: Glyph, p: ConversationPalette, active: Boolean
 
 @Composable
 private fun ImageChip(image: PendingImage, onRemove: (Long) -> Unit, p: ConversationPalette) {
-    val shape = RoundedRectangle(12.dp)
+    val look = LocalConversationLook.current
+    val shape = look.shape(12.dp)
     Box(Modifier.size(52.dp)) {
         Box(Modifier.size(48.dp).padding(top = 4.dp).clip(shape).background(p.code).border(0.5.dp, p.surfaceStroke, shape)) {
             image.preview?.let {
@@ -383,7 +388,7 @@ private fun ImageChip(image: PendingImage, onRemove: (Long) -> Unit, p: Conversa
             Modifier
                 .align(Alignment.TopEnd)
                 .size(20.dp)
-                .clip(Capsule())
+                .clip(look.pill())
                 .background(p.ink)
                 .clickable { onRemove(image.id) },
             contentAlignment = Alignment.Center,
@@ -408,12 +413,12 @@ internal fun ComposerSheetOverlay(sheet: ComposerSheet, entries: List<SheetEntry
 
 @Composable
 private fun ComposerSheetPanel(entries: List<SheetEntry>, onEntry: (SheetEntry) -> Unit, backdrop: Backdrop, p: ConversationPalette, modifier: Modifier = Modifier) {
-    val shape = RoundedRectangle(22.dp)
+    val look = LocalConversationLook.current
     LazyColumn(
         modifier
             .fillMaxWidth()
             .heightIn(max = 300.dp)
-            .frostedGlass(backdrop, shape, p)
+            .panelSurface(look, backdrop, 22.dp, p)
             .testTag("conversation-sheet"),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(6.dp),
     ) {
@@ -423,7 +428,7 @@ private fun ComposerSheetPanel(entries: List<SheetEntry>, onEntry: (SheetEntry) 
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedRectangle(16.dp))
+                    .clip(look.shape(16.dp))
                     .background(if (pressed) p.accent.copy(alpha = 0.12f) else Color.Transparent)
                     .clickable(interactionSource = interaction, indication = null) { onEntry(entry) }
                     .padding(horizontal = 8.dp, vertical = 8.dp)
@@ -431,7 +436,7 @@ private fun ComposerSheetPanel(entries: List<SheetEntry>, onEntry: (SheetEntry) 
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    Modifier.size(32.dp).clip(RoundedRectangle(10.dp)).background(p.ink.copy(alpha = 0.06f)),
+                    Modifier.size(32.dp).clip(look.shape(10.dp)).background(p.ink.copy(alpha = 0.06f)),
                     contentAlignment = Alignment.Center,
                 ) { GlyphIcon(entry.glyph, p.accentInk, 16.dp) }
                 Column(Modifier.weight(1f).padding(start = 11.dp)) {
@@ -465,7 +470,7 @@ fun GlassCircleButton(glyph: Glyph, p: ConversationPalette, backdrop: Backdrop, 
         Modifier
             .size(size)
             .scale(scale)
-            .frostedGlass(backdrop, Capsule(), p)
+            .panelSurface(LocalConversationLook.current, backdrop, null, p)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .testTag(tag),
         contentAlignment = Alignment.Center,

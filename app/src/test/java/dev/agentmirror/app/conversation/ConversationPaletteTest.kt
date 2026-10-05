@@ -56,6 +56,10 @@ class ConversationPaletteTest {
                     Triple("ink/glass", p.ink, glassOverCanvas) to ConversationPalette.TEXT_MIN,
                     Triple("inkSoft/glass", p.inkSoft, glassOverCanvas) to ConversationPalette.TEXT_MIN,
                     Triple("accent/canvas (UI)", p.accent, p.canvas) to 3.0,
+                    Triple("ink/panel", p.ink, p.panel) to ConversationPalette.TEXT_MIN,
+                    Triple("ink/panelEnd", p.ink, p.panelEnd) to ConversationPalette.TEXT_MIN,
+                    Triple("inkSoft/panelEnd", p.inkSoft, p.panelEnd) to ConversationPalette.TEXT_MIN,
+                    Triple("accentInk/panelEnd", p.accentInk, p.panelEnd) to 3.0,
                 )
                 for ((pair, min) in pairs) {
                     val (name, fg, bg) = pair
@@ -66,7 +70,7 @@ class ConversationPaletteTest {
             }
         }
         assertTrue("checked=$checked\n" + failures.joinToString("\n"), failures.isEmpty())
-        assertTrue(checked >= 30 * 2 * 15)
+        assertTrue(checked >= 30 * 2 * 19)
     }
 
     @Test

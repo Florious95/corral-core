@@ -115,7 +115,7 @@ internal fun ModelPicker(
                 Modifier
                     .widthIn(max = 520.dp)
                     .fillMaxWidth()
-                    .frostedGlass(backdrop, RoundedRectangle(24.dp), p)
+                    .panelSurface(LocalConversationLook.current, backdrop, 24.dp, p)
                     .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 16.dp)
                     .testTag("conversation-model-picker"),
             ) {
@@ -123,7 +123,7 @@ internal fun ModelPicker(
                 val models = state.models
                 when {
                     models == null -> Row(Modifier.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Breathing(true) { a -> Box(Modifier.size(7.dp).clip(Capsule()).background(p.accent.copy(alpha = a))) }
+                        Breathing(true) { a -> Box(Modifier.size(7.dp).clip(lookPill()).background(p.accent.copy(alpha = a))) }
                         Text("正在读取可用模型…", style = CaptionStyle.copy(color = p.inkSoft, fontSize = 12.5.sp), modifier = Modifier.padding(start = 8.dp))
                     }
                     models.isEmpty() -> Text(
@@ -182,7 +182,7 @@ private fun Eyebrow(text: String, p: ConversationPalette) {
 private fun ModelChip(choice: ModelChoice, current: Boolean, pending: Boolean, p: ConversationPalette, onClick: () -> Unit) {
     val fill by animateColorAsState(if (current) p.accent else p.ink.copy(alpha = 0.06f), tween(180), label = "model-fill")
     val ink = if (current) p.onAccent else p.ink
-    val shape = Capsule()
+    val shape = lookPill()
     Row(
         Modifier
             .heightIn(min = 36.dp)
@@ -197,7 +197,7 @@ private fun ModelChip(choice: ModelChoice, current: Boolean, pending: Boolean, p
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         when {
-            pending -> Breathing(true) { a -> Box(Modifier.size(6.dp).clip(Capsule()).background(p.accent.copy(alpha = a))) }
+            pending -> Breathing(true) { a -> Box(Modifier.size(6.dp).clip(lookPill()).background(p.accent.copy(alpha = a))) }
             current -> GlyphIcon(Glyph.Check, ink, 13.dp)
         }
         Text(choice.name, style = LabelStyle.copy(color = ink, fontSize = 13.sp, fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -213,7 +213,7 @@ private fun Segmented(levels: List<String>, selected: String?, pending: Boolean,
         modifier
             .fillMaxWidth()
             .height(38.dp)
-            .clip(Capsule())
+            .clip(lookPill())
             .background(p.ink.copy(alpha = 0.06f))
             .padding(3.dp)
             .testTag("conversation-thinking"),
@@ -226,7 +226,7 @@ private fun Segmented(levels: List<String>, selected: String?, pending: Boolean,
                     .offset(x = x)
                     .width(segment)
                     .fillMaxHeight()
-                    .clip(Capsule())
+                    .clip(lookPill())
                     .background(if (pending) p.accent.copy(alpha = 0.55f) else p.accent),
             )
         }
@@ -237,7 +237,7 @@ private fun Segmented(levels: List<String>, selected: String?, pending: Boolean,
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(Capsule())
+                        .clip(lookPill())
                         .clickable(enabled = !on && !pending, interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(level) }
                         .testTag("conversation-thinking-$level"),
                     contentAlignment = Alignment.Center,

@@ -135,7 +135,7 @@ fun UserBubble(turn: UserTurn, p: ConversationPalette, expanded: Boolean, onTogg
 
 @Composable
 private fun UserText(text: String, p: ConversationPalette, folded: Boolean, onToggle: (() -> Unit)?, modifier: Modifier = Modifier, lines: Int = 0) {
-    val shape = RoundedRectangle(22.dp)
+    val shape = lookShape(22.dp)
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Spacer(Modifier.weight(0.14f))
         Column(
@@ -143,7 +143,10 @@ private fun UserText(text: String, p: ConversationPalette, folded: Boolean, onTo
                 .weight(0.86f, fill = false)
                 .clip(shape)
                 .background(p.userBubble)
-                .border(0.6.dp, Brush.verticalGradient(listOf(p.surfaceGlint, Color.Transparent)), shape)
+                .then(
+                    if (LocalConversationLook.current.glass) Modifier.border(0.6.dp, Brush.verticalGradient(listOf(p.surfaceGlint, Color.Transparent)), shape)
+                    else Modifier.border(LocalConversationLook.current.hairline, p.rule, shape),
+                )
                 .animateContentSize(disclosureSpring())
                 .padding(horizontal = 15.dp, vertical = 10.dp)
                 .testTag("conversation-user"),
@@ -162,7 +165,7 @@ private fun UserText(text: String, p: ConversationPalette, folded: Boolean, onTo
                     style = CaptionStyle.copy(color = p.userInk.copy(alpha = 0.72f), fontWeight = FontWeight.SemiBold),
                     modifier = Modifier
                         .padding(top = 6.dp)
-                        .clip(Capsule())
+                        .clip(lookPill())
                         .clickable(onClick = onToggle)
                         .padding(vertical = 4.dp)
                         .testTag("conversation-user-fold"),
@@ -179,7 +182,7 @@ private fun UserText(text: String, p: ConversationPalette, folded: Boolean, onTo
  */
 @Composable
 fun SkillCard(skill: SkillBlock, p: ConversationPalette, expanded: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
-    val shape = RoundedRectangle(20.dp)
+    val shape = lookShape(20.dp)
     val chevron by animateFloatAsState(if (expanded) 180f else 0f, disclosureSpring(), label = "skill-chevron")
     val lines = remember(skill.content) { if (skill.content.isEmpty()) 0 else skill.content.count { it == '\n' } + 1 }
     val summary = remember(skill.content) { skillSummary(skill.content) }
@@ -207,7 +210,7 @@ fun SkillCard(skill: SkillBlock, p: ConversationPalette, expanded: Boolean, onTo
                 Box(
                     Modifier
                         .size(36.dp)
-                        .clip(RoundedRectangle(11.dp))
+                        .clip(lookShape(11.dp))
                         .background(Brush.linearGradient(listOf(p.accent.copy(alpha = 0.22f), p.accent.copy(alpha = 0.08f)))),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -232,7 +235,7 @@ fun SkillCard(skill: SkillBlock, p: ConversationPalette, expanded: Boolean, onTo
                 Text(
                     "$lines 行",
                     style = CaptionStyle.copy(color = p.inkSoft, fontFamily = ConversationMono),
-                    modifier = Modifier.clip(Capsule()).background(p.ink.copy(alpha = 0.05f)).padding(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.clip(lookPill()).background(p.ink.copy(alpha = 0.05f)).padding(horizontal = 8.dp, vertical = 4.dp),
                 )
                 GlyphIcon(Glyph.Chevron, p.inkSoft, 16.dp, Modifier.padding(start = 6.dp).rotate(chevron))
             }
@@ -269,7 +272,7 @@ private fun SkillBody(skill: SkillBlock, p: ConversationPalette) {
             Row(
                 Modifier
                     .padding(start = 8.dp)
-                    .clip(Capsule())
+                    .clip(lookPill())
                     .clickable {
                         clipboard.setText(AnnotatedString(listOfNotNull(skill.content, skill.request).joinToString("\n\n")))
                         copied = true
@@ -308,7 +311,7 @@ fun ReasoningRow(item: Reasoning, p: ConversationPalette, expanded: Boolean, onT
     Column(modifier.fillMaxWidth()) {
         Row(
             Modifier
-                .clip(Capsule())
+                .clip(lookPill())
                 .clickable(onClick = onToggle)
                 .padding(start = 4.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -342,7 +345,7 @@ fun ReasoningRow(item: Reasoning, p: ConversationPalette, expanded: Boolean, onT
             exit = shrinkVertically(disclosureSpring(), shrinkTowards = Alignment.Top) + fadeOut(tween(120)),
         ) {
             Row(Modifier.padding(start = 10.dp, top = 4.dp, bottom = 4.dp).height(IntrinsicSize.Min)) {
-                Box(Modifier.width(2.dp).fillMaxHeight().clip(Capsule()).background(p.inkFaint))
+                Box(Modifier.width(2.dp).fillMaxHeight().clip(lookPill()).background(p.inkFaint))
                 Spacer(Modifier.width(12.dp))
                 SelectionContainer {
                     Text(item.text.trim(), style = BodyStyle.copy(color = p.inkSoft, fontSize = 13.5.sp, lineHeight = 21.sp, fontStyle = FontStyle.Italic))
@@ -354,7 +357,7 @@ fun ReasoningRow(item: Reasoning, p: ConversationPalette, expanded: Boolean, onT
 
 @Composable
 fun ToolCallCard(tool: ToolCall, p: ConversationPalette, expanded: Boolean, skewMs: Long, onToggle: () -> Unit, modifier: Modifier = Modifier) {
-    val shape = RoundedRectangle(18.dp)
+    val shape = lookShape(18.dp)
     val chevron by animateFloatAsState(if (expanded) 180f else 0f, disclosureSpring(), label = "tool-chevron")
     val tone = when (tool.phase) {
         ToolPhase.Failed -> p.danger
@@ -367,10 +370,16 @@ fun ToolCallCard(tool: ToolCall, p: ConversationPalette, expanded: Boolean, skew
             .clip(shape)
             .background(p.surface)
             .border(0.5.dp, p.surfaceStroke, shape)
-            .drawBehind {
-                // Specular glint along the top edge: the card catches light, it is not a box.
-                drawRect(Brush.verticalGradient(listOf(p.surfaceGlint.copy(alpha = p.surfaceGlint.alpha * 0.6f), Color.Transparent), endY = 18.dp.toPx()))
-            }
+            .then(
+                if (LocalConversationLook.current.glass) {
+                    Modifier.drawBehind {
+                        // Specular glint along the top edge: the card catches light, it is not a box.
+                        drawRect(Brush.verticalGradient(listOf(p.surfaceGlint.copy(alpha = p.surfaceGlint.alpha * 0.6f), Color.Transparent), endY = 18.dp.toPx()))
+                    }
+                } else {
+                    Modifier.border(LocalConversationLook.current.hairline, p.rule, shape)
+                },
+            )
             .testTag("conversation-tool-${tool.id}"),
     ) {
         Row(
@@ -384,14 +393,14 @@ fun ToolCallCard(tool: ToolCall, p: ConversationPalette, expanded: Boolean, skew
             Box(
                 Modifier
                     .size(32.dp)
-                    .clip(RoundedRectangle(10.dp))
+                    .clip(lookShape(10.dp))
                     .background(tone.copy(alpha = if (p.dark) 0.16f else 0.11f)),
                 contentAlignment = Alignment.Center,
             ) {
                 GlyphIcon(if (skillRead(tool) != null) Glyph.Wand else toolGlyph(tool.name), tone, 17.dp)
             }
             Column(Modifier.weight(1f).padding(start = 11.dp, end = 8.dp)) {
-                Text(toolTitle(tool), style = LabelStyle.copy(color = p.ink), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(toolTitle(tool), style = LabelStyle.copy(color = p.ink, fontWeight = LocalConversationLook.current.titleWeight), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val summary = toolSummary(tool)
                 if (summary.isNotBlank()) {
                     Text(summary, style = MonoSmall.copy(color = p.inkSoft), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
@@ -429,7 +438,7 @@ fun ToolCallCard(tool: ToolCall, p: ConversationPalette, expanded: Boolean, skew
 private fun ToolStatus(tool: ToolCall, p: ConversationPalette, skewMs: Long) {
     Row(
         Modifier
-            .clip(Capsule())
+            .clip(lookPill())
             .background(p.ink.copy(alpha = 0.05f))
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -437,11 +446,11 @@ private fun ToolStatus(tool: ToolCall, p: ConversationPalette, skewMs: Long) {
     ) {
         when (tool.phase) {
             ToolPhase.Composing, ToolPhase.Pending -> {
-                Breathing(true) { a -> Box(Modifier.size(6.dp).clip(Capsule()).background(p.inkSoft.copy(alpha = a))) }
+                Breathing(true) { a -> Box(Modifier.size(6.dp).clip(lookPill()).background(p.inkSoft.copy(alpha = a))) }
                 Text(if (tool.phase == ToolPhase.Composing) "生成中" else "排队", style = CaptionStyle.copy(color = p.inkSoft))
             }
             ToolPhase.Running -> {
-                Breathing(true) { a -> Box(Modifier.size(6.dp).clip(Capsule()).background(p.accent.copy(alpha = a))) }
+                Breathing(true) { a -> Box(Modifier.size(6.dp).clip(lookPill()).background(p.accent.copy(alpha = a))) }
                 var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
                 LaunchedEffect(tool.key) {
                     while (true) {
@@ -484,7 +493,7 @@ fun NoticeRow(notice: Notice, p: ConversationPalette, modifier: Modifier = Modif
         NoticeTone.Warning -> p.warning
         else -> p.accentInk
     }
-    val shape = RoundedRectangle(16.dp)
+    val shape = lookShape(16.dp)
     Row(
         modifier
             .fillMaxWidth()
@@ -519,7 +528,7 @@ fun WorkingIndicator(label: String, p: ConversationPalette, modifier: Modifier =
                     .size(7.dp)
                     .scale(0.75f + 0.35f * wave)
                     .alpha(0.35f + 0.65f * wave)
-                    .clip(Capsule())
+                    .clip(lookPill())
                     .background(p.accent),
             )
         }
@@ -545,12 +554,12 @@ fun ConversationSkeleton(p: ConversationPalette, modifier: Modifier = Modifier) 
     }
     Column(modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Box(Modifier.width(190.dp).height(42.dp).clip(RoundedRectangle(22.dp)).shimmer())
+            Box(Modifier.width(190.dp).height(42.dp).clip(lookShape(22.dp)).shimmer())
         }
-        Box(Modifier.fillMaxWidth(0.92f).height(14.dp).clip(Capsule()).shimmer())
-        Box(Modifier.fillMaxWidth(0.78f).height(14.dp).clip(Capsule()).shimmer())
-        Box(Modifier.fillMaxWidth().height(54.dp).clip(RoundedRectangle(18.dp)).shimmer())
-        Box(Modifier.fillMaxWidth(0.64f).height(14.dp).clip(Capsule()).shimmer())
+        Box(Modifier.fillMaxWidth(0.92f).height(14.dp).clip(lookPill()).shimmer())
+        Box(Modifier.fillMaxWidth(0.78f).height(14.dp).clip(lookPill()).shimmer())
+        Box(Modifier.fillMaxWidth().height(54.dp).clip(lookShape(18.dp)).shimmer())
+        Box(Modifier.fillMaxWidth(0.64f).height(14.dp).clip(lookPill()).shimmer())
     }
 }
 
@@ -560,7 +569,7 @@ fun ConversationEmpty(model: String?, p: ConversationPalette, onSuggestion: (Str
         Box(
             Modifier
                 .size(60.dp)
-                .clip(RoundedRectangle(20.dp))
+                .clip(lookShape(20.dp))
                 .background(Brush.linearGradient(listOf(p.accent, p.accent.copy(alpha = 0.62f)))),
             contentAlignment = Alignment.Center,
         ) {
@@ -574,7 +583,7 @@ fun ConversationEmpty(model: String?, p: ConversationPalette, onSuggestion: (Str
         )
         Column(Modifier.padding(top = 26.dp).widthIn(max = 360.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("梳理这个仓库的结构和入口", "找出最近改动里可能的问题", "跑一遍测试并总结失败原因").forEach { text ->
-                val shape = RoundedRectangle(16.dp)
+                val shape = lookShape(16.dp)
                 Row(
                     Modifier
                         .fillMaxWidth()

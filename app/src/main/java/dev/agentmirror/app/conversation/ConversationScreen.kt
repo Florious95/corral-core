@@ -131,10 +131,13 @@ import dev.agentmirror.app.session.UploadOutcome
 import dev.agentmirror.app.session.resolveShortcutCommand
 import dev.agentmirror.app.session.textFileAttachment
 import dev.agentmirror.app.session.textFileReference
+import dev.agentmirror.app.ui.components.RuleEdge
+import dev.agentmirror.app.ui.components.edgeRule
 import dev.agentmirror.app.ui.components.glassControl
 import dev.agentmirror.app.ui.components.glassReadable
 import dev.agentmirror.app.ui.theme.AppTheme
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 import dev.agentmirror.app.ui.theme.SharedPreferencesTermThemeStore
 import dev.agentmirror.app.ui.theme.TermPalette
 import dev.agentmirror.app.ui.theme.isDark
@@ -197,8 +200,12 @@ fun ConversationRoute(
     }
     AppTheme {
         val dark = LocalAppPalette.current.isDark
-        val palette = remember(dark) { ConversationPalette.of(TermPalette.of(dark)) }
+        // Keyed on the scheme instance: switching terminal family within one slot repaints too.
+        val scheme = TermPalette.of(dark)
+        val palette = remember(scheme) { ConversationPalette.of(scheme) }
+        val look = ConversationLook.of(LocalThemeSuite.current)
         SystemBarInk(palette.dark)
+        androidx.compose.runtime.CompositionLocalProvider(LocalConversationLook provides look) {
         ConversationScreen(
             ref = ref,
             name = name,
@@ -210,6 +217,7 @@ fun ConversationRoute(
             onBack = onBack,
             onOpenTerminal = { onOpenTerminal(false) },
         )
+        }
     }
 }
 
@@ -471,15 +479,20 @@ private fun ConversationScreen(
     BackHandler(enabled = activeSheet == ComposerSheet.None && !menuOpen && !pickerOpen && !editorFocused, onBack = onBack)
 
     // ---- layout -----------------------------------------------------------------------------
+    val look = LocalConversationLook.current
+    // Glass records the transcript (plus the ambient glow) for the panels to sample; Modernism
+    // samples nothing, so it records nothing.
     val backdrop = rememberLayerBackdrop {
         drawRect(p.canvas)
-        drawRect(
-            Brush.radialGradient(
-                listOf(p.glow, Color.Transparent),
-                center = Offset(size.width * 0.18f, -size.height * 0.04f),
-                radius = size.maxDimension * 0.75f,
-            ),
-        )
+        if (look.glass) {
+            drawRect(
+                Brush.radialGradient(
+                    listOf(p.glow, Color.Transparent),
+                    center = Offset(size.width * 0.18f, -size.height * 0.04f),
+                    radius = size.maxDimension * 0.75f,
+                ),
+            )
+        }
         drawContent()
     }
     val listPadding = remember(density) { LiveListPadding(density, headerPx, dockPx) }
@@ -527,7 +540,7 @@ private fun ConversationScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.Bottom),
             modifier = Modifier
                 .fillMaxSize()
-                .layerBackdrop(backdrop)
+                .then(if (look.glass) Modifier.layerBackdrop(backdrop) else Modifier)
                 .drawWithContent {
                     drawContent()
                     if (!firstDrawn[0] && rows.isNotEmpty()) {
@@ -665,7 +678,7 @@ private fun ConversationScreen(
                         modifier = Modifier
                             .padding(bottom = 10.dp)
                             .widthIn(max = 320.dp)
-                            .frostedGlass(backdrop, Capsule(), p)
+                            .panelSurface(look, backdrop, null, p)
                             .padding(horizontal = 16.dp, vertical = 9.dp)
                             .testTag("conversation-toast"),
                     )
@@ -718,8 +731,23 @@ private fun ConversationScreen(
                 .align(Alignment.BottomCenter)
                 // Measured outside the insets: the transcript must clear the keyboard too.
                 .onSizeChanged { dockPx.intValue = it.height }
+                .then(
+                    if (look.glass) {
+                        Modifier
+                    } else {
+                        // Modernism: a full-bleed brushed sill under a heavy ink rule, down to the edge.
+                        Modifier
+                            .background(Brush.verticalGradient(listOf(p.panel, p.panelEnd)))
+                            .edgeRule(RuleEdge.Top, p.ink, look.rule)
+                    },
+                )
                 .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
-                .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
+                .padding(
+                    start = if (look.glass) 12.dp else 6.dp,
+                    end = if (look.glass) 12.dp else 6.dp,
+                    top = if (look.glass) 0.dp else look.rule,
+                    bottom = if (look.glass) 10.dp else 4.dp,
+                )
                 .zIndex(4f),
         )
     }
@@ -807,12 +835,22 @@ private fun ConversationHeader(
     pickerOpen: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val look = LocalConversationLook.current
     Box(
         modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(p.canvas.copy(alpha = 0.92f), p.canvas.copy(alpha = 0.72f), Color.Transparent)))
+            .then(
+                if (look.glass) {
+                    Modifier.background(Brush.verticalGradient(listOf(p.canvas.copy(alpha = 0.92f), p.canvas.copy(alpha = 0.72f), Color.Transparent)))
+                } else {
+                    // Modernism: an opaque brushed lintel standing on a heavy ink rule.
+                    Modifier
+                        .background(Brush.verticalGradient(listOf(p.panel, p.panelEnd)))
+                        .edgeRule(RuleEdge.Bottom, p.ink, look.rule)
+                },
+            )
             .statusBarsPadding()
-            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp),
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = if (look.glass) 10.dp else 8.dp + look.rule),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             GlassCircleButton(Glyph.Back, p, backdrop, "conversation-back", onClick = onBack)
@@ -821,26 +859,26 @@ private fun ConversationHeader(
                 Modifier
                     .weight(1f)
                     .padding(horizontal = 10.dp)
-                    .frostedGlass(backdrop, Capsule(), p)
-                    .clip(Capsule())
+                    .then(if (look.glass) Modifier.panelSurface(look, backdrop, null, p) else Modifier)
+                    .clip(look.pill())
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onModel)
-                    .padding(start = 16.dp, end = 12.dp, top = 7.dp, bottom = 7.dp)
+                    .padding(start = if (look.glass) 16.dp else 4.dp, end = 12.dp, top = 7.dp, bottom = 7.dp)
                     .testTag("conversation-model"),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
                         name,
-                        style = TextStyle(fontFamily = ConversationSans, fontSize = 15.sp, lineHeight = 20.sp, lineHeightStyle = StableLines, fontWeight = FontWeight.SemiBold, color = p.ink, letterSpacing = (-0.1).sp),
+                        style = TextStyle(fontFamily = ConversationSans, fontSize = 15.sp, lineHeight = 20.sp, lineHeightStyle = StableLines, fontWeight = look.titleWeight, color = p.ink, letterSpacing = (-0.1).sp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.lineBox(20.sp),
                     )
                     Row(Modifier.lineBox(CaptionStyle.lineHeight), verticalAlignment = Alignment.CenterVertically) {
-                        Breathing(pulsing) { a -> Box(Modifier.size(6.dp).clip(Capsule()).background(statusTone.copy(alpha = a))) }
+                        Breathing(pulsing) { a -> Box(Modifier.size(6.dp).clip(look.pill()).background(statusTone.copy(alpha = a))) }
                         Text(
-                            status,
-                            style = CaptionStyle.copy(color = p.inkSoft),
+                            if (look.glass) status else status.uppercase(),
+                            style = if (look.glass) CaptionStyle.copy(color = p.inkSoft) else MonoSmall.copy(color = p.inkSoft, fontSize = 11.sp, lineHeight = 15.sp, letterSpacing = 0.4.sp),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(start = 6.dp).testTag("conversation-status"),
@@ -856,15 +894,16 @@ private fun ConversationHeader(
 
 @Composable
 private fun ConnectionCapsule(phase: LinkPhase, p: ConversationPalette, backdrop: Backdrop, onRetry: () -> Unit, onOpenTerminal: () -> Unit) {
+    val look = LocalConversationLook.current
     Row(
         Modifier
-            .frostedGlass(backdrop, Capsule(), p)
+            .panelSurface(look, backdrop, null, p)
             .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp)
             .testTag("conversation-connection"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val ended = phase == LinkPhase.Ended
-        Breathing(!ended) { a -> Box(Modifier.size(7.dp).clip(Capsule()).background((if (ended) p.danger else p.warning).copy(alpha = a))) }
+        Breathing(!ended) { a -> Box(Modifier.size(7.dp).clip(look.pill()).background((if (ended) p.danger else p.warning).copy(alpha = a))) }
         Text(
             if (ended) "Agent 已退出" else "连接中断，正在恢复…",
             style = CaptionStyle.copy(color = p.ink, fontSize = 12.5.sp, fontWeight = FontWeight.Medium),
@@ -874,7 +913,7 @@ private fun ConnectionCapsule(phase: LinkPhase, p: ConversationPalette, backdrop
             if (ended) "打开终端" else "立即重试",
             style = CaptionStyle.copy(color = p.onAccent, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold),
             modifier = Modifier
-                .clip(Capsule())
+                .clip(look.pill())
                 .background(p.accent)
                 .clickable(onClick = if (ended) onOpenTerminal else onRetry)
                 .padding(horizontal = 12.dp, vertical = 6.dp)
@@ -908,7 +947,7 @@ private fun HeaderMenu(
             Column(
                 Modifier
                     .widthIn(min = 210.dp)
-                    .frostedGlass(backdrop, RoundedRectangle(20.dp), p)
+                    .panelSurface(LocalConversationLook.current, backdrop, 20.dp, p)
                     .padding(6.dp)
                     .testTag("conversation-menu"),
             ) {
@@ -925,7 +964,7 @@ private fun MenuRow(glyph: Glyph, title: String, detail: String, p: Conversation
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedRectangle(14.dp))
+            .clip(LocalConversationLook.current.shape(14.dp))
             .clickable(enabled = enabled, interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 9.dp)
             .testTag(tag),

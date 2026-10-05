@@ -279,7 +279,7 @@ private fun MarkdownBlock(block: MdBlock, p: ConversationPalette) {
                         if (block.ordered) {
                             Text("${block.start + index}.", style = BodyStyle.copy(color = p.inkSoft, fontWeight = FontWeight.Medium))
                         } else {
-                            Box(Modifier.padding(top = 9.5.dp, start = 4.dp).size(5.dp).clip(RoundedRectangle(3.dp)).background(p.inkSoft))
+                            Box(Modifier.padding(top = 9.5.dp, start = 4.dp).size(5.dp).clip(lookShape(3.dp)).background(p.inkSoft))
                         }
                     }
                     Text(remember(item, p) { inlineMarkdown(item, p) }, style = BodyStyle.copy(color = p.ink))
@@ -287,7 +287,7 @@ private fun MarkdownBlock(block: MdBlock, p: ConversationPalette) {
             }
         }
         is MdBlock.Quote -> Row(Modifier.height(IntrinsicSize.Min)) {
-            Box(Modifier.width(3.dp).fillMaxHeight().clip(RoundedRectangle(2.dp)).background(p.accent.copy(alpha = 0.45f)))
+            Box(Modifier.width(3.dp).fillMaxHeight().clip(lookShape(2.dp)).background(p.accent.copy(alpha = 0.45f)))
             Spacer(Modifier.width(12.dp))
             Text(remember(block.text, p) { inlineMarkdown(block.text, p) }, style = BodyStyle.copy(color = p.inkSoft, fontStyle = FontStyle.Italic))
         }
@@ -301,7 +301,7 @@ private fun MarkdownBlock(block: MdBlock, p: ConversationPalette) {
 fun CodeBlock(language: String, code: String, p: ConversationPalette, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE) {
     val clipboard = LocalClipboardManager.current
     var copied by remember(code) { mutableStateOf(false) }
-    val shape = RoundedRectangle(14.dp)
+    val shape = lookShape(14.dp)
     Column(
         modifier
             .fillMaxWidth()
@@ -320,7 +320,7 @@ fun CodeBlock(language: String, code: String, p: ConversationPalette, modifier: 
             )
             Row(
                 Modifier
-                    .clip(RoundedRectangle(10.dp))
+                    .clip(lookShape(10.dp))
                     .clickable {
                         clipboard.setText(AnnotatedString(code))
                         copied = true
