@@ -199,6 +199,33 @@ class ConversationHubTest {
     }
 
     @Test
+    fun paneModeFollowsTheWorkerAndASwitchReportsBusy() {
+        val (socket, _, _) = connect()
+        hub.attach("r1")
+        settle()
+        socket.listener.onText("""{"v":1,"type":"conversation_ready","payload":{"ref":"r1","stream":"s","head_seq":0,"reset":true,"history_truncated":false,"running":false,"server_time_ms":1,"mode":"tui"}}""")
+        settle()
+        assertEquals(PaneMode.Tui, hub.session("r1").mode.value)
+        socket.listener.onText("""{"v":1,"type":"conversation_event","payload":{"ref":"r1","event":{"type":"worker_mode","mode":"rpc"}}}""")
+        settle()
+        assertEquals(PaneMode.Rpc, hub.session("r1").mode.value)
+
+        var result: Triple<Boolean, String?, Boolean>? = null
+        hub.switchMode("r1", PaneMode.Tui, force = false) { ok, reason, busy -> result = Triple(ok, reason, busy) }
+        settle()
+        val command = frames(socket, "conversation_command").last()["payload"]!!.jsonObject
+        val sent = command["command"]!!.jsonObject
+        assertEquals("switch_mode", sent["type"]!!.jsonPrimitive.content)
+        assertEquals("tui", sent["mode"]!!.jsonPrimitive.content)
+        assertEquals("false", sent["force"]!!.jsonPrimitive.content)
+        val id = command["id"]!!.jsonPrimitive.content
+        socket.listener.onText("""{"v":1,"type":"conversation_event","payload":{"ref":"r1","event":{"id":"$id","type":"response","command":"switch_mode","success":false,"error":"当前任务正在运行","data":{"mode":"rpc","busy":true}}}}""")
+        settle()
+        assertEquals(Triple(false, "当前任务正在运行", true), result)
+        assertEquals("a refused switch leaves the mode", PaneMode.Rpc, hub.session("r1").mode.value)
+    }
+
+    @Test
     fun listingMarkersDriveTheConversationRefSet() {
         val (socket, _, core) = connect()
         socket.listener.onText("""{"v":1,"type":"listing","payload":{"req_id":1,"seq":1,"workspaces":[{"cwd":"/w","sessions":[{"ref":"a","conversation":true},{"ref":"b"}]}]}}""")

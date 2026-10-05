@@ -192,10 +192,19 @@ fun ConversationRoute(
     val state by session.state.collectAsState()
     val phase by session.phase.collectAsState()
     val commands by session.commands.collectAsState()
+    val mode by session.mode.collectAsState()
     LaunchedEffect(phase) {
         if (phase == LinkPhase.Unavailable && !session.everReady) {
             DiagLog.record("conversation", "fallback_tui ref_hash=${ref.hashCode()} reason=unavailable_before_ready")
             onOpenTerminal(true)
+        }
+    }
+    // The worker says Pi's own TUI holds the pane (switched here or on another device): show it.
+    // This is a confirmed mode, not a capability fallback.
+    LaunchedEffect(phase, mode) {
+        if (phase == LinkPhase.Live && mode == PaneMode.Tui) {
+            DiagLog.record("conversation", "pane_mode ref_hash=${ref.hashCode()} mode=tui")
+            onOpenTerminal(false)
         }
     }
     AppTheme {
@@ -246,6 +255,7 @@ private fun ConversationScreen(
     var slashDismissedFor by remember { mutableStateOf<String?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
     var pickerOpen by remember { mutableStateOf(false) }
+    var confirmSwitch by remember { mutableStateOf(false) }
     var pendingModel by remember(ref) { mutableStateOf<ModelChoice?>(null) }
     var pendingLevel by remember(ref) { mutableStateOf<String?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
@@ -466,9 +476,26 @@ private fun ConversationScreen(
         }
     }
 
+    // ---- in-pane switch to Pi's TUI --------------------------------------------------------
+    // Real work in flight, read from what the agent reported (not from what is on screen).
+    val inFlight = state.running || state.compacting || state.queued > 0 ||
+        state.items.any { it is ToolCall && !it.finished }
+    fun switchToTerminal(force: Boolean) {
+        confirmSwitch = false
+        toast = "正在切换到 Pi 终端…"
+        hub.switchMode(ref, PaneMode.Tui, force) { ok, reason, busy ->
+            when {
+                ok -> onOpenTerminal()
+                busy && !force -> { toast = null; collapseComposer("confirm"); confirmSwitch = true }
+                else -> toast = "未切换到终端：${reason ?: "主机没有确认"}"
+            }
+        }
+    }
+
     // Back peels one layer at a time: picker/menu → panel → composer → leave.
-    BackHandler(enabled = activeSheet != ComposerSheet.None || menuOpen || pickerOpen || editorFocused) {
+    BackHandler(enabled = activeSheet != ComposerSheet.None || menuOpen || pickerOpen || editorFocused || confirmSwitch) {
         when {
+            confirmSwitch -> confirmSwitch = false
             pickerOpen -> pickerOpen = false
             menuOpen -> menuOpen = false
             sheet != ComposerSheet.None -> sheet = ComposerSheet.None
@@ -476,7 +503,7 @@ private fun ConversationScreen(
             else -> collapseComposer("back")
         }
     }
-    BackHandler(enabled = activeSheet == ComposerSheet.None && !menuOpen && !pickerOpen && !editorFocused, onBack = onBack)
+    BackHandler(enabled = activeSheet == ComposerSheet.None && !menuOpen && !pickerOpen && !editorFocused && !confirmSwitch, onBack = onBack)
 
     // ---- layout -----------------------------------------------------------------------------
     val look = LocalConversationLook.current
@@ -648,10 +675,29 @@ private fun ConversationScreen(
             backdrop = backdrop,
             topPx = { headerPx.intValue },
             onDismiss = { menuOpen = false },
-            onTerminal = { menuOpen = false; onOpenTerminal() },
+            onTerminal = {
+                menuOpen = false
+                if (inFlight) {
+                    collapseComposer("confirm")
+                    confirmSwitch = true
+                } else {
+                    switchToTerminal(force = false)
+                }
+            },
             onCompact = { menuOpen = false; hub.send(ref, "compact") { ok, r -> if (!ok) toast = "压缩未执行：${r ?: "主机没有确认"}" } },
             onNewSession = { menuOpen = false; hub.send(ref, "new_session") { ok, r -> if (!ok) toast = "新会话未创建：${r ?: "主机没有确认"}" } },
             enabled = connected,
+        )
+
+        ConfirmDialog(
+            open = confirmSwitch,
+            title = "切换到终端模式",
+            body = "当前任务正在运行中，切换模式将中断并丢弃当前未完成任务，是否确认切换？",
+            confirm = "确认切换",
+            p = p,
+            backdrop = backdrop,
+            onDismiss = { confirmSwitch = false },
+            onConfirm = { switchToTerminal(force = true) },
         )
 
         // Overlays ride on top of the dock but are not part of its measure: the jump control or a
@@ -793,7 +839,7 @@ fun ConversationWarmup() {
  * Subscribes while the first frame is still composing (not after it commits), so the replay
  * races the cold layout instead of queueing behind it. Abandoned compositions detach too.
  */
-private class ConversationAttachment(private val hub: ConversationHub, private val ref: String) : RememberObserver {
+internal class ConversationAttachment(private val hub: ConversationHub, private val ref: String) : RememberObserver {
     init {
         hub.attach(ref)
     }
@@ -951,9 +997,71 @@ private fun HeaderMenu(
                     .padding(6.dp)
                     .testTag("conversation-menu"),
             ) {
-                MenuRow(Glyph.Terminal, "在终端中打开", "查看这个 Agent 的终端视图", p, true, "conversation-menu-terminal", onTerminal)
+                MenuRow(Glyph.Terminal, "切换到终端", "同一面板运行 Pi 终端界面，会话不变", p, enabled, "conversation-menu-terminal", onTerminal)
                 MenuRow(Glyph.Refresh, "压缩上下文", "/compact", p, enabled, "conversation-menu-compact", onCompact)
                 MenuRow(Glyph.Spark, "开始新会话", "/new", p, enabled, "conversation-menu-new", onNewSession)
+            }
+        }
+    }
+}
+
+/** A themed, centred confirmation over a scrim; cancel is the default (Back and scrim tap). */
+@Composable
+private fun ConfirmDialog(
+    open: Boolean,
+    title: String,
+    body: String,
+    confirm: String,
+    p: ConversationPalette,
+    backdrop: Backdrop,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val look = LocalConversationLook.current
+    AnimatedVisibility(visible = open, enter = fadeIn(tween(140)), exit = fadeOut(tween(120)), modifier = Modifier.zIndex(8f)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = if (p.dark) 0.5f else 0.32f))
+                .pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) },
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                Modifier
+                    .padding(horizontal = 28.dp)
+                    .widthIn(max = 360.dp)
+                    .fillMaxWidth()
+                    .animateEnterExit(enter = scaleIn(spring(dampingRatio = 0.82f, stiffness = 560f), 0.94f), exit = scaleOut(tween(120), 0.97f))
+                    .panelSurface(look, backdrop, 26.dp, p)
+                    .pointerInput(Unit) { detectTapGestures { } }
+                    .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 16.dp)
+                    .testTag("conversation-confirm"),
+            ) {
+                Text(title, style = LabelStyle.copy(color = p.ink, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = look.titleWeight))
+                Text(body, style = BodyStyle.copy(color = p.inkSoft, fontSize = 14.sp, lineHeight = 21.sp), modifier = Modifier.padding(top = 8.dp))
+                Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+                    Text(
+                        "取消",
+                        style = LabelStyle.copy(color = p.ink, fontSize = 14.sp),
+                        modifier = Modifier
+                            .clip(look.pill())
+                            .background(p.ink.copy(alpha = 0.07f))
+                            .clickable(onClick = onDismiss)
+                            .padding(horizontal = 18.dp, vertical = 10.dp)
+                            .testTag("conversation-confirm-cancel"),
+                    )
+                    Text(
+                        confirm,
+                        // Danger ink on a danger wash: the ink is contrast-repaired for every theme.
+                        style = LabelStyle.copy(color = p.danger, fontSize = 14.sp),
+                        modifier = Modifier
+                            .clip(look.pill())
+                            .background(p.danger.copy(alpha = if (p.dark) 0.18f else 0.12f))
+                            .clickable(onClick = onConfirm)
+                            .padding(horizontal = 18.dp, vertical = 10.dp)
+                            .testTag("conversation-confirm-ok"),
+                    )
+                }
             }
         }
     }

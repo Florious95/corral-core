@@ -142,6 +142,7 @@ func (c *wsConn) relayConversation(sub *conversationSub, hello guirpc.Hello) {
 		HistoryTruncated: ready.Truncated,
 		Running:          ready.Running,
 		ServerTimeMS:     ready.Now,
+		Mode:             ready.Mode,
 	}))
 	prefix := conversationEventPrefix(sub.ref)
 	for scan.Scan() {
@@ -272,6 +273,19 @@ func (s *Server) conversationCommand(id string, raw json.RawMessage) (string, []
 			return kind, nil, "model is missing or malformed"
 		}
 		command = map[string]json.RawMessage{"type": command["type"], "provider": command["provider"], "modelId": command["modelId"]}
+	case "switch_mode":
+		// Handled by the pane's own worker (Pi TUI ↔ structured agent on one session).
+		var mode string
+		var force bool
+		_ = json.Unmarshal(command["mode"], &mode)
+		if raw := command["force"]; raw != nil && json.Unmarshal(raw, &force) != nil {
+			return kind, nil, "force must be a boolean"
+		}
+		if mode != guirpc.ModeTUI && mode != guirpc.ModeRPC {
+			return kind, nil, "mode is not supported"
+		}
+		forceJSON, _ := json.Marshal(force)
+		command = map[string]json.RawMessage{"type": command["type"], "mode": command["mode"], "force": forceJSON}
 	case "set_thinking_level":
 		var level string
 		_ = json.Unmarshal(command["level"], &level)

@@ -197,6 +197,10 @@ func TestConversationModelCommandsAreValidatedAndMinimal(t *testing.T) {
 		{`{"type":"set_thinking_level","level":"max"}`, "", `{"id":"c1","level":"max","type":"set_thinking_level"}`},
 		{`{"type":"set_thinking_level","level":"ultra"}`, "thinking level is not supported", ""},
 		{`{"type":"cycle_model"}`, "command is not available from the phone", ""},
+		{`{"type":"switch_mode","mode":"tui","force":true,"argv":["sh"]}`, "", `{"force":true,"id":"c1","mode":"tui","type":"switch_mode"}`},
+		{`{"type":"switch_mode","mode":"rpc"}`, "", `{"force":false,"id":"c1","mode":"rpc","type":"switch_mode"}`},
+		{`{"type":"switch_mode","mode":"bash"}`, "mode is not supported", ""},
+		{`{"type":"switch_mode","mode":"tui","force":"yes"}`, "force must be a boolean", ""},
 	} {
 		_, forwarded, reason := s.conversationCommand("c1", json.RawMessage(tc.raw))
 		if reason != tc.reason || string(forwarded) != tc.forwarded {

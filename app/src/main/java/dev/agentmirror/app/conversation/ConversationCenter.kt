@@ -60,6 +60,9 @@ enum class ConversationSupport { Unknown, Supported, Unsupported }
 /** Session stream phase as the conversation screen shows it. */
 enum class LinkPhase { Connecting, Live, Reconnecting, Ended, Unavailable }
 
+/** What the managed pane runs: the structured agent, or Pi's own TUI on the same session. */
+enum class PaneMode { Rpc, Tui }
+
 data class SlashCommand(val name: String, val description: String, val source: String)
 
 /** One managed conversation. State survives screen exits so re-entry renders instantly. */
@@ -72,6 +75,10 @@ class ConversationSession internal constructor(val ref: String) {
 
     internal val mutableCommands = MutableStateFlow<List<SlashCommand>>(emptyList())
     val commands: StateFlow<List<SlashCommand>> = mutableCommands.asStateFlow()
+
+    /** Server-acknowledged pane mode (ready + worker_mode); never inferred from a disconnect. */
+    internal val mutableMode = MutableStateFlow(PaneMode.Rpc)
+    val mode: StateFlow<PaneMode> = mutableMode.asStateFlow()
 
     /**
      * Once a stream was ready, this ref is proven structured for the process lifetime: a later
@@ -100,7 +107,7 @@ class ConversationHub(
         @Volatile internal var negotiated = false
     }
 
-    private class PendingCommand(val ref: String, val id: String, val echo: Boolean, val onResult: ((Boolean, String?) -> Unit)?, val timeout: ScheduledFuture<*>)
+    private class PendingCommand(val ref: String, val id: String, val echo: Boolean, val onResult: ((Boolean, String?, JsonObject?) -> Unit)?, val timeout: ScheduledFuture<*>)
     private class PendingCreate(val onResult: (Boolean, String?, String?) -> Unit, val timeout: ScheduledFuture<*>)
 
     private val _support = MutableStateFlow(ConversationSupport.Unknown)
@@ -243,30 +250,51 @@ class ConversationHub(
             if (streamingBehavior != null) put("streamingBehavior", streamingBehavior)
             if (attachmentPaths.isNotEmpty()) putJsonArray("attachment_paths") { attachmentPaths.forEach { add(JsonPrimitive(it)) } }
         }
-        dispatch(l, ref, id, command, echo, onResult)
+        dispatch(l, ref, id, command, echo, onResult?.let { cb -> { ok, reason, _ -> cb(ok, reason) } })
     }
 
     /**
      * A non-prompt agent command with its own fields (set_model, set_thinking_level, …): same
      * correlation id, 15 s deadline and main-thread [onResult] as [send], no echo.
      */
-    fun control(ref: String, command: JsonObject, onResult: ((Boolean, String?) -> Unit)? = null) = executor.execute {
+    fun control(ref: String, command: JsonObject, onResult: ((Boolean, String?) -> Unit)? = null) =
+        controlWithData(ref, command, onResult?.let { cb -> { ok, reason, _ -> cb(ok, reason) } })
+
+    /** [control] whose callback also receives the response's data object (e.g. switch_mode's busy). */
+    fun controlWithData(ref: String, command: JsonObject, onResult: ((Boolean, String?, JsonObject?) -> Unit)?) = executor.execute {
         val s = session(ref)
         val l = link
         if (l == null || s.mutablePhase.value != LinkPhase.Live) {
-            onResult?.let { cb -> mainPost { cb(false, "Not connected") } }
+            onResult?.let { cb -> mainPost { cb(false, "Not connected", null) } }
             return@execute
         }
         dispatch(l, ref, "c${ids.incrementAndGet()}", command, false, onResult)
     }
 
-    private fun dispatch(l: Link, ref: String, id: String, command: JsonObject, echo: Boolean, onResult: ((Boolean, String?) -> Unit)?) {
+    private fun dispatch(l: Link, ref: String, id: String, command: JsonObject, echo: Boolean, onResult: ((Boolean, String?, JsonObject?) -> Unit)?) {
         val timeout = executor.schedule({
             pendingCommands[id]?.let { finishCommand(it, false, "The host did not confirm in time") }
         }, COMMAND_TIMEOUT_MS, TimeUnit.MILLISECONDS)
         val pending = PendingCommand(ref, id, echo, onResult, timeout)
         pendingCommands[id] = pending
         if (!l.send(ConversationCodec.command(ref, id, command))) finishCommand(pending, false, "Not connected")
+    }
+
+    /**
+     * Asks the pane's worker to run Pi's TUI ([PaneMode.Tui]) or the structured agent on the same
+     * session. [onResult] gets (ok, reason, busy): busy means work is in flight and the user must
+     * consent ([force]) to drop it. The mode itself moves only when the worker confirms.
+     */
+    fun switchMode(ref: String, mode: PaneMode, force: Boolean, onResult: (Boolean, String?, Boolean) -> Unit) {
+        val command = buildJsonObject {
+            put("type", "switch_mode")
+            put("mode", if (mode == PaneMode.Tui) "tui" else "rpc")
+            put("force", force)
+        }
+        controlWithData(ref, command) { ok, reason, data ->
+            if (ok) sessions[ref]?.mutableMode?.value = mode
+            onResult(ok, reason, data?.bool("busy") == true)
+        }
     }
 
     /** conversation_create; [onResult] gets (ok, ref, reason) on the main thread. */
@@ -317,6 +345,9 @@ class ConversationHub(
                     val s = sessions[ref] ?: continue
                     val event = payload.obj("event") ?: continue
                     if (event.str("type") == "response") onResponse(s, event)?.let(settled::add)
+                    if (event.str("type") == "worker_mode") s.mutableMode.value = paneMode(event.str("mode"))
+                    // A new session or a resumed process: header facts come from Pi again.
+                    if (event.str("type") == "session_reset") settled += { internalCommand(s, "get_state") }
                     batches.getOrPut(s) { ArrayList() }.add(Triple(payload.long("seq") ?: 0, payload.long("ts") ?: 0, event))
                 }
                 "conversation_ready" -> {
@@ -356,6 +387,7 @@ class ConversationHub(
         }
         s.everReady = true
         s.lostRetries = 0
+        s.mutableMode.value = paneMode(payload.str("mode"))
         s.mutablePhase.value = LinkPhase.Live
         _refs.update { it + ref }
         DiagLog.record("conversation", "ready ref_hash=${ref.hashCode()} stream=$stream head=${payload.long("head_seq")} reset=${payload.bool("reset")}")
@@ -401,14 +433,14 @@ class ConversationHub(
             }
         }
         val pending = pendingCommands[id] ?: return null
-        return { finishCommand(pending, event.bool("success") == true, event.str("error").ifBlank { null }, settleEcho = false) }
+        return { finishCommand(pending, event.bool("success") == true, event.str("error").ifBlank { null }, settleEcho = false, data = event.obj("data")) }
     }
 
-    private fun finishCommand(pending: PendingCommand, ok: Boolean, reason: String?, settleEcho: Boolean = true) {
+    private fun finishCommand(pending: PendingCommand, ok: Boolean, reason: String?, settleEcho: Boolean = true, data: JsonObject? = null) {
         pendingCommands.remove(pending.id)
         pending.timeout.cancel(false)
         if (!ok && pending.echo && settleEcho) sessions[pending.ref]?.mutableState?.update { it.dropLocalEcho(pending.id) }
-        pending.onResult?.let { cb -> mainPost { cb(ok, reason) } }
+        pending.onResult?.let { cb -> mainPost { cb(ok, reason, data) } }
     }
 
     private fun internalCommand(s: ConversationSession, kind: String) {
@@ -423,6 +455,8 @@ class ConversationHub(
             .take(sessions.size - MAX_CACHED_SESSIONS)
             .forEach { sessions.remove(it.ref) }
     }
+
+    private fun paneMode(wire: String) = if (wire == "tui") PaneMode.Tui else PaneMode.Rpc
 
     private fun markedRef(element: JsonElement): String? =
         (element as? JsonObject)?.takeIf { it.bool("conversation") == true }?.str("ref")?.ifBlank { null }

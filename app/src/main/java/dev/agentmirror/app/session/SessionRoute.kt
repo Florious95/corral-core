@@ -33,7 +33,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import android.content.Context
 import dev.agentmirror.app.conn.BinaryFrame
+import dev.agentmirror.app.conversation.ConversationAttachment
 import dev.agentmirror.app.conversation.ConversationCenter
+import dev.agentmirror.app.conversation.PaneMode
 import dev.agentmirror.app.conversation.ConversationRoute
 import dev.agentmirror.app.conversation.DisplayMode
 import dev.agentmirror.app.conversation.SharedPreferencesDisplayModeStore
@@ -112,13 +114,15 @@ fun SessionRoute(
         }
     }
     // 原生对话（issue #50）：进入时裁定一次，之后到达的 listing 不会把在屏视图换掉。
-    // 退回终端只有两条路：用户显式点「在终端中打开」，或该 ref 从未就绪过的能力回退。
-    var terminalForced by remember(ref) { mutableStateOf(false) }
+    // 视图只随三件事改变：用户显式切换（经主机确认的同面板 Pi TUI ↔ 原生对话）、主机确认的
+    // 面板模式，或该 ref 从未就绪过的能力回退。
+    val hub = ConversationCenter.hub
+    val managed = remember(ref) { hub.isConversation(ref) || hub.session(ref).everReady }
     val nativeConversation = remember(ref) {
-        SharedPreferencesDisplayModeStore(sessionContext).load() == DisplayMode.GUI &&
-            ConversationCenter.hub.let { it.isConversation(ref) || it.session(ref).everReady }
+        SharedPreferencesDisplayModeStore(sessionContext).load() == DisplayMode.GUI && managed
     }
-    if (nativeConversation && !terminalForced) {
+    var showNative by remember(ref) { mutableStateOf(nativeConversation) }
+    if (showNative) {
         val connected = remember(ref) { ensureSessionConnection(sessionContext) != null }
         if (!connected) {
             ConnectionNotReady(onBack = onBack)
@@ -128,10 +132,13 @@ fun SessionRoute(
             ref = ref,
             name = name,
             onBack = onBack,
-            onOpenTerminal = { terminalForced = true },
+            onOpenTerminal = { showNative = false },
         )
         return
     }
+    // A managed pane keeps its conversation subscription in the terminal view: the way back to
+    // the native conversation is a request on it, and its mode changes arrive on it.
+    if (managed) remember(ref) { ConversationAttachment(hub, ref) }
     var viewModel by remember(ref) { mutableStateOf<SessionViewModel?>(null) }
     if (viewModel == null) {
         viewModel = remember(ref) { createSessionViewModel(ref, sessionContext) }
@@ -160,6 +167,16 @@ fun SessionRoute(
         viewModel = vm,
         name = name,
         provider = sessionProvider,
+        nativeSwitch = if (managed) {
+            { force, done ->
+                hub.switchMode(ref, PaneMode.Rpc, force) { ok, reason, busy ->
+                    if (ok) showNative = true
+                    done(ok, reason, busy)
+                }
+            }
+        } else {
+            null
+        },
         connectionPath = connectionPath,
         onBack = onBack,
         favoriteRows = favoriteRows,

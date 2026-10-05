@@ -104,6 +104,9 @@ type ConversationReady struct {
 	HistoryTruncated bool   `json:"history_truncated"`
 	Running          bool   `json:"running"`
 	ServerTimeMS     int64  `json:"server_time_ms"`
+	// Mode is what the pane runs now: "rpc" (this stream) or "tui" (Pi's own
+	// interactive UI on the same session). Empty from older workers means rpc.
+	Mode string `json:"mode,omitempty"`
 }
 
 // ConversationEvent is one agent record. Seq is 0 for server-synthesized,

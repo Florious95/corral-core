@@ -23,12 +23,10 @@ import (
 	"io"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -117,6 +115,9 @@ type Ready struct {
 	Truncated bool   `json:"truncated"`
 	Running   bool   `json:"running"`
 	Now       int64  `json:"now"`
+	// Mode is what runs in the pane: "rpc" (structured, this stream) or "tui"
+	// (Pi's own interactive UI on the same session; the stream is idle).
+	Mode string `json:"mode,omitempty"`
 }
 
 // WaitReady confirms that the worker actually serves its socket, not just
@@ -191,6 +192,18 @@ type worker struct {
 	clients          map[*client]struct{}
 	now              func() time.Time
 	onRunning        func(bool)
+	// Real work in flight, as the agent reports it: a turn, a compaction or queued input.
+	compacting bool
+	queued     int
+	// The agent's own session identity (get_state), kept for an in-pane mode switch.
+	sessionID   string
+	sessionFile string
+	mode        string
+	// Worker-internal commands ("worker:<n>") answer here, never to clients.
+	waiters map[string]chan []byte
+	reqSeq  uint64
+	// onSwitch performs a client's switch_mode; set by the supervisor.
+	onSwitch func(target string, force bool) (map[string]any, error)
 
 	inputMu sync.Mutex
 	stdin   io.Writer
@@ -205,8 +218,19 @@ func newWorker(stdin io.Writer) *worker {
 		now:       time.Now,
 		onRunning: func(bool) {},
 		stdin:     stdin,
+		mode:      ModeRPC,
+		waiters:   make(map[string]chan []byte),
 	}
 }
+
+const (
+	ModeRPC = "rpc"
+	ModeTUI = "tui"
+	// internalID prefixes the worker's own commands to the agent.
+	internalID = "worker:"
+)
+
+var errNoAgent = errors.New("guirpc: no structured agent attached")
 
 func newStreamID() string {
 	var b [8]byte
@@ -214,144 +238,15 @@ func newStreamID() string {
 	return hex.EncodeToString(b[:])
 }
 
-// childCommand is replaced by tests with a fake agent process.
-var childCommand = func(ctx context.Context, name string) *exec.Cmd {
-	return exec.CommandContext(ctx, "pi", "--mode", "rpc", "--name", name)
-}
-
-// Run is invoked only by agentmirrord gui-worker <private-dir> <name>.
-// @contract
-// @pre TMUX and TMUX_PANE identify the newly created pane; dir is private.
-// @post The child is reaped and the worker's socket/state files removed before return.
-// @err Startup/JSONL/child failures return an error; cancellation terminates the group.
-// @inv One child, one continuously drained stdout; bounded history and queues.
-func Run(ctx context.Context, dir, name string) error {
-	socket, _, ok := strings.Cut(os.Getenv("TMUX"), ",")
-	pane := os.Getenv("TMUX_PANE")
-	if !ok || !filepath.IsAbs(socket) || !strings.HasPrefix(pane, "%") {
-		return errors.New("GUI worker requires a tmux pane")
-	}
-	return run(ctx, dir, socket+"\x1f"+pane, name, os.Stdin, os.Stdout)
-}
-
-func run(ctx context.Context, dir, ref, name string, input io.Reader, output io.Writer) error {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	path := SocketPath(dir, ref)
-	state := statePath(dir, ref)
-	// A crashed predecessor on a reused pane id must not block this listener.
-	_ = os.Remove(path)
-	listener, err := net.Listen("unix", path)
-	if err != nil {
-		return fmt.Errorf("GUI socket unavailable: %w", err)
-	}
-	defer func() { listener.Close(); os.Remove(path); os.Remove(state) }()
-	if err := os.Chmod(path, 0o600); err != nil {
-		return err
-	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	cmd := childCommand(ctx, name)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return err
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	cmd.Stderr = os.Stderr
-	cmd.WaitDelay = 3 * time.Second
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	defer func() { _ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }()
-	w := newWorker(stdin)
-	w.onRunning = func(running bool) { writeState(state, running) }
-	writeState(state, false)
-	defer stdin.Close()
-	defer w.shutdown()
-	go func() {
-		<-ctx.Done()
-		listener.Close()
-	}()
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			go w.serve(ctx, conn)
-		}
-	}()
-	// The pane stays a readable terminal for this session. It never shows raw
-	// JSON and never receives JSON through tmux; GUI input uses the socket.
-	// Bracketed paste is requested so tmux wraps a multi-line paste and the
-	// console submits it as one prompt instead of one prompt per line.
-	fmt.Fprintf(output, "%sPi · native conversation · %s\nType a prompt and press Enter; /compact, /new and /help are available.\n", pasteOn, name)
-	defer fmt.Fprint(output, pasteOff)
-	go func() {
-		scan := bufio.NewScanner(input)
-		scan.Buffer(make([]byte, 4096), 1<<20)
-		var paste pasteJoiner
-		for scan.Scan() {
-			text, complete := paste.line(scan.Text())
-			if !complete || strings.TrimSpace(text) == "" {
-				continue
-			}
-			command := map[string]any{"type": "prompt", "message": text}
-			switch text {
-			case "/compact":
-				command = map[string]any{"type": "compact"}
-			case "/new", "/clear":
-				command = map[string]any{"type": "new_session"}
-			case "/help":
-				fmt.Fprintln(output, "/compact — summarize context · /new — fresh session · Ctrl-C — close this agent")
-				continue
-			default:
-				if w.isRunning() {
-					command["streamingBehavior"] = "steer"
-				}
-			}
-			data, _ := json.Marshal(command)
-			if w.send(data) != nil {
-				return
-			}
-		}
-		cancel()
-	}()
-	scan := bufio.NewScanner(stdout)
-	scan.Buffer(make([]byte, 4096), MaxRecord)
-	for scan.Scan() {
-		data := append([]byte(nil), scan.Bytes()...)
-		if !json.Valid(data) {
-			cancel()
-			break
-		}
-		w.ingest(data)
-		printTerminal(output, data)
-	}
-	if scan.Err() != nil {
-		cancel()
-	}
-	waitErr := cmd.Wait()
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	if scan.Err() != nil {
-		return scan.Err()
-	}
-	return waitErr
-}
-
 func writeState(path string, running bool) {
 	state := "idle"
 	if running {
 		state = "working"
 	}
+	writeStateValue(path, state)
+}
+
+func writeStateValue(path, state string) {
 	tmp := path + ".tmp"
 	if os.WriteFile(tmp, []byte(state), 0o600) == nil {
 		_ = os.Rename(tmp, path)
@@ -403,8 +298,71 @@ func (w *worker) isRunning() bool {
 func (w *worker) send(data []byte) error {
 	w.inputMu.Lock()
 	defer w.inputMu.Unlock()
+	if w.stdin == nil {
+		return errNoAgent
+	}
 	_, err := w.stdin.Write(append(append([]byte(nil), data...), '\n'))
 	return err
+}
+
+// setInput swaps the agent's stdin (nil while no structured agent runs).
+func (w *worker) setInput(stdin io.Writer) {
+	w.inputMu.Lock()
+	w.stdin = stdin
+	w.inputMu.Unlock()
+}
+
+// request sends a worker-internal command and waits for the agent's response.
+func (w *worker) request(command map[string]any, timeout time.Duration) (json.RawMessage, error) {
+	w.mu.Lock()
+	w.reqSeq++
+	id := internalID + strconv.FormatUint(w.reqSeq, 10)
+	ch := make(chan []byte, 1)
+	w.waiters[id] = ch
+	w.mu.Unlock()
+	defer func() {
+		w.mu.Lock()
+		delete(w.waiters, id)
+		w.mu.Unlock()
+	}()
+	command["id"] = id
+	data, _ := json.Marshal(command)
+	if err := w.send(data); err != nil {
+		return nil, err
+	}
+	select {
+	case raw := <-ch:
+		var resp struct {
+			Success bool            `json:"success"`
+			Error   string          `json:"error"`
+			Data    json.RawMessage `json:"data"`
+		}
+		if json.Unmarshal(raw, &resp) != nil || !resp.Success {
+			return nil, fmt.Errorf("%s: %s", command["type"], resp.Error)
+		}
+		return resp.Data, nil
+	case <-time.After(timeout):
+		return nil, fmt.Errorf("%s: no response in %s", command["type"], timeout)
+	}
+}
+
+// busy is real work the agent is doing or about to do.
+func (w *worker) busy() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.running || w.compacting || w.queued > 0
+}
+
+func (w *worker) currentMode() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.mode
+}
+
+func (w *worker) setMode(mode string) {
+	w.mu.Lock()
+	w.mode = mode
+	w.mu.Unlock()
 }
 
 func (w *worker) shutdown() {
@@ -447,6 +405,18 @@ func (w *worker) ingest(raw []byte) {
 	if json.Unmarshal(raw, &h) != nil {
 		return
 	}
+	if h.Type == "response" && h.Command == "get_state" {
+		w.noteSession(raw)
+	}
+	if h.Type == "response" && strings.HasPrefix(h.ID, internalID) {
+		w.mu.Lock()
+		ch := w.waiters[h.ID]
+		w.mu.Unlock()
+		if ch != nil {
+			ch <- raw
+		}
+		return
+	}
 	switch h.Type {
 	case "message_start", "message_end":
 		role := ""
@@ -483,6 +453,9 @@ func (w *worker) ingest(raw []byte) {
 		running := h.Type == "agent_start"
 		changed := w.running != running
 		w.running = running
+		if !running {
+			w.compacting = false
+		}
 		w.publish(raw, entry{kind: h.Type}, true)
 		w.mu.Unlock()
 		if changed {
@@ -524,8 +497,19 @@ func (w *worker) ingest(raw []byte) {
 		w.publish(raw, entry{kind: h.Type, key: h.ToolCallID}, true)
 		w.mu.Unlock()
 	case "queue_update":
+		var q struct {
+			Steering []json.RawMessage `json:"steering"`
+			FollowUp []json.RawMessage `json:"followUp"`
+		}
+		_ = json.Unmarshal(raw, &q)
 		w.mu.Lock()
+		w.queued = len(q.Steering) + len(q.FollowUp)
 		w.removeHistory(h.Type, "")
+		w.publish(raw, entry{kind: h.Type}, true)
+		w.mu.Unlock()
+	case "compaction_start", "compaction_end":
+		w.mu.Lock()
+		w.compacting = h.Type == "compaction_start"
 		w.publish(raw, entry{kind: h.Type}, true)
 		w.mu.Unlock()
 	case "extension_ui_request":
@@ -547,6 +531,23 @@ func (w *worker) ingest(raw []byte) {
 		w.publish(raw, entry{kind: h.Type}, true)
 		w.mu.Unlock()
 	}
+}
+
+// noteSession keeps the agent's session identity from any get_state response.
+func (w *worker) noteSession(raw []byte) {
+	var resp struct {
+		Success bool `json:"success"`
+		Data    struct {
+			SessionID   string `json:"sessionId"`
+			SessionFile string `json:"sessionFile"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(raw, &resp) != nil || !resp.Success || resp.Data.SessionID == "" {
+		return
+	}
+	w.mu.Lock()
+	w.sessionID, w.sessionFile = resp.Data.SessionID, resp.Data.SessionFile
+	w.mu.Unlock()
 }
 
 // publish assigns the next seq and fans the record out. Caller holds w.mu.
@@ -682,6 +683,7 @@ func (w *worker) attach(hello Hello, live bool) (Ready, [][]byte, *client) {
 		Truncated: w.truncated,
 		Running:   w.running,
 		Now:       w.now().UnixMilli(),
+		Mode:      w.mode,
 	}
 	after := hello.AfterSeq
 	if hello.Stream != w.stream || after < w.truncatedThrough || after > w.seq {
@@ -740,9 +742,10 @@ func (w *worker) serve(ctx context.Context, conn net.Conn) {
 	defer w.detach(c)
 	go func() {
 		for scan.Scan() {
-			if !json.Valid(scan.Bytes()) || w.send(scan.Bytes()) != nil {
+			if !json.Valid(scan.Bytes()) {
 				break
 			}
+			w.command(append([]byte(nil), scan.Bytes()...))
 		}
 		conn.Close()
 	}()
@@ -761,6 +764,54 @@ func (w *worker) serve(ctx context.Context, conn net.Conn) {
 			}
 		}
 	}
+}
+
+// command routes one client record: switch_mode is the worker's own; everything
+// else goes to the structured agent, or fails visibly while none is attached.
+func (w *worker) command(raw []byte) {
+	var c struct {
+		ID    string `json:"id"`
+		Type  string `json:"type"`
+		Mode  string `json:"mode"`
+		Force bool   `json:"force"`
+	}
+	_ = json.Unmarshal(raw, &c)
+	if c.Type == "switch_mode" {
+		go func() {
+			data, err := map[string]any(nil), errNoAgent
+			if w.onSwitch != nil {
+				data, err = w.onSwitch(c.Mode, c.Force)
+			}
+			w.respond(c.ID, c.Type, data, err)
+		}()
+		return
+	}
+	if err := w.send(raw); err != nil {
+		w.respond(c.ID, c.Type, nil, errors.New("Pi 正在终端中运行，切回原生对话后再发送"))
+	}
+}
+
+// respond publishes a worker-made response to every client (not retained).
+func (w *worker) respond(id, command string, data map[string]any, err error) {
+	resp := map[string]any{"type": "response", "id": id, "command": command, "success": err == nil}
+	if err != nil {
+		resp["error"] = err.Error()
+	}
+	if data != nil {
+		resp["data"] = data
+	}
+	raw, _ := json.Marshal(resp)
+	w.mu.Lock()
+	w.publish(raw, entry{kind: "response"}, false)
+	w.mu.Unlock()
+}
+
+// publishEvent fans a worker-made event out; retained ones survive reconnects.
+func (w *worker) publishEvent(event map[string]any, retain bool) {
+	raw, _ := json.Marshal(event)
+	w.mu.Lock()
+	w.publish(raw, entry{kind: fmt.Sprint(event["type"])}, retain)
+	w.mu.Unlock()
 }
 
 func withoutFields(raw []byte, keys ...string) []byte {

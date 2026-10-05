@@ -181,6 +181,8 @@ fun SessionScreen(
     overlayFavorited: Set<FavoriteKey> = emptySet(),
     onToggleOverlayFavorite: (L2Entry) -> Unit = {},
     onOpenOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
+    /** Managed panes only: ask the worker to hand the pane back to the native conversation. */
+    nativeSwitch: ((force: Boolean, done: (ok: Boolean, reason: String?, busy: Boolean) -> Unit) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -316,6 +318,21 @@ fun SessionScreen(
     )
     // Registered later, so it wins while suggestions show: Back dismisses them, keeps the draft.
     BackHandler(enabled = slashOpen) { slashDismissedFor = mirror.text }
+    var nativeSwitching by remember { mutableStateOf(false) }
+    var confirmNative by remember { mutableStateOf(false) }
+    BackHandler(enabled = confirmNative) { confirmNative = false }
+    val switchToNative: (Boolean) -> Unit = { force ->
+        confirmNative = false
+        nativeSwitching = true
+        nativeSwitch?.invoke(force) { ok, reason, busy ->
+            nativeSwitching = false
+            when {
+                ok -> Unit
+                busy && !force -> confirmNative = true
+                else -> viewModel.transientError = "未切回原生对话：${reason ?: "主机没有确认"}"
+            }
+        }
+    }
     var attachMenu by remember { mutableStateOf(false) }
     val pickImage = {
         pickMedia.launch(
@@ -435,6 +452,13 @@ fun SessionScreen(
                             Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
                                 StatusArea(viewModel)
                             }
+                            if (nativeSwitch != null) {
+                                NativeSwitchPill(
+                                    switching = nativeSwitching,
+                                    onClick = { if (!nativeSwitching) switchToNative(false) },
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp),
+                                )
+                            }
                         }
                     },
                     imeHideRequested = imeHideRequested,
@@ -527,6 +551,11 @@ fun SessionScreen(
                     onDismissRequest = { shortcutMenuOpen = false },
                     onSelect = applyShortcut,
                     modifier = Modifier.fillMaxSize().imePadding(),
+                )
+                NativeSwitchConfirm(
+                    open = confirmNative,
+                    onDismiss = { confirmNative = false },
+                    onConfirm = { switchToNative(true) },
                 )
                 AttachmentGlassMenu(
                     expanded = attachMenu,
