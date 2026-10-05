@@ -154,6 +154,9 @@ type Server struct {
 	agentLaunchers []agentLauncher
 	// guiDir is the private guirpc socket directory; "" disables conversation_v1.
 	guiDir string
+	// An upgrade owns one ref until its replacement is ready; reconnects wait
+	// rather than mistaking the temporary missing socket for capability loss.
+	conversationUpgrades sync.Map
 
 	notifications *notify.Store
 }

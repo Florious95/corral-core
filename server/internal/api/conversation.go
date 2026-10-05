@@ -44,11 +44,13 @@ const (
 )
 
 type conversationSub struct {
-	ref     string
-	conn    net.Conn
-	ctx     context.Context
-	cancel  context.CancelFunc
-	writeMu sync.Mutex
+	ref        string
+	conn       net.Conn
+	ctx        context.Context
+	cancel     context.CancelFunc
+	writeMu    sync.Mutex
+	switchable bool // ready.mode is the D5 supervisor capability, not Pi's.
+	mode       string
 }
 
 func (c *wsConn) conversationSub(ref string) *conversationSub {
@@ -59,7 +61,7 @@ func (c *wsConn) conversationSub(ref string) *conversationSub {
 
 func (c *wsConn) handleConversationSubscribe(s protocol.ConversationSubscribe) {
 	c.stopConversation(s.Ref)
-	if !guirpc.Available(c.s.guiDir, s.Ref) {
+	if !guirpc.Available(c.s.guiDir, s.Ref) && c.s.upgradingConversation(s.Ref) == nil {
 		c.send(&protocol.ConversationClosed{Ref: s.Ref, Reason: protocol.ConversationUnavailable})
 		return
 	}
@@ -104,6 +106,9 @@ func (c *wsConn) closeConversations() {
 // blocks the connection's read loop: dialing, replay and live records run here.
 func (c *wsConn) relayConversation(sub *conversationSub, hello guirpc.Hello) {
 	defer sub.cancel()
+	if err := c.s.waitConversationUpgrade(sub.ctx, sub.ref); err != nil {
+		return
+	}
 	dialCtx, stop := context.WithTimeout(sub.ctx, conversationDialTimeout)
 	local, err := (&net.Dialer{}).DialContext(dialCtx, "unix", guirpc.SocketPath(c.s.guiDir, sub.ref))
 	stop()
@@ -134,6 +139,10 @@ func (c *wsConn) relayConversation(sub *conversationSub, hello guirpc.Hello) {
 		c.endConversation(sub, false)
 		return
 	}
+	sub.writeMu.Lock()
+	sub.switchable = ready.Mode == guirpc.ModeRPC || ready.Mode == guirpc.ModeTUI
+	sub.mode = ready.Mode
+	sub.writeMu.Unlock()
 	c.sendConversationFrame(sub.ctx, mustFrame(&protocol.ConversationReady{
 		Ref:              sub.ref,
 		Stream:           ready.Stream,
@@ -187,7 +196,7 @@ func (c *wsConn) endConversation(sub *conversationSub, attached bool) {
 		return
 	}
 	reason := protocol.ConversationExited
-	if attached && guirpc.Available(c.s.guiDir, sub.ref) {
+	if attached && (guirpc.Available(c.s.guiDir, sub.ref) || c.s.upgradingConversation(sub.ref) != nil) {
 		reason = protocol.ConversationLost
 	}
 	c.send(&protocol.ConversationClosed{Ref: sub.ref, Reason: reason})
@@ -231,7 +240,21 @@ func (c *wsConn) handleConversationCommand(cmd protocol.ConversationCommand) {
 		c.rejectConversationCommand(cmd, kind, "conversation is not attached")
 		return
 	}
+	if c.s.upgradingConversation(cmd.Ref) != nil {
+		c.rejectConversationCommand(cmd, kind, "会话正在原地升级，结果未确认，请稍后重试")
+		return
+	}
 	sub.writeMu.Lock()
+	if kind == "switch_mode" && !sub.switchable {
+		mode := sub.mode
+		sub.writeMu.Unlock()
+		if mode != "" {
+			c.rejectConversationCommand(cmd, kind, "工作进程模式不受支持，未转发给 Pi")
+		} else {
+			c.switchLegacyConversation(cmd)
+		}
+		return
+	}
 	err := errNotAttached
 	if sub.conn != nil {
 		_ = sub.conn.SetWriteDeadline(time.Now().Add(conversationIOTimeout))
@@ -395,7 +418,7 @@ func (s *Server) identifyConversationWorkers(model *discovery.Model, observation
 	for _, workspace := range model.Workspaces {
 		for _, pane := range workspace.Panes {
 			ref := sessionRef(pane)
-			if !guirpc.Available(s.guiDir, ref) {
+			if !guirpc.Available(s.guiDir, ref) && s.upgradingConversation(ref) == nil {
 				continue
 			}
 			obs, ok := observations[ref]

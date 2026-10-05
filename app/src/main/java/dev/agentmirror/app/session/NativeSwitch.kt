@@ -79,7 +79,7 @@ internal fun NativeSwitchPill(switching: Boolean, onClick: () -> Unit, modifier:
 }
 
 @Composable
-internal fun NativeSwitchConfirm(open: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+internal fun NativeSwitchConfirm(open: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit, title: String = "切换回原生对话") {
     val p = LocalAppPalette.current
     val kit = LocalThemeSuite.current
     AnimatedVisibility(visible = open, enter = fadeIn(tween(140)), exit = fadeOut(tween(120)), modifier = Modifier.zIndex(30f)) {
@@ -102,9 +102,9 @@ internal fun NativeSwitchConfirm(open: Boolean, onDismiss: () -> Unit, onConfirm
                     .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 16.dp)
                     .testTag("session-native-confirm"),
             ) {
-                Text("切换回原生对话", style = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = p.titleText))
+                Text(title, style = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = p.titleText))
                 Text(
-                    "当前任务正在运行中，切换模式将中断并丢弃当前未完成任务，是否确认切换？",
+                    "切换模式或升级会话进程将中断并丢弃当前未完成任务，是否确认切换？",
                     style = TextStyle(fontSize = 14.sp, lineHeight = 21.sp, color = p.bodyText),
                     modifier = Modifier.padding(top = 8.dp),
                 )

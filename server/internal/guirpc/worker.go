@@ -205,8 +205,9 @@ type worker struct {
 	// onSwitch performs a client's switch_mode; set by the supervisor.
 	onSwitch func(target string, force bool) (map[string]any, error)
 
-	inputMu sync.Mutex
-	stdin   io.Writer
+	inputMu   sync.Mutex
+	stdin     io.Writer
+	switching bool // inputMu: user input cannot race the switch's busy check.
 }
 
 func newWorker(stdin io.Writer) *worker {
@@ -295,14 +296,27 @@ func (w *worker) isRunning() bool {
 	return w.running
 }
 
-func (w *worker) send(data []byte) error {
+func (w *worker) send(data []byte) error { return w.sendInput(data, false) }
+
+func (w *worker) sendUser(data []byte) error { return w.sendInput(data, true) }
+
+func (w *worker) sendInput(data []byte, user bool) error {
 	w.inputMu.Lock()
 	defer w.inputMu.Unlock()
+	if user && w.switching {
+		return errors.New("会话正在切换，输入未提交")
+	}
 	if w.stdin == nil {
 		return errNoAgent
 	}
 	_, err := w.stdin.Write(append(append([]byte(nil), data...), '\n'))
 	return err
+}
+
+func (w *worker) setSwitching(value bool) {
+	w.inputMu.Lock()
+	w.switching = value
+	w.inputMu.Unlock()
 }
 
 // setInput swaps the agent's stdin (nil while no structured agent runs).
@@ -786,8 +800,11 @@ func (w *worker) command(raw []byte) {
 		}()
 		return
 	}
-	if err := w.send(raw); err != nil {
-		w.respond(c.ID, c.Type, nil, errors.New("Pi 正在终端中运行，切回原生对话后再发送"))
+	if err := w.sendUser(raw); err != nil {
+		if errors.Is(err, errNoAgent) {
+			err = errors.New("Pi 正在终端中运行，切回原生对话后再发送")
+		}
+		w.respond(c.ID, c.Type, nil, err)
 	}
 }
 

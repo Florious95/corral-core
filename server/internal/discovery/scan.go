@@ -25,7 +25,9 @@ import (
 // window name (display label task fix-session-alias: tmux window names carry
 // the meaningful per-window labels — e.g. "wiki-r5-acceptance-tester" — where
 // the session name is a whole-team name like "team-refactor-maintainability").
-const paneFormat = "#{session_name}\x1f#{window_index}\x1f#{pane_id}\x1f#{pane_current_path}\x1f#{pane_current_command}\x1f#{pane_pid}\x1f#{pane_title}\x1f#{pane_width}x#{pane_height}\x1f#{window_name}"
+// A managed worker's process is briefly absent during replacement. Its saved
+// workspace keeps that real pane valid without changing any public ref.
+const paneFormat = "#{session_name}\x1f#{window_index}\x1f#{pane_id}\x1f#{?pane_current_path,#{pane_current_path},#{@corral_cwd}}\x1f#{pane_current_command}\x1f#{pane_pid}\x1f#{pane_title}\x1f#{pane_width}x#{pane_height}\x1f#{window_name}"
 
 // socketTimeout bounds a single tmux query against a single socket so a hung
 // server cannot stall the whole scan. A server that does not answer within

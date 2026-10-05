@@ -692,7 +692,7 @@ private fun ConversationScreen(
         ConfirmDialog(
             open = confirmSwitch,
             title = "切换到终端模式",
-            body = "当前任务正在运行中，切换模式将中断并丢弃当前未完成任务，是否确认切换？",
+            body = "切换模式或升级会话进程将中断并丢弃当前未完成任务，是否确认切换？",
             confirm = "确认切换",
             p = p,
             backdrop = backdrop,

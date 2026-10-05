@@ -272,9 +272,12 @@ class ConversationHub(
     }
 
     private fun dispatch(l: Link, ref: String, id: String, command: JsonObject, echo: Boolean, onResult: ((Boolean, String?, JsonObject?) -> Unit)?) {
+        val switching = command.str("type") == "switch_mode"
         val timeout = executor.schedule({
-            pendingCommands[id]?.let { finishCommand(it, false, "The host did not confirm in time") }
-        }, COMMAND_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            pendingCommands[id]?.let {
+                finishCommand(it, false, if (switching) "主机未在切换时限内确认，请重连核对当前模式后再重试" else "The host did not confirm in time")
+            }
+        }, if (switching) SWITCH_TIMEOUT_MS else COMMAND_TIMEOUT_MS, TimeUnit.MILLISECONDS)
         val pending = PendingCommand(ref, id, echo, onResult, timeout)
         pendingCommands[id] = pending
         if (!l.send(ConversationCodec.command(ref, id, command))) finishCommand(pending, false, "Not connected")
@@ -293,7 +296,7 @@ class ConversationHub(
         }
         controlWithData(ref, command) { ok, reason, data ->
             if (ok) sessions[ref]?.mutableMode?.value = mode
-            onResult(ok, reason, data?.bool("busy") == true)
+            onResult(ok, reason, data?.bool("busy") == true || data?.bool("upgrade_required") == true)
         }
     }
 
@@ -463,6 +466,8 @@ class ConversationHub(
 
     companion object {
         const val COMMAND_TIMEOUT_MS = 15_000L
+        // Includes a bounded legacy-worker upgrade; ordinary commands keep 15s.
+        const val SWITCH_TIMEOUT_MS = 45_000L
         const val CREATE_TIMEOUT_MS = 20_000L
         const val RESUBSCRIBE_BASE_MS = 300L
         const val RESUBSCRIBE_MAX_MS = 5_000L

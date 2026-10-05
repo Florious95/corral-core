@@ -74,10 +74,14 @@ func main() {
 func run(args []string) int {
 	// gui-worker runs inside a pane created by conversation_create; it is not a
 	// daemon instance and never touches the daemon's pidfile, token or ports.
-	if len(args) == 3 && args[0] == "gui-worker" {
+	if (len(args) == 3 || len(args) == 4) && args[0] == "gui-worker" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 		defer stop()
-		if err := guirpc.Run(ctx, args[1], args[2]); err != nil && !errors.Is(err, context.Canceled) {
+		sessionID := ""
+		if len(args) == 4 {
+			sessionID = args[3]
+		}
+		if err := guirpc.RunSession(ctx, args[1], args[2], sessionID); err != nil && !errors.Is(err, context.Canceled) {
 			fmt.Fprintln(os.Stderr, "structured agent stopped:", err)
 			return 1
 		}

@@ -37,8 +37,11 @@ import (
 
 const (
 	switchReplyTimeout = 3 * time.Second
-	abortSettleTimeout = 10 * time.Second
-	childStopTimeout   = 4 * time.Second
+	// The first metadata reply depends on Pi's resource/startup initialization;
+	// ordinary commands keep the 3s budget once that identity has arrived.
+	agentStartupTimeout = 15 * time.Second
+	abortSettleTimeout  = 10 * time.Second
+	childStopTimeout    = 4 * time.Second
 	// terminalReset undoes whatever an interrupted TUI left on the pane:
 	// alternate screen, hidden cursor, mouse and paste modes, attributes.
 	terminalReset = "\x1b[?1049l\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l\x1b[0m\x1b[2J\x1b[H"
@@ -65,12 +68,18 @@ var tuiCommand = func(ctx context.Context, sessionID string) *exec.Cmd {
 // @err Startup/JSONL/child failures return an error; cancellation terminates the group.
 // @inv One child at a time, one continuously drained stdout; bounded history and queues.
 func Run(ctx context.Context, dir, name string) error {
+	return RunSession(ctx, dir, name, "")
+}
+
+// RunSession is the daemon's in-place upgrade entry; sessionID comes from Pi,
+// not from a client-supplied history path.
+func RunSession(ctx context.Context, dir, name, sessionID string) error {
 	socket, _, ok := strings.Cut(os.Getenv("TMUX"), ",")
 	pane := os.Getenv("TMUX_PANE")
 	if !ok || !filepath.IsAbs(socket) || !strings.HasPrefix(pane, "%") {
 		return errors.New("GUI worker requires a tmux pane")
 	}
-	return run(ctx, dir, socket+"\x1f"+pane, name, os.Stdin, os.Stdout)
+	return runSession(ctx, dir, socket+"\x1f"+pane, name, sessionID, os.Stdin, os.Stdout)
 }
 
 type supervisor struct {
@@ -78,22 +87,29 @@ type supervisor struct {
 	cancel context.CancelFunc
 	w      *worker
 	name   string
+	resume string
 	tty    *os.File
 	out    io.Writer
 	state  string
 	// The pane's line discipline at start; restored after every TUI.
 	termState *term.State
 
-	mu      sync.Mutex
-	target  string        // mode a switch asked for; "" when a child ends on its own
-	started chan error    // the next child's start result, for the waiting switch
-	stop    func()        // ends the current child for a switch
-	busy    bool          // a switch is in progress
-	console *consoleInput // the RPC console's tty reader
-	tuiFrom time.Time     // when the current TUI started
+	mu           sync.Mutex
+	target       string        // mode a switch asked for; "" when a child ends on its own
+	started      chan error    // the next child's start result, for the waiting switch
+	stop         func()        // ends the current child for a switch
+	busy         bool          // a switch is in progress
+	console      *consoleInput // the RPC console's tty reader
+	tuiFrom      time.Time     // when the current TUI started
+	initialReady chan struct{} // do not advertise control before stdin/stop exist
+	replayMu     sync.Mutex    // an old prime must finish publishing before a new child
 }
 
 func run(ctx context.Context, dir, ref, name string, tty *os.File, output io.Writer) error {
+	return runSession(ctx, dir, ref, name, "", tty, output)
+}
+
+func runSession(ctx context.Context, dir, ref, name, sessionID string, tty *os.File, output io.Writer) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
@@ -115,7 +131,8 @@ func run(ctx context.Context, dir, ref, name string, tty *os.File, output io.Wri
 	w.onRunning = func(running bool) { writeState(state, running) }
 	writeState(state, false)
 	defer w.shutdown()
-	s := &supervisor{ctx: ctx, cancel: cancel, w: w, name: name, tty: tty, out: output, state: state}
+	initialReady := make(chan struct{})
+	s := &supervisor{ctx: ctx, cancel: cancel, w: w, name: name, resume: sessionID, tty: tty, out: output, state: state, initialReady: initialReady}
 	if term.IsTerminal(int(tty.Fd())) {
 		s.termState, _ = term.GetState(int(tty.Fd()))
 	}
@@ -125,6 +142,11 @@ func run(ctx context.Context, dir, ref, name string, tty *os.File, output io.Wri
 		listener.Close()
 	}()
 	go func() {
+		select {
+		case <-initialReady:
+		case <-ctx.Done():
+			return
+		}
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
@@ -137,7 +159,7 @@ func run(ctx context.Context, dir, ref, name string, tty *os.File, output io.Wri
 }
 
 func (s *supervisor) loop() error {
-	mode, resume := ModeRPC, ""
+	mode, resume := ModeRPC, s.resume
 	for {
 		var next string
 		var err error
@@ -167,6 +189,10 @@ func (s *supervisor) takeTarget() string {
 
 func (s *supervisor) signalStarted(err error) {
 	s.mu.Lock()
+	if err == nil && s.initialReady != nil {
+		close(s.initialReady)
+		s.initialReady = nil
+	}
 	ch := s.started
 	s.started = nil
 	s.mu.Unlock()
@@ -177,6 +203,12 @@ func (s *supervisor) signalStarted(err error) {
 
 // runRPC runs the structured agent until it exits or a switch stops it.
 func (s *supervisor) runRPC(resume string) (string, error) {
+	primeCtx, stopPrime := context.WithCancel(s.ctx)
+	defer func() {
+		stopPrime()
+		s.replayMu.Lock()
+		s.replayMu.Unlock()
+	}()
 	cmd := childCommand(s.ctx, s.name, resume)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
@@ -226,7 +258,7 @@ func (s *supervisor) runRPC(resume string) (string, error) {
 	s.mu.Lock()
 	s.console = console
 	s.mu.Unlock()
-	go s.prime(resume != "")
+	go s.prime(primeCtx, resume != "")
 	s.signalStarted(nil)
 
 	scan := bufio.NewScanner(stdout)
@@ -261,15 +293,23 @@ func (s *supervisor) runRPC(resume string) (string, error) {
 }
 
 // prime learns the session identity and, on a resume, replays Pi's record.
-func (s *supervisor) prime(resumed bool) {
-	w := s.w
-	if _, err := w.request(map[string]any{"type": "get_state"}, switchReplyTimeout); err != nil {
+func (s *supervisor) prime(ctx context.Context, resumed bool) {
+	if ctx.Err() != nil {
 		return
 	}
-	if !resumed {
+	w := s.w
+	if _, err := w.request(map[string]any{"type": "get_state"}, agentStartupTimeout); err != nil {
+		return
+	}
+	if !resumed || ctx.Err() != nil {
 		return
 	}
 	data, err := w.request(map[string]any{"type": "get_messages"}, 2*switchReplyTimeout)
+	s.replayMu.Lock()
+	defer s.replayMu.Unlock()
+	if ctx.Err() != nil {
+		return
+	}
 	if err == nil {
 		var resp struct {
 			Messages []json.RawMessage `json:"messages"`
@@ -302,7 +342,9 @@ func (s *supervisor) consoleLine(text string) {
 		}
 	}
 	data, _ := json.Marshal(command)
-	_ = w.send(data)
+	if err := w.sendUser(data); err != nil {
+		fmt.Fprintf(s.out, "未提交：%s\n", err)
+	}
 }
 
 // runTUI hands the pane's tty to Pi's interactive UI until it exits.
@@ -377,9 +419,21 @@ func (s *supervisor) switchTo(target string, force bool) (map[string]any, error)
 	w := s.w
 	current := w.currentMode()
 	if current == target {
+		if target == ModeRPC {
+			if _, err := w.request(map[string]any{"type": "get_state"}, agentStartupTimeout); err != nil {
+				return nil, fmt.Errorf("Pi 就绪未确认：%w", err)
+			}
+		}
 		return map[string]any{"mode": target}, nil
 	}
+	w.setSwitching(true)
+	defer w.setSwitching(false)
 	if target == ModeTUI {
+		// Confirm this process, not a cached ID from the previous RPC child.
+		// Pi resource initialization can exceed an ordinary command's 3s.
+		if _, err := w.request(map[string]any{"type": "get_state"}, agentStartupTimeout); err != nil {
+			return nil, fmt.Errorf("Pi 初始化未确认：%w", err)
+		}
 		if w.busy() {
 			if !force {
 				return map[string]any{"mode": current, "busy": true}, errors.New("当前任务正在运行")
@@ -398,6 +452,9 @@ func (s *supervisor) switchTo(target string, force bool) (map[string]any, error)
 		// The session Pi itself reports now: a /new since start changed it.
 		if _, err := w.request(map[string]any{"type": "get_state"}, switchReplyTimeout); err != nil {
 			return nil, fmt.Errorf("读取会话失败：%w", err)
+		}
+		if !force && w.busy() {
+			return map[string]any{"mode": current, "busy": true}, errors.New("当前任务正在运行")
 		}
 	} else if !force && sessionBusy(s.tuiSessionFile()) {
 		return map[string]any{"mode": current, "busy": true}, errors.New("当前任务正在运行")
@@ -418,6 +475,11 @@ func (s *supervisor) switchTo(target string, force bool) (map[string]any, error)
 	case err := <-started:
 		if err != nil {
 			return nil, fmt.Errorf("启动失败：%w", err)
+		}
+		if target == ModeRPC {
+			if _, err := w.request(map[string]any{"type": "get_state"}, agentStartupTimeout); err != nil {
+				return nil, fmt.Errorf("新 Pi 就绪未确认：%w", err)
+			}
 		}
 		return map[string]any{"mode": target}, nil
 	case <-time.After(childStopTimeout + 2*switchReplyTimeout):

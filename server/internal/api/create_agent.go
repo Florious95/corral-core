@@ -144,6 +144,10 @@ func (s *Server) createAgent(ctx context.Context, req protocol.CreateAgent, stru
 	}
 	ref := entry.pane.Socket + "\x1f" + paneID
 	if structured {
+		if err := bridge.RememberManagedCWD(ctx, entry.pane.Socket, paneID, entry.pane.CWD); err != nil {
+			_ = bridge.KillPane(entry.pane.Socket, paneID)
+			return fail(protocol.CreateAgentLaunchFailed)
+		}
 		startup, cancel := context.WithTimeout(ctx, structuredStartupTimeout)
 		err := guirpc.WaitReady(startup, s.guiDir, ref)
 		cancel()

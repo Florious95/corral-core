@@ -19,11 +19,17 @@ package dev.agentmirror.app.session
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,11 +37,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
+import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 import android.content.Context
 import dev.agentmirror.app.conn.BinaryFrame
 import dev.agentmirror.app.conversation.ConversationAttachment
 import dev.agentmirror.app.conversation.ConversationCenter
 import dev.agentmirror.app.conversation.PaneMode
+import dev.agentmirror.app.conversation.LinkPhase
 import dev.agentmirror.app.conversation.ConversationRoute
 import dev.agentmirror.app.conversation.DisplayMode
 import dev.agentmirror.app.conversation.SharedPreferencesDisplayModeStore
@@ -113,32 +124,112 @@ fun SessionRoute(
             }
         }
     }
-    // 原生对话（issue #50）：进入时裁定一次，之后到达的 listing 不会把在屏视图换掉。
-    // 视图只随三件事改变：用户显式切换（经主机确认的同面板 Pi TUI ↔ 原生对话）、主机确认的
-    // 面板模式，或该 ref 从未就绪过的能力回退。
+    // Preferences request a host mode; they never turn an RPC console into a TUI locally.
+    // Managed identity may arrive after a cold deep link; once proved it is not
+    // revoked by a disconnect or a later listing. Ordinary PTY refs stay terminal.
     val hub = ConversationCenter.hub
-    val managed = remember(ref) { hub.isConversation(ref) || hub.session(ref).everReady }
-    val nativeConversation = remember(ref) {
-        SharedPreferencesDisplayModeStore(sessionContext).load() == DisplayMode.GUI && managed
+    val session = remember(ref) { hub.session(ref) }
+    val refs by hub.conversationRefs.collectAsState()
+    val phase by session.phase.collectAsState()
+    val hostMode by session.mode.collectAsState()
+    var managed by remember(ref) { mutableStateOf(hub.isConversation(ref) || session.everReady) }
+    LaunchedEffect(ref in refs, session.everReady) {
+        if (ref in refs || session.everReady) managed = true
     }
-    var showNative by remember(ref) { mutableStateOf(nativeConversation) }
-    if (showNative) {
+    val modeStore = remember(sessionContext) { SharedPreferencesDisplayModeStore(sessionContext) }
+    var displayMode by remember(modeStore) { mutableStateOf(modeStore.load()) }
+    DisposableEffect(modeStore) { val stop = modeStore.observe { displayMode = it }; onDispose(stop) }
+    var confirmedMode by remember(ref) { mutableStateOf<PaneMode?>(if (session.everReady) session.mode.value else null) }
+    var targetMode by remember(ref) { mutableStateOf<PaneMode?>(null) }
+    var forceSwitch by remember(ref) { mutableStateOf(false) }
+    var switchGeneration by remember(ref) { mutableStateOf(0) }
+    var switching by remember(ref) { mutableStateOf(false) }
+    var switchError by remember(ref) { mutableStateOf<String?>(null) }
+    var confirmSwitch by remember(ref) { mutableStateOf(false) }
+    var attached by remember(ref) { mutableStateOf(true) }
+    DisposableEffect(ref) { onDispose { attached = false } }
+    if (managed) {
         val connected = remember(ref) { ensureSessionConnection(sessionContext) != null }
-        if (!connected) {
-            ConnectionNotReady(onBack = onBack)
-            return
+        if (!connected) { ConnectionNotReady(onBack); return }
+        remember(ref) { ConversationAttachment(hub, ref) }
+    }
+    LaunchedEffect(ref, displayMode, managed) {
+        if (managed) {
+            targetMode = if (displayMode == DisplayMode.TUI) PaneMode.Tui else PaneMode.Rpc
+            forceSwitch = false
+            switchGeneration++
+            switchError = null
+            confirmSwitch = false
         }
-        ConversationRoute(
-            ref = ref,
-            name = name,
-            onBack = onBack,
-            onOpenTerminal = { showNative = false },
-        )
+    }
+    LaunchedEffect(phase, hostMode) {
+        if (managed && phase == LinkPhase.Live) confirmedMode = hostMode
+    }
+    LaunchedEffect(targetMode, switchGeneration, switching, phase, hostMode) {
+        val target = targetMode
+        if (!managed || target == null || phase != LinkPhase.Live) return@LaunchedEffect
+        if (hostMode == target) {
+            confirmedMode = hostMode
+            targetMode = null
+            switchError = null
+            confirmSwitch = false
+            return@LaunchedEffect
+        }
+        if (switching || confirmSwitch || switchError != null) return@LaunchedEffect
+        val generation = switchGeneration
+        val force = forceSwitch
+        switching = true
+        hub.switchMode(ref, target, force) { ok, reason, busy ->
+            if (!attached) return@switchMode
+            switching = false
+            if (generation != switchGeneration) return@switchMode
+            when {
+                ok -> { confirmedMode = target; targetMode = null; switchError = null }
+                busy && !force -> { switchError = reason; confirmSwitch = true }
+                else -> switchError = reason ?: "主机未确认模式，请重连核对后重试"
+            }
+        }
+    }
+    LaunchedEffect(phase, targetMode) {
+        if (managed && targetMode != null && !switching &&
+            (phase == LinkPhase.Ended || phase == LinkPhase.Unavailable)) {
+            switchError = "会话工作进程不可用，未确认目标模式；请重连核对"
+        }
+    }
+    val retrySwitch: (Boolean) -> Unit = { force ->
+        if (!force) { ServiceWire.reconnectNow(); hub.retry(ref) }
+        forceSwitch = force
+        switchError = null
+        confirmSwitch = false
+        switchGeneration++
+    }
+    val cancelSwitch = {
+        switchGeneration++
+        targetMode = null
+        confirmSwitch = false
+        switchError = null
+    }
+    if (managed && confirmedMode != PaneMode.Tui) {
+        Box(Modifier.fillMaxSize()) {
+            ConversationRoute(
+                ref = ref,
+                name = name,
+                onBack = onBack,
+                onOpenTerminal = { fallback ->
+                    if (fallback && !session.everReady) {
+                        switchError = "此会话工作进程不可用，未确认 Pi 终端模式"
+                    } else {
+                        targetMode = PaneMode.Tui
+                        forceSwitch = false
+                        switchGeneration++
+                        switchError = null
+                    }
+                },
+            )
+            RouteModeFeedback(targetMode, switching, switchError, confirmSwitch, retrySwitch, cancelSwitch)
+        }
         return
     }
-    // A managed pane keeps its conversation subscription in the terminal view: the way back to
-    // the native conversation is a request on it, and its mode changes arrive on it.
-    if (managed) remember(ref) { ConversationAttachment(hub, ref) }
     var viewModel by remember(ref) { mutableStateOf<SessionViewModel?>(null) }
     if (viewModel == null) {
         viewModel = remember(ref) { createSessionViewModel(ref, sessionContext) }
@@ -163,27 +254,67 @@ fun SessionRoute(
     val sessionProvider = overlaySessions.firstOrNull { it.ref == ref }?.provider
         ?: favoriteRows.firstOrNull { it.ref == ref }?.provider
         ?: "unknown"
-    SessionScreen(
-        viewModel = vm,
-        name = name,
-        provider = sessionProvider,
-        nativeSwitch = if (managed) {
-            { force, done ->
-                hub.switchMode(ref, PaneMode.Rpc, force) { ok, reason, busy ->
-                    if (ok) showNative = true
-                    done(ok, reason, busy)
+    Box(Modifier.fillMaxSize()) {
+        SessionScreen(
+            viewModel = vm,
+            name = name,
+            provider = sessionProvider,
+            nativeSwitch = if (managed) {
+                { force, done ->
+                    switchGeneration++
+                    val generation = switchGeneration
+                    targetMode = PaneMode.Rpc
+                    switching = true
+                    hub.switchMode(ref, PaneMode.Rpc, force) { ok, reason, busy ->
+                        if (!attached) return@switchMode
+                        switching = false
+                        if (generation == switchGeneration) {
+                            if (ok) confirmedMode = PaneMode.Rpc
+                            targetMode = null
+                        }
+                        done(ok, reason, busy)
+                    }
                 }
+            } else {
+                null
+            },
+            connectionPath = connectionPath,
+            onBack = onBack,
+            favoriteRows = favoriteRows,
+            overlaySessions = overlaySessions,
+            overlayFavorited = overlayFavorited,
+            onToggleOverlayFavorite = onToggleOverlayFavorite,
+            onOpenOverlaySession = onOpenOverlaySession,
+        )
+        if (managed) RouteModeFeedback(targetMode, switching, switchError, confirmSwitch, retrySwitch, cancelSwitch)
+    }
+}
+
+@Composable
+private fun RouteModeFeedback(
+    target: PaneMode?, switching: Boolean, error: String?, confirm: Boolean,
+    onRetry: (Boolean) -> Unit, onCancel: () -> Unit,
+) {
+    val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
+    if (target != null && !confirm && (target == PaneMode.Tui || switching || error != null)) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+            Column(
+                Modifier.statusBarsPadding().padding(start = 16.dp, end = 16.dp, top = 80.dp)
+                    .background(p.sheetBackground, kit.geometry.shape(RoundedCornerShape(16.dp)))
+                    .padding(12.dp).testTag("session-mode-transition"),
+            ) {
+                Text(error ?: if (switching) "正在切换会话模式…" else "等待主机确认会话模式…", color = p.bodyText)
+                if (error != null) TextButton(onClick = { onRetry(false) }) { Text("重连核对后重试") }
+                if (!switching) TextButton(onClick = onCancel) { Text("取消切换") }
             }
-        } else {
-            null
-        },
-        connectionPath = connectionPath,
-        onBack = onBack,
-        favoriteRows = favoriteRows,
-        overlaySessions = overlaySessions,
-        overlayFavorited = overlayFavorited,
-        onToggleOverlayFavorite = onToggleOverlayFavorite,
-        onOpenOverlaySession = onOpenOverlaySession,
+        }
+    }
+    NativeSwitchConfirm(
+        open = confirm,
+        onDismiss = onCancel,
+        onConfirm = { onRetry(true) },
+        title = if (target == PaneMode.Tui) "切换到 Pi 终端" else "切换回原生对话",
     )
 }
 

@@ -17,6 +17,7 @@
 package dev.agentmirror.app.conversation
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.core.content.edit
 
 /**
@@ -39,6 +40,14 @@ class SharedPreferencesDisplayModeStore(context: Context) : DisplayModeStore {
 
     override fun save(mode: DisplayMode) {
         prefs.edit { putString(KEY, mode.name) }
+    }
+
+    fun observe(onChange: (DisplayMode) -> Unit): () -> Unit {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY) onChange(load())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        return { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
     companion object {
