@@ -2,14 +2,13 @@ package api
 
 import (
 	"context"
-	"os"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
-	"github.com/agentmirror/agentmirror/internal/guirpc"
+	"github.com/agentmirror/agentmirror/internal/discovery"
 	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
@@ -107,8 +106,7 @@ func (c *wsConn) handleCreateAgent(req protocol.CreateAgent) {
 }
 
 // createAgent is shared by create_agent and conversation_create. A structured
-// launch runs this daemon's guirpc worker in the new pane instead of the
-// provider TUI and waits until the worker serves its private socket.
+// launch runs the official Pi RPC command and confirms its native I/O.
 func (s *Server) createAgent(ctx context.Context, req protocol.CreateAgent, structured bool) protocol.CreateAgentResult {
 	fail := func(reason protocol.CreateAgentReason) protocol.CreateAgentResult {
 		return createAgentResult(req.ReqID, false, "", "", "", reason)
@@ -117,7 +115,7 @@ func (s *Server) createAgent(ctx context.Context, req protocol.CreateAgent, stru
 		return fail(protocol.CreateAgentInvalidField)
 	}
 	launcher, ok := s.launcher(req.Provider)
-	if !ok || (structured && (req.Provider != "pi" || s.guiDir == "")) {
+	if !ok || (structured && (req.Provider != "pi" || s.conversations == nil)) {
 		return fail(protocol.CreateAgentProviderUnavailable)
 	}
 	if req.Bypass && !launcher.SupportsBypass {
@@ -131,11 +129,7 @@ func (s *Server) createAgent(ctx context.Context, req protocol.CreateAgent, stru
 
 	args := agentCommand(launcher, req.Name, req.Bypass)
 	if structured {
-		executable, err := os.Executable()
-		if err != nil {
-			return fail(protocol.CreateAgentLaunchFailed)
-		}
-		args = []string{executable, "gui-worker", s.guiDir, req.Name}
+		args = append(args, "--mode", "rpc", "--name", req.Name)
 	}
 	paneID, err := bridge.CreateWindow(ctx, entry.pane.Socket, entry.pane.Session, entry.pane.CWD, req.Name, args)
 	if err != nil {
@@ -149,7 +143,10 @@ func (s *Server) createAgent(ctx context.Context, req protocol.CreateAgent, stru
 			return fail(protocol.CreateAgentLaunchFailed)
 		}
 		startup, cancel := context.WithTimeout(ctx, structuredStartupTimeout)
-		err := guirpc.WaitReady(startup, s.guiDir, ref)
+		conn, err := s.conversations.Open(startup, discovery.Pane{Socket: entry.pane.Socket, PaneID: paneID, CWD: entry.pane.CWD})
+		if conn != nil {
+			conn.Close()
+		}
 		cancel()
 		if err != nil {
 			s.log.Warn("ws: structured agent not ready", "timeout_ms", structuredStartupTimeout.Milliseconds(), "err", err)
@@ -163,5 +160,5 @@ func (s *Server) createAgent(ctx context.Context, req protocol.CreateAgent, stru
 	return createAgentResult(req.ReqID, true, ref, req.Name, launcher.Naming, "")
 }
 
-// structuredStartupTimeout bounds how long create waits for the worker socket.
-const structuredStartupTimeout = 5 * time.Second
+// Native Pi initialization can outlive tmux's successful pane creation.
+const structuredStartupTimeout = 35 * time.Second

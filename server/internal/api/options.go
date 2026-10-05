@@ -13,6 +13,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/agentmirror/agentmirror/internal/guirpc"
 	"github.com/agentmirror/agentmirror/internal/nodeprobe"
 	"github.com/agentmirror/agentmirror/internal/notify"
 	"github.com/agentmirror/agentmirror/internal/overlay"
@@ -136,9 +137,10 @@ type Options struct {
 	// $HOME/Downloads/agentmirror-uploads (created on demand; last-good).
 	UploadDir string
 
-	// GUIDir holds private managed-agent sockets and run-state files
-	// (guirpc.Dir). Empty disables conversation_v1.
-	GUIDir string
+	// ConversationBridge defaults to the daemon's native tmux RPC bridge.
+	// An injected transport is owned and closed by this server.
+	ConversationBridge   guirpc.Transport
+	DisableConversations bool
 
 	// MaxUploadBytes caps a single uploaded file. Zero defaults to 20 MiB.
 	MaxUploadBytes int64

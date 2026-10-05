@@ -1,19 +1,13 @@
 package guirpc
 
 import (
-	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
-	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -284,283 +278,9 @@ func TestHistoryIsBounded(t *testing.T) {
 }
 
 // TestFakePi is the child process used by the integration test.
-func TestFakePi(t *testing.T) {
-	if os.Getenv("GUIRPC_FAKE_PI") != "1" {
-		t.Skip("helper process")
-	}
-	scan := bufio.NewScanner(os.Stdin)
-	for scan.Scan() {
-		var cmd struct {
-			ID      string `json:"id"`
-			Type    string `json:"type"`
-			Message string `json:"message"`
-		}
-		_ = json.Unmarshal(scan.Bytes(), &cmd)
-		switch cmd.Type {
-		case "get_state":
-			fmt.Printf(`{"id":%q,"type":"response","command":"get_state","success":true,"data":{"sessionId":"sess-1","isStreaming":false}}`+"\n", cmd.ID)
-			continue
-		case "get_messages":
-			// A resumed process knows the session's history; a fresh one has none.
-			if os.Getenv("GUIRPC_FAKE_RESUME") == "sess-1" {
-				fmt.Printf(`{"id":%q,"type":"response","command":"get_messages","success":true,"data":{"messages":[`+
-					`{"role":"system","content":""},{"role":"user","content":"ping","timestamp":1},`+
-					`{"role":"assistant","content":[{"type":"text","text":"pong"}],"stopReason":"stop","timestamp":2}]}}`+"\n", cmd.ID)
-			} else {
-				fmt.Printf(`{"id":%q,"type":"response","command":"get_messages","success":true,"data":{"messages":[]}}`+"\n", cmd.ID)
-			}
-			continue
-		}
-		fmt.Printf(`{"id":%q,"type":"response","command":%q,"success":true,"data":{"disposition":"started"}}`+"\n", cmd.ID, cmd.Type)
-		if cmd.Type == "prompt" {
-			fmt.Println(`{"type":"agent_start"}`)
-			fmt.Printf(`{"type":"message_start","message":{"role":"user","content":%q,"timestamp":1}}`+"\n", cmd.Message)
-			fmt.Println(`{"type":"message_start","message":{"role":"assistant","content":[],"stopReason":"pending","timestamp":2}}`)
-			fmt.Println(`{"type":"message_update","usage":{"input":1},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"pong"}}`)
-			fmt.Println(`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"pong"}],"stopReason":"stop","timestamp":2}}`)
-			fmt.Println(`{"type":"agent_settled"}`)
-		}
-	}
-	os.Exit(0)
-}
-
-func TestWorkerServesSocketAndCleansUp(t *testing.T) {
-	dir, err := os.MkdirTemp(".", "s")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	useFakeAgents(t)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	ref := "/tmp/tmux-test\x1f%7"
-	pane := &syncBuffer{}
-	done := make(chan error, 1)
-	// The pane tty never reaches EOF while the agent lives; EOF closes the worker.
-	paneInput, paneInputWriter, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer paneInputWriter.Close()
-	go func() { done <- run(ctx, dir, ref, "probe", paneInput, pane) }()
-
-	waitCtx, waitCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer waitCancel()
-	if err := WaitReady(waitCtx, dir, ref); err != nil {
-		entries, _ := os.ReadDir(dir)
-		cancel()
-		var werr error
-		select {
-		case werr = <-done:
-		case <-time.After(5 * time.Second):
-		}
-		t.Fatalf("WaitReady: %v (dir=%v worker=%v pane=%q)", err, entries, werr, pane.String())
-	}
-	if !Available(dir, ref) || Activity(dir, ref) != "idle" {
-		t.Fatalf("available=%v activity=%q", Available(dir, ref), Activity(dir, ref))
-	}
-	conn, err := net.Dial("unix", SocketPath(dir, ref))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
-	fmt.Fprintln(conn, `{"type":"hello"}`)
-	reader := bufio.NewReader(conn)
-	first, _ := reader.ReadBytes('\n')
-	var ready Ready
-	if json.Unmarshal(first, &ready) != nil || ready.Type != "ready" || ready.Stream == "" {
-		t.Fatalf("ready = %q", first)
-	}
-	fmt.Fprintln(conn, `{"id":"p1","type":"prompt","message":"ping"}`)
-	var kinds []string
-	for len(kinds) < 7 {
-		line, err := reader.ReadBytes('\n')
-		if err != nil {
-			t.Fatalf("read after %v: %v", kinds, err)
-		}
-		var r record
-		if err := json.Unmarshal(line, &r); err != nil {
-			t.Fatalf("record %q: %v", line, err)
-		}
-		kind, sub, role := eventType(r)
-		kinds = append(kinds, strings.Trim(kind+":"+sub+":"+role, ":"))
-	}
-	want := "response,agent_start,message_start::user,message_start::assistant,message_update:text_delta,message_end::assistant,agent_settled"
-	if got := strings.Join(kinds, ","); got != want {
-		t.Fatalf("stream = %s\nwant     %s", got, want)
-	}
-	if !strings.Contains(pane.String(), "pong") {
-		t.Fatalf("pane transcript missing reply: %q", pane.String())
-	}
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("worker did not exit after cancel")
-	}
-	if _, err := os.Stat(SocketPath(dir, ref)); !os.IsNotExist(err) {
-		t.Fatalf("socket not removed: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, baseName(ref)+".state")); !os.IsNotExist(err) {
-		t.Fatalf("state file not removed: %v", err)
-	}
-}
-
-// useFakeAgents swaps Pi for this test binary: TestFakePi (RPC) and TestFakeTUI.
-func useFakeAgents(t *testing.T) {
-	t.Helper()
-	exe, _ := os.Executable()
-	prevRPC, prevTUI := childCommand, tuiCommand
-	childCommand = func(ctx context.Context, _ string, sessionID string) *exec.Cmd {
-		cmd := exec.CommandContext(ctx, exe, "-test.run=^TestFakePi$")
-		cmd.Env = append(os.Environ(), "GUIRPC_FAKE_PI=1", "GUIRPC_FAKE_RESUME="+sessionID)
-		return cmd
-	}
-	tuiCommand = func(ctx context.Context, sessionID string) *exec.Cmd {
-		cmd := exec.CommandContext(ctx, exe, "-test.run=^TestFakeTUI$")
-		cmd.Env = append(os.Environ(), "GUIRPC_FAKE_TUI="+sessionID)
-		return cmd
-	}
-	t.Cleanup(func() { childCommand, tuiCommand = prevRPC, prevTUI })
-}
-
-// TestFakeTUI stands in for Pi's interactive UI: it owns the tty until SIGTERM.
-func TestFakeTUI(t *testing.T) {
-	session := os.Getenv("GUIRPC_FAKE_TUI")
-	if session == "" {
-		t.Skip("helper process")
-	}
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGTERM)
-	fmt.Printf("TUI session=%s\n", session)
-	<-stop
-	fmt.Println("TUI restored terminal")
-	os.Exit(0)
-}
-
-// readRecords reads socket records until want returns true for one of them.
-func readRecords(t *testing.T, reader *bufio.Reader, want func(kind string, event json.RawMessage) bool) {
-	t.Helper()
-	for {
-		line, err := reader.ReadBytes('\n')
-		if err != nil {
-			t.Fatalf("socket read: %v", err)
-		}
-		var r record
-		if err := json.Unmarshal(line, &r); err != nil {
-			t.Fatalf("record %q: %v", line, err)
-		}
-		kind, _, _ := eventType(r)
-		if want(kind, r.Event) {
-			return
-		}
-	}
-}
-
-func TestSwitchHandsThePaneToPiTUIAndBackOnTheSameSession(t *testing.T) {
-	dir, err := os.MkdirTemp(".", "s")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	useFakeAgents(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	ref := "/tmp/tmux-test\x1f%9"
-	pane := &syncBuffer{}
-	paneInput, paneInputWriter, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer paneInputWriter.Close()
-	done := make(chan error, 1)
-	go func() { done <- run(ctx, dir, ref, "swap", paneInput, pane) }()
-	waitCtx, waitCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer waitCancel()
-	if err := WaitReady(waitCtx, dir, ref); err != nil {
-		t.Fatalf("WaitReady: %v", err)
-	}
-	conn, err := net.Dial("unix", SocketPath(dir, ref))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(20 * time.Second))
-	fmt.Fprintln(conn, `{"type":"hello"}`)
-	reader := bufio.NewReader(conn)
-	first, _ := reader.ReadBytes('\n')
-	var ready Ready
-	if json.Unmarshal(first, &ready) != nil || ready.Mode != ModeRPC {
-		t.Fatalf("ready = %s", first)
-	}
-	response := func(command string) map[string]any {
-		var got map[string]any
-		readRecords(t, reader, func(kind string, event json.RawMessage) bool {
-			_ = json.Unmarshal(event, &got)
-			return kind == "response" && got["command"] == command
-		})
-		return got
-	}
-	// The switch asks Pi for its session itself; nothing to wait for first.
-	fmt.Fprintln(conn, `{"id":"s1","type":"switch_mode","mode":"tui"}`)
-	if got := response("switch_mode"); got["success"] != true || got["data"].(map[string]any)["mode"] != ModeTUI {
-		t.Fatalf("switch to tui = %v", got)
-	}
-	deadline := time.Now().Add(5 * time.Second)
-	for !strings.Contains(pane.String(), "TUI session=sess-1") {
-		if time.Now().After(deadline) {
-			t.Fatalf("TUI did not start on the session: %q", pane.String())
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	// While the TUI owns the pane, structured commands fail visibly instead of vanishing.
-	fmt.Fprintln(conn, `{"id":"p1","type":"prompt","message":"hi"}`)
-	if got := response("prompt"); got["success"] != false || got["id"] != "p1" {
-		t.Fatalf("prompt in tui mode = %v", got)
-	}
-	var probe Ready
-	if c, err := net.Dial("unix", SocketPath(dir, ref)); err == nil {
-		fmt.Fprintln(c, `{"type":"hello","probe":true}`)
-		line, _ := bufio.NewReader(c).ReadBytes('\n')
-		_ = json.Unmarshal(line, &probe)
-		c.Close()
-	}
-	if probe.Mode != ModeTUI {
-		t.Fatalf("ready while in tui = %+v", probe)
-	}
-
-	fmt.Fprintln(conn, `{"id":"s2","type":"switch_mode","mode":"rpc"}`)
-	// The resumed agent's record comes back as a fresh transcript of the same session;
-	// the switch answer may interleave anywhere after the reset.
-	var replayed []string
-	var answer map[string]any
-	readRecords(t, reader, func(kind string, event json.RawMessage) bool {
-		if kind == "response" {
-			_ = json.Unmarshal(event, &answer)
-		} else {
-			replayed = append(replayed, kind)
-		}
-		return kind == "worker_mode"
-	})
-	if got := strings.Join(replayed, ","); got != "session_reset,message_start,message_end,message_start,message_end,worker_mode" {
-		t.Fatalf("resume stream = %s", got)
-	}
-	if answer == nil {
-		answer = response("switch_mode")
-	}
-	if answer["success"] != true || answer["data"].(map[string]any)["mode"] != ModeRPC {
-		t.Fatalf("switch back to rpc = %v", answer)
-	}
-	if !strings.Contains(pane.String(), "TUI restored terminal") {
-		t.Fatalf("TUI was not stopped gracefully: %q", pane.String())
-	}
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("worker did not exit after cancel")
-	}
-}
+// Native tmux lifecycle coverage lives in native_bridge_test.go. The former
+// child-command/UDS supervisor fixtures are deliberately no longer a product
+// path; projection, replay, history bounds and input guards above remain.
 
 func TestSessionBusyReadsTheLastMessage(t *testing.T) {
 	dir := t.TempDir()
@@ -573,7 +293,7 @@ func TestSessionBusyReadsTheLastMessage(t *testing.T) {
 	}
 	head := `{"type":"session","id":"x","cwd":"/w"}`
 	user := `{"type":"message","message":{"role":"user","content":"go"}}`
-	tool := `{"type":"message","message":{"role":"assistant","stopReason":"toolUse"}}`
+	tool := `{"type":"message","message":{"role":"assistant","stopReason":"toolUse","content":[{"type":"toolCall"}]}}`
 	result := `{"type":"message","message":{"role":"toolResult"}}`
 	done := `{"type":"message","message":{"role":"assistant","stopReason":"stop"}}`
 	for _, tc := range []struct {
@@ -586,14 +306,11 @@ func TestSessionBusyReadsTheLastMessage(t *testing.T) {
 		{write(head, user, tool, result), true},
 		{write(head, user, tool, result, done), false},
 		{write(head, user, done, `{"type":"model_change"}`), false},
-		{"", false},
+		{"", true},
 	} {
 		if got := sessionBusy(tc.path); got != tc.busy {
 			t.Fatalf("%s busy=%v want %v", tc.path, got, tc.busy)
 		}
-	}
-	if id, cwd := sessionHeader(write(head, user, done, done, done, done, done)); id != "x" || cwd != "/w" {
-		t.Fatalf("header = %q %q", id, cwd)
 	}
 }
 
@@ -624,24 +341,6 @@ func TestWriteClientGoldens(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(out, "pi-tool-turn.replay.jsonl"), bytes.Join(replay, nil), 0o644); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestBracketedPasteIsOnePrompt(t *testing.T) {
-	var j pasteJoiner
-	var got []string
-	for _, line := range []string{
-		"plain",
-		"\x1b[200~first", "", "  indented", "last\x1b[201~ and typed",
-		"\x1b[200~single\x1b[201~",
-	} {
-		if text, ok := j.line(line); ok {
-			got = append(got, text)
-		}
-	}
-	want := []string{"plain", "first\n\n  indented\nlast and typed", "single"}
-	if fmt.Sprintf("%q", got) != fmt.Sprintf("%q", want) {
-		t.Fatalf("prompts = %q\nwant      %q", got, want)
 	}
 }
 

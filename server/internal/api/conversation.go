@@ -1,9 +1,8 @@
 package api
 
-// conversation.go multiplexes managed structured-agent conversations over the
-// existing /ws connection (conversation_v1). Each subscription is one private
-// Unix socket to the pane's guirpc worker; records are spliced into
-// conversation_event frames without re-encoding the agent's JSON.
+// conversation.go multiplexes native Pi conversations over the existing /ws
+// connection. Each subscription joins a daemon-local stream; the pane keeps
+// its official command and JSON records are spliced without re-encoding.
 //
 // @consumes internal/guirpc
 // @contract
@@ -38,7 +37,7 @@ import (
 
 const (
 	maxConversationSubs     = 8
-	conversationDialTimeout = 3 * time.Second
+	conversationDialTimeout = 35 * time.Second
 	conversationIOTimeout   = 5 * time.Second
 	maxConversationImages   = 5
 )
@@ -61,7 +60,8 @@ func (c *wsConn) conversationSub(ref string) *conversationSub {
 
 func (c *wsConn) handleConversationSubscribe(s protocol.ConversationSubscribe) {
 	c.stopConversation(s.Ref)
-	if !guirpc.Available(c.s.guiDir, s.Ref) && c.s.upgradingConversation(s.Ref) == nil {
+	entry := c.s.catalogEntry(s.Ref)
+	if c.s.conversations == nil || entry == nil || (!entry.observation.Conversation && !c.s.conversations.Available(s.Ref)) {
 		c.send(&protocol.ConversationClosed{Ref: s.Ref, Reason: protocol.ConversationUnavailable})
 		return
 	}
@@ -102,15 +102,17 @@ func (c *wsConn) closeConversations() {
 	}
 }
 
-// relayConversation owns one worker socket for its whole life. It never
-// blocks the connection's read loop: dialing, replay and live records run here.
+// relayConversation owns one local stream, never an agent process. Native
+// startup and replay run here without blocking the WebSocket read loop.
 func (c *wsConn) relayConversation(sub *conversationSub, hello guirpc.Hello) {
 	defer sub.cancel()
-	if err := c.s.waitConversationUpgrade(sub.ctx, sub.ref); err != nil {
+	entry := c.s.catalogEntry(sub.ref)
+	if entry == nil {
+		c.endConversation(sub, false)
 		return
 	}
 	dialCtx, stop := context.WithTimeout(sub.ctx, conversationDialTimeout)
-	local, err := (&net.Dialer{}).DialContext(dialCtx, "unix", guirpc.SocketPath(c.s.guiDir, sub.ref))
+	local, err := c.s.conversations.Open(dialCtx, entry.pane)
 	stop()
 	if err != nil {
 		c.endConversation(sub, false)
@@ -180,8 +182,8 @@ func conversationEventPrefix(ref string) []byte {
 }
 
 // endConversation reports why a stream ended unless the client already
-// detached it. A live worker socket means the stream was dropped (resume with
-// after_seq); a missing one means the agent exited.
+// detached it. A live daemon bridge means resume with after_seq; otherwise
+// the native process or bridge exited.
 func (c *wsConn) endConversation(sub *conversationSub, attached bool) {
 	if sub.ctx.Err() != nil {
 		return
@@ -196,7 +198,7 @@ func (c *wsConn) endConversation(sub *conversationSub, attached bool) {
 		return
 	}
 	reason := protocol.ConversationExited
-	if attached && (guirpc.Available(c.s.guiDir, sub.ref) || c.s.upgradingConversation(sub.ref) != nil) {
+	if attached && c.s.conversations.Available(sub.ref) {
 		reason = protocol.ConversationLost
 	}
 	c.send(&protocol.ConversationClosed{Ref: sub.ref, Reason: reason})
@@ -240,19 +242,10 @@ func (c *wsConn) handleConversationCommand(cmd protocol.ConversationCommand) {
 		c.rejectConversationCommand(cmd, kind, "conversation is not attached")
 		return
 	}
-	if c.s.upgradingConversation(cmd.Ref) != nil {
-		c.rejectConversationCommand(cmd, kind, "会话正在原地升级，结果未确认，请稍后重试")
-		return
-	}
 	sub.writeMu.Lock()
 	if kind == "switch_mode" && !sub.switchable {
-		mode := sub.mode
 		sub.writeMu.Unlock()
-		if mode != "" {
-			c.rejectConversationCommand(cmd, kind, "工作进程模式不受支持，未转发给 Pi")
-		} else {
-			c.switchLegacyConversation(cmd)
-		}
+		c.rejectConversationCommand(cmd, kind, "原生桥接模式不受支持，未转发给 Pi")
 		return
 	}
 	err := errNotAttached
@@ -297,7 +290,7 @@ func (s *Server) conversationCommand(id string, raw json.RawMessage) (string, []
 		}
 		command = map[string]json.RawMessage{"type": command["type"], "provider": command["provider"], "modelId": command["modelId"]}
 	case "switch_mode":
-		// Handled by the pane's own worker (Pi TUI ↔ structured agent on one session).
+		// Handled by the daemon bridge, never forwarded as a Pi command.
 		var mode string
 		var force bool
 		_ = json.Unmarshal(command["mode"], &mode)
@@ -412,13 +405,13 @@ func (c *wsConn) handleConversationCreate(req protocol.ConversationCreate) {
 // provider, activity and health come from the worker itself: the pane runs
 // the daemon binary, which process-based identification cannot attribute.
 func (s *Server) identifyConversationWorkers(model *discovery.Model, observations map[string]nodeprobe.Observation) {
-	if model == nil || s.guiDir == "" {
+	if model == nil || s.conversations == nil {
 		return
 	}
 	for _, workspace := range model.Workspaces {
 		for _, pane := range workspace.Panes {
 			ref := sessionRef(pane)
-			if !guirpc.Available(s.guiDir, ref) && s.upgradingConversation(ref) == nil {
+			if !s.conversations.Detect(s.loopCtx, pane) {
 				continue
 			}
 			obs, ok := observations[ref]
@@ -427,7 +420,7 @@ func (s *Server) identifyConversationWorkers(model *discovery.Model, observation
 			}
 			obs.Provider = "pi"
 			obs.Conversation = true
-			if activity := guirpc.Activity(s.guiDir, ref); activity != "" {
+			if activity := s.conversations.Activity(ref); activity != "" {
 				obs.Activity = activity
 				obs.Health = protocol.SessionHealthNormal
 			}

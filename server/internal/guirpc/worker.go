@@ -1,11 +1,11 @@
-// Package guirpc owns a client-created structured agent (Pi RPC) inside its
-// own tmux pane and serves its event stream over a private Unix socket.
-//
+// Package guirpc bridges native foreground Pi RPC through tmux, in the daemon.
+// The pane runs only the official CLI; replay and projection are in memory.
+// @consumes internal/bridge
 // @contract
-// @pre Only an explicit structured launch invokes the worker inside its new pane.
-// @post The pane stays a usable line-oriented terminal; GUI clients attach to a
-// private JSONL socket that replays a compacted, sequence-numbered history.
-// @err Failed child startup or malformed stdout terminates the worker visibly.
+// @pre an exact native Pi process has been detected in a scoped pane
+// @post clients receive bounded, sequence-numbered history and live records
+// @err process loss, framing loss and input failure are visible to clients
+// @inv no wrapper process or private filesystem socket is created
 // @inv Existing agents are never reconfigured; history, client queues and the
 // per-tool update rate are bounded; closing the pane reaps the child and removes
 // every file the worker created.
@@ -15,15 +15,12 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,57 +41,6 @@ const (
 	helloTimeout       = 5 * time.Second
 	writeTimeout       = 5 * time.Second
 )
-
-// Dir returns the private socket directory for a daemon state directory,
-// keeping socket paths below the AF_UNIX limit on long state roots.
-func Dir(stateDir string) string {
-	dir := filepath.Join(stateDir, "gui")
-	if len(dir)+len("/0123456789abcdef.sock") < 100 {
-		return dir
-	}
-	sum := sha256.Sum256([]byte(stateDir))
-	return filepath.Join(os.TempDir(), "corral-gui-"+hex.EncodeToString(sum[:6]))
-}
-
-func baseName(ref string) string {
-	// Canonicalize only the private IPC key: discovery may use /tmp while
-	// TMUX uses /private/tmp. Public refs and their pane identity stay intact.
-	if socket, pane, ok := strings.Cut(ref, "\x1f"); ok {
-		if canonical, err := filepath.EvalSymlinks(socket); err == nil {
-			ref = canonical + "\x1f" + pane
-		}
-	}
-	sum := sha256.Sum256([]byte(ref))
-	return hex.EncodeToString(sum[:8])
-}
-
-// SocketPath binds one private endpoint to the stable socket/pane ref.
-func SocketPath(dir, ref string) string { return filepath.Join(dir, baseName(ref)+".sock") }
-
-func statePath(dir, ref string) string { return filepath.Join(dir, baseName(ref)+".state") }
-
-// Available checks an explicit managed socket without spawning a subprocess.
-func Available(dir, ref string) bool {
-	if dir == "" {
-		return false
-	}
-	info, err := os.Lstat(SocketPath(dir, ref))
-	return err == nil && info.Mode()&os.ModeSocket != 0
-}
-
-// Activity reports the managed agent's run state ("working" or "idle") as
-// last written by its worker, or "" when unknown.
-func Activity(dir, ref string) string {
-	data, err := os.ReadFile(statePath(dir, ref))
-	if err != nil {
-		return ""
-	}
-	switch state := strings.TrimSpace(string(data)); state {
-	case "working", "idle":
-		return state
-	}
-	return ""
-}
 
 // Hello is the first line a socket client writes.
 type Hello struct {
@@ -120,46 +66,6 @@ type Ready struct {
 	Mode string `json:"mode,omitempty"`
 }
 
-// WaitReady confirms that the worker actually serves its socket, not just
-// that tmux created the pane.
-func WaitReady(ctx context.Context, dir, ref string) error {
-	for {
-		if err := probe(ctx, SocketPath(dir, ref)); err == nil {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(50 * time.Millisecond):
-		}
-	}
-}
-
-func probe(ctx context.Context, path string) error {
-	conn, err := (&net.Dialer{Timeout: 200 * time.Millisecond}).DialContext(ctx, "unix", path)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	deadline := time.Now().Add(time.Second)
-	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
-		deadline = d
-	}
-	_ = conn.SetDeadline(deadline)
-	if _, err := conn.Write([]byte(`{"type":"hello","probe":true}` + "\n")); err != nil {
-		return err
-	}
-	line, err := bufio.NewReader(conn).ReadBytes('\n')
-	if err != nil {
-		return err
-	}
-	var ready Ready
-	if json.Unmarshal(line, &ready) != nil || ready.Type != "ready" {
-		return errors.New("guirpc: invalid ready")
-	}
-	return nil
-}
-
 type entry struct {
 	seq  uint64
 	kind string // event type
@@ -179,6 +85,8 @@ type pendingUpdate struct {
 
 type worker struct {
 	mu               sync.Mutex
+	done             chan struct{}
+	closeOnce        sync.Once
 	stream           string
 	seq              uint64
 	history          []entry
@@ -196,9 +104,10 @@ type worker struct {
 	compacting bool
 	queued     int
 	// The agent's own session identity (get_state), kept for an in-pane mode switch.
-	sessionID   string
-	sessionFile string
-	mode        string
+	sessionID     string
+	sessionFile   string
+	totalMessages *int
+	mode          string
 	// Worker-internal commands ("worker:<n>") answer here, never to clients.
 	waiters map[string]chan []byte
 	reqSeq  uint64
@@ -213,6 +122,7 @@ type worker struct {
 func newWorker(stdin io.Writer) *worker {
 	return &worker{
 		stream:    newStreamID(),
+		done:      make(chan struct{}),
 		pending:   make(map[string]*pendingUpdate),
 		lastTool:  make(map[string]time.Time),
 		clients:   make(map[*client]struct{}),
@@ -237,57 +147,6 @@ func newStreamID() string {
 	var b [8]byte
 	_, _ = rand.Read(b[:])
 	return hex.EncodeToString(b[:])
-}
-
-func writeState(path string, running bool) {
-	state := "idle"
-	if running {
-		state = "working"
-	}
-	writeStateValue(path, state)
-}
-
-func writeStateValue(path, state string) {
-	tmp := path + ".tmp"
-	if os.WriteFile(tmp, []byte(state), 0o600) == nil {
-		_ = os.Rename(tmp, path)
-	}
-}
-
-const (
-	pasteOn    = "\x1b[?2004h"
-	pasteOff   = "\x1b[?2004l"
-	pasteStart = "\x1b[200~"
-	pasteEnd   = "\x1b[201~"
-	// maxPaste bounds one buffered paste; a longer one is submitted as is.
-	maxPaste = 1 << 20
-)
-
-// pasteJoiner folds the lines of one bracketed paste back into a single
-// message: the cooked tty delivers a paste line by line, but the user sent
-// one prompt. Text typed after the paste joins it until Enter.
-type pasteJoiner struct {
-	lines []string
-	size  int
-	open  bool
-}
-
-func (j *pasteJoiner) line(text string) (string, bool) {
-	if rest, ok := strings.CutPrefix(text, pasteStart); ok {
-		j.lines, j.size, j.open = j.lines[:0], 0, true
-		text = rest
-	}
-	if !j.open {
-		return text, true
-	}
-	before, after, closed := strings.Cut(text, pasteEnd)
-	j.lines = append(j.lines, before)
-	j.size += len(before) + 1
-	if !closed && j.size < maxPaste {
-		return "", false
-	}
-	j.open = false
-	return strings.Join(j.lines, "\n") + after, true
 }
 
 func (w *worker) isRunning() bool {
@@ -355,6 +214,8 @@ func (w *worker) request(command map[string]any, timeout time.Duration) (json.Ra
 			return nil, fmt.Errorf("%s: %s", command["type"], resp.Error)
 		}
 		return resp.Data, nil
+	case <-w.done:
+		return nil, errNoAgent
 	case <-time.After(timeout):
 		return nil, fmt.Errorf("%s: no response in %s", command["type"], timeout)
 	}
@@ -380,6 +241,7 @@ func (w *worker) setMode(mode string) {
 }
 
 func (w *worker) shutdown() {
+	w.closeOnce.Do(func() { close(w.done) })
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for key, p := range w.pending {
@@ -419,7 +281,7 @@ func (w *worker) ingest(raw []byte) {
 	if json.Unmarshal(raw, &h) != nil {
 		return
 	}
-	if h.Type == "response" && h.Command == "get_state" {
+	if h.Type == "response" && (h.Command == "get_state" || h.Command == "get_session_stats") {
 		w.noteSession(raw)
 	}
 	if h.Type == "response" && strings.HasPrefix(h.ID, internalID) {
@@ -427,7 +289,10 @@ func (w *worker) ingest(raw []byte) {
 		ch := w.waiters[h.ID]
 		w.mu.Unlock()
 		if ch != nil {
-			ch <- raw
+			select {
+			case ch <- raw:
+			default:
+			}
 		}
 		return
 	}
@@ -550,18 +415,39 @@ func (w *worker) ingest(raw []byte) {
 // noteSession keeps the agent's session identity from any get_state response.
 func (w *worker) noteSession(raw []byte) {
 	var resp struct {
-		Success bool `json:"success"`
+		Success bool   `json:"success"`
+		Command string `json:"command"`
 		Data    struct {
-			SessionID   string `json:"sessionId"`
-			SessionFile string `json:"sessionFile"`
+			SessionID     string `json:"sessionId"`
+			SessionFile   string `json:"sessionFile"`
+			TotalMessages *int   `json:"totalMessages"`
+			Streaming     *bool  `json:"isStreaming"`
+			Compacting    *bool  `json:"isCompacting"`
+			Pending       *int   `json:"pendingMessageCount"`
 		} `json:"data"`
 	}
-	if json.Unmarshal(raw, &resp) != nil || !resp.Success || resp.Data.SessionID == "" {
+	if json.Unmarshal(raw, &resp) != nil || !resp.Success {
 		return
 	}
 	w.mu.Lock()
-	w.sessionID, w.sessionFile = resp.Data.SessionID, resp.Data.SessionFile
-	w.mu.Unlock()
+	defer w.mu.Unlock()
+	if resp.Data.SessionID != "" {
+		w.sessionID, w.sessionFile = resp.Data.SessionID, resp.Data.SessionFile
+	}
+	if resp.Command == "get_session_stats" {
+		w.totalMessages = resp.Data.TotalMessages
+	}
+	if resp.Command == "get_state" {
+		if resp.Data.Streaming != nil {
+			w.running = *resp.Data.Streaming
+		}
+		if resp.Data.Compacting != nil {
+			w.compacting = *resp.Data.Compacting
+		}
+		if resp.Data.Pending != nil {
+			w.queued = *resp.Data.Pending
+		}
+	}
 }
 
 // publish assigns the next seq and fans the record out. Caller holds w.mu.
@@ -728,6 +614,8 @@ func (w *worker) detach(c *client) {
 }
 
 func (w *worker) serve(ctx context.Context, conn net.Conn) {
+	stopClose := context.AfterFunc(ctx, func() { conn.Close() })
+	defer stopClose()
 	defer conn.Close()
 	scan := bufio.NewScanner(conn)
 	scan.Buffer(make([]byte, 4096), MaxRecord)
@@ -964,70 +852,4 @@ func projectModels(raw []byte) []byte {
 		return raw
 	}
 	return out
-}
-
-func printTerminal(output io.Writer, data []byte) {
-	var event struct {
-		Type     string `json:"type"`
-		ToolName string `json:"toolName"`
-		IsError  bool   `json:"isError"`
-		Error    string `json:"error"`
-		Success  *bool  `json:"success"`
-		Message  struct {
-			Role    string          `json:"role"`
-			Content json.RawMessage `json:"content"`
-		} `json:"message"`
-		Update struct {
-			Type  string `json:"type"`
-			Delta string `json:"delta"`
-		} `json:"assistantMessageEvent"`
-	}
-	if json.Unmarshal(data, &event) != nil {
-		return
-	}
-	switch event.Type {
-	case "message_start":
-		if event.Message.Role == "user" {
-			fmt.Fprintf(output, "\n› %s\n\n", contentText(event.Message.Content))
-		}
-	case "message_update":
-		if event.Update.Type == "text_delta" {
-			fmt.Fprint(output, event.Update.Delta)
-		}
-	case "message_end":
-		if event.Message.Role == "assistant" {
-			fmt.Fprintln(output)
-		}
-	case "tool_execution_start":
-		fmt.Fprintf(output, "\n  ⏵ %s\n", event.ToolName)
-	case "tool_execution_end":
-		if event.IsError {
-			fmt.Fprintf(output, "  ✗ %s failed\n", event.ToolName)
-		} else {
-			fmt.Fprintf(output, "  ✓ %s\n", event.ToolName)
-		}
-	case "response":
-		if event.Success != nil && !*event.Success {
-			fmt.Fprintln(output, "Request failed:", event.Error)
-		}
-	}
-}
-
-func contentText(content json.RawMessage) string {
-	var text string
-	if json.Unmarshal(content, &text) == nil {
-		return text
-	}
-	var blocks []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	}
-	_ = json.Unmarshal(content, &blocks)
-	parts := make([]string, 0, len(blocks))
-	for _, block := range blocks {
-		if block.Type == "text" {
-			parts = append(parts, block.Text)
-		}
-	}
-	return strings.Join(parts, "\n")
 }

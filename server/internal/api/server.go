@@ -19,6 +19,7 @@ import (
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
 	"github.com/agentmirror/agentmirror/internal/discovery"
+	"github.com/agentmirror/agentmirror/internal/guirpc"
 	"github.com/agentmirror/agentmirror/internal/nodeprobe"
 	"github.com/agentmirror/agentmirror/internal/notify"
 	"github.com/agentmirror/agentmirror/internal/overlay"
@@ -152,11 +153,8 @@ type Server struct {
 	// AuthAck and used by create_agent. It is computed once so a client cannot
 	// request arbitrary executables or unverified flags.
 	agentLaunchers []agentLauncher
-	// guiDir is the private guirpc socket directory; "" disables conversation_v1.
-	guiDir string
-	// An upgrade owns one ref until its replacement is ready; reconnects wait
-	// rather than mistaking the temporary missing socket for capability loss.
-	conversationUpgrades sync.Map
+	// Native Pi conversations are daemon-local bridges, not pane-owned IPC.
+	conversations guirpc.Transport
 
 	notifications *notify.Store
 }
@@ -206,7 +204,7 @@ func NewServer(opts Options) *Server {
 		discoverer:      opts.Discoverer,
 		listInterval:    opts.ListInterval,
 		uploadDir:       opts.UploadDir,
-		guiDir:          opts.GUIDir,
+		conversations:   opts.ConversationBridge,
 		maxUpload:       opts.MaxUploadBytes,
 		maxUploadDir:    defaultMaxUploadDirBytes,
 		maxInput:        opts.MaxInputBytes,
@@ -217,6 +215,11 @@ func NewServer(opts Options) *Server {
 		trackers:        make(map[*wsConn]struct{}),
 		attachPreviews:  make(map[string]attachPreviewEntry),
 		notifications:   opts.NotificationStore,
+	}
+	if opts.DisableConversations {
+		s.conversations = nil
+	} else if s.conversations == nil {
+		s.conversations = guirpc.NewManager()
 	}
 	if s.notifications == nil && !opts.DisableNotifications {
 		store, err := notify.New("")
@@ -314,6 +317,9 @@ func (s *Server) Close() {
 	s.trackersMu.Unlock()
 	for _, c := range conns {
 		c.closeSubscriptions()
+	}
+	if s.conversations != nil {
+		s.conversations.Close()
 	}
 }
 

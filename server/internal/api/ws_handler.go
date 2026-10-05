@@ -98,7 +98,7 @@ func (c *wsConn) handleAuth(a protocol.Auth) bool {
 					ack.Capabilities = append(ack.Capabilities, capability)
 					ack.NotificationState = ptrNotificationState(c.s.notifications.State())
 				}
-				if capability == protocol.ConversationCapability && c.s.guiDir != "" {
+				if capability == protocol.ConversationCapability && c.s.conversations != nil {
 					ack.Capabilities = append(ack.Capabilities, capability)
 				}
 			}

@@ -2,10 +2,11 @@ package api
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"net"
-	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,71 +15,98 @@ import (
 	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
-// fakeWorker speaks the guirpc socket protocol for one ref.
+// API routing fixture implements the daemon-local transport; native tmux/Pi
+// behavior is independently exercised by guirpc's actual CLI lifecycle test.
+type fakeConversations struct {
+	mu      sync.Mutex
+	workers map[string]*fakeWorker
+}
 type fakeWorker struct {
-	t        *testing.T
-	listener net.Listener
 	hellos   chan guirpc.Hello
 	commands chan map[string]any
 	conns    chan net.Conn
+	records  []string
+	activity string
 }
 
-func startFakeWorker(t *testing.T, dir, ref string, records ...string) *fakeWorker {
-	t.Helper()
-	listener, err := net.Listen("unix", guirpc.SocketPath(dir, ref))
-	if err != nil {
-		t.Fatalf("listen: %v", err)
+func (f *fakeConversations) Open(ctx context.Context, p discovery.Pane) (net.Conn, error) {
+	f.mu.Lock()
+	w := f.workers[sessionRef(p)]
+	f.mu.Unlock()
+	if w == nil {
+		return nil, net.ErrClosed
 	}
-	w := &fakeWorker{t: t, listener: listener, hellos: make(chan guirpc.Hello, 4), commands: make(chan map[string]any, 4), conns: make(chan net.Conn, 4)}
-	t.Cleanup(func() { listener.Close() })
+	client, server := net.Pipe()
 	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
+		defer server.Close()
+		scan := bufio.NewScanner(server)
+		if !scan.Scan() {
+			return
+		}
+		var hello guirpc.Hello
+		json.Unmarshal(scan.Bytes(), &hello)
+		w.hellos <- hello
+		ready, _ := json.Marshal(guirpc.Ready{Type: "ready", Stream: "s1", HeadSeq: uint64(len(w.records)), Reset: hello.Stream != "s1", Now: 1, Mode: guirpc.ModeRPC})
+		if _, err := server.Write(append(ready, '\n')); err != nil {
+			return
+		}
+		for _, r := range w.records {
+			if _, err := server.Write([]byte(r + "\n")); err != nil {
 				return
 			}
-			go func() {
-				scan := bufio.NewScanner(conn)
-				if !scan.Scan() {
-					return
-				}
-				var hello guirpc.Hello
-				_ = json.Unmarshal(scan.Bytes(), &hello)
-				w.hellos <- hello
-				ready, _ := json.Marshal(guirpc.Ready{Type: "ready", Stream: "s1", HeadSeq: uint64(len(records)), Reset: hello.Stream != "s1", Now: 1})
-				conn.Write(append(ready, '\n'))
-				for _, r := range records {
-					conn.Write([]byte(r + "\n"))
-				}
-				w.conns <- conn
-				for scan.Scan() {
-					var command map[string]any
-					_ = json.Unmarshal(scan.Bytes(), &command)
-					w.commands <- command
-				}
-			}()
+		}
+		w.conns <- server
+		for scan.Scan() {
+			var command map[string]any
+			json.Unmarshal(scan.Bytes(), &command)
+			w.commands <- command
 		}
 	}()
+	return client, nil
+}
+func (f *fakeConversations) Available(ref string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.workers[ref] != nil
+}
+func (f *fakeConversations) Detect(_ context.Context, p discovery.Pane) bool {
+	return f.Available(sessionRef(p))
+}
+func (f *fakeConversations) Activity(ref string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if w := f.workers[ref]; w != nil {
+		return w.activity
+	}
+	return ""
+}
+func (f *fakeConversations) Close() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.workers = map[string]*fakeWorker{}
+}
+func startFakeWorker(t *testing.T, f *fakeConversations, ref string, records ...string) *fakeWorker {
+	t.Helper()
+	w := &fakeWorker{hellos: make(chan guirpc.Hello, 4), commands: make(chan map[string]any, 4), conns: make(chan net.Conn, 4), records: records}
+	f.mu.Lock()
+	f.workers[ref] = w
+	f.mu.Unlock()
 	return w
 }
 
-func conversationEnv(t *testing.T) (*wsEnv, string, discovery.Pane) {
+func conversationEnv(t *testing.T) (*wsEnv, *fakeConversations, discovery.Pane) {
 	t.Helper()
-	dir, err := os.MkdirTemp(".", "g")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
-	pane := discovery.Pane{Socket: "/tmp/conv-test.sock", PaneID: "%3", WindowName: "pi", CWD: "/work/p", Command: "agentmirrord", Width: 80, Height: 24}
+	transport := &fakeConversations{workers: map[string]*fakeWorker{}}
+	pane := discovery.Pane{Socket: "/synthetic/conv-test.sock", PaneID: "%3", WindowName: "pi", CWD: "/work/p", Command: "pi", Width: 80, Height: 24}
 	model := &discovery.Model{Workspaces: []discovery.Workspace{{CWD: pane.CWD, Panes: []discovery.Pane{pane}}}}
-	e := startWS(t, Options{Token: "test-token", Discoverer: scriptedDiscoverer{model: model}, ListInterval: time.Hour, GUIDir: dir})
+	e := startWS(t, Options{Token: "test-token", Discoverer: scriptedDiscoverer{model: model}, ListInterval: time.Hour, ConversationBridge: transport})
 	ack := sendRawControl(t, e, `{"v":1,"type":"auth","payload":{"token":"test-token","capabilities":["conversation_v1"]}}`)
 	var payload protocol.AuthAck
-	_ = json.Unmarshal(ack.Payload, &payload)
+	json.Unmarshal(ack.Payload, &payload)
 	if ack.Type != "auth_ack" || len(payload.Capabilities) != 1 || payload.Capabilities[0] != protocol.ConversationCapability {
 		t.Fatalf("conversation_v1 not negotiated: %s %s", ack.Type, ack.Payload)
 	}
-	return e, dir, pane
+	return e, transport, pane
 }
 
 func readUntil[T protocol.Typed](t *testing.T, e *wsEnv) T {
@@ -93,11 +121,11 @@ func readUntil[T protocol.Typed](t *testing.T, e *wsEnv) T {
 	return zero
 }
 
-func TestConversationCapabilityRequiresGUIDir(t *testing.T) {
-	e := startWS(t, Options{Token: "test-token", Discoverer: scriptedDiscoverer{model: &discovery.Model{}}, ListInterval: time.Hour})
+func TestConversationCapabilityCanBeExplicitlyDisabled(t *testing.T) {
+	e := startWS(t, Options{Token: "test-token", Discoverer: scriptedDiscoverer{model: &discovery.Model{}}, ListInterval: time.Hour, DisableConversations: true})
 	ack := sendRawControl(t, e, `{"v":1,"type":"auth","payload":{"token":"test-token","capabilities":["conversation_v1"]}}`)
 	if strings.Contains(string(ack.Payload), "conversation_v1") {
-		t.Fatalf("server without a GUI dir must not acknowledge conversation_v1: %s", ack.Payload)
+		t.Fatalf("disabled native bridge acknowledged: %s", ack.Payload)
 	}
 	e.sendFrame(&protocol.ConversationSubscribe{Ref: "x"})
 	if got, ok := readControlWithTimeout(t, e, 5*time.Second).(protocol.ErrorFrame); !ok || got.Code != protocol.ErrCodeUnsupportedType {
@@ -105,14 +133,20 @@ func TestConversationCapabilityRequiresGUIDir(t *testing.T) {
 	}
 }
 
-func TestConversationSubscribeRelaysReplayAndCommands(t *testing.T) {
-	e, dir, pane := conversationEnv(t)
-	ref := sessionRef(pane)
-	worker := startFakeWorker(t, dir, ref,
-		`{"seq":1,"ts":10,"event":{"type":"agent_start"}}`,
-		`{"seq":2,"ts":11,"event":{"type":"message_start","message":{"role":"user","content":"hi","timestamp":1}}}`,
-	)
+func TestConversationCapabilityNeedsNoPrivateDirectory(t *testing.T) {
+	e := startWS(t, Options{Token: "test-token", Discoverer: scriptedDiscoverer{model: &discovery.Model{}}, ListInterval: time.Hour})
+	ack := sendRawControl(t, e, `{"v":1,"type":"auth","payload":{"token":"test-token","capabilities":["conversation_v1"]}}`)
+	if !strings.Contains(string(ack.Payload), "conversation_v1") {
+		t.Fatal("native capability not enabled by default")
+	}
+}
 
+func TestConversationSubscribeRelaysReplayAndCommands(t *testing.T) {
+	e, transport, pane := conversationEnv(t)
+	ref := sessionRef(pane)
+	worker := startFakeWorker(t, transport, ref,
+		`{"seq":1,"ts":10,"event":{"type":"agent_start"}}`,
+		`{"seq":2,"ts":11,"event":{"type":"message_start","message":{"role":"user","content":"hi","timestamp":1}}}`)
 	e.sendFrame(&protocol.ConversationSubscribe{Ref: ref, Stream: "s1", AfterSeq: 0})
 	ready := readUntil[protocol.ConversationReady](t, e)
 	if ready.Ref != ref || ready.Stream != "s1" || ready.HeadSeq != 2 || ready.Reset {
@@ -126,7 +160,6 @@ func TestConversationSubscribeRelaysReplayAndCommands(t *testing.T) {
 	if first.Ref != ref || first.Seq != 1 || first.TS != 10 || string(first.Event) != `{"type":"agent_start"}` || second.Seq != 2 {
 		t.Fatalf("events = %+v / %+v", first, second)
 	}
-
 	e.sendFrame(&protocol.ConversationCommand{Ref: ref, ID: "c1", Command: json.RawMessage(`{"type":"prompt","message":"hello"}`)})
 	select {
 	case command := <-worker.commands:
@@ -134,25 +167,22 @@ func TestConversationSubscribeRelaysReplayAndCommands(t *testing.T) {
 			t.Fatalf("forwarded command = %v", command)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("command never reached the worker")
+		t.Fatal("command never reached native bridge")
 	}
-
 	e.sendFrame(&protocol.ConversationCommand{Ref: ref, ID: "c2", Command: json.RawMessage(`{"type":"bash","command":"rm -rf /"}`)})
 	rejected := readUntil[protocol.ConversationEvent](t, e)
 	if rejected.Seq != 0 || !strings.Contains(string(rejected.Event), `"success":false`) || !strings.Contains(string(rejected.Event), `"id":"c2"`) {
 		t.Fatalf("non-whitelisted command must be rejected visibly: %s", rejected.Event)
 	}
-
-	// The worker drops the stream while alive: the client is told to resume.
 	(<-worker.conns).Close()
 	if closed := readUntil[protocol.ConversationClosed](t, e); closed.Reason != protocol.ConversationLost {
 		t.Fatalf("closed = %+v", closed)
 	}
-	// Socket gone: the agent exited.
 	e.sendFrame(&protocol.ConversationSubscribe{Ref: ref, Stream: "s1", AfterSeq: 2})
 	readUntil[protocol.ConversationReady](t, e)
-	worker.listener.Close()
-	os.Remove(guirpc.SocketPath(dir, ref))
+	transport.mu.Lock()
+	delete(transport.workers, ref)
+	transport.mu.Unlock()
 	(<-worker.conns).Close()
 	if closed := readUntil[protocol.ConversationClosed](t, e); closed.Reason != protocol.ConversationExited {
 		t.Fatalf("closed after exit = %+v", closed)
@@ -167,19 +197,18 @@ func TestConversationSubscribeToTerminalPaneIsUnavailable(t *testing.T) {
 	}
 }
 
-func TestListingMarksManagedConversationPanes(t *testing.T) {
-	e, dir, pane := conversationEnv(t)
+func TestListingMarksNativeConversationPanes(t *testing.T) {
+	e, transport, pane := conversationEnv(t)
 	ref := sessionRef(pane)
-	startFakeWorker(t, dir, ref)
-	state := strings.TrimSuffix(guirpc.SocketPath(dir, ref), ".sock") + ".state"
-	if err := os.WriteFile(state, []byte("working"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	worker := startFakeWorker(t, transport, ref)
+	transport.mu.Lock()
+	worker.activity = "working"
+	transport.mu.Unlock()
 	e.sendFrame(&protocol.List{ReqID: 1})
 	listing := readUntil[protocol.Listing](t, e)
 	session := listing.Workspaces[0].Sessions[0]
 	if !session.Conversation || session.Provider != "pi" || session.Activity != "working" || session.Health != protocol.SessionHealthNormal {
-		t.Fatalf("managed pane = %+v", session)
+		t.Fatalf("native pane = %+v", session)
 	}
 }
 
