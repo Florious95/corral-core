@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.dp
  * One consistent line-icon family for the conversation surface: 24-unit grid, round caps and
  * joins, stroke ≈ 1.7/24. Drawn on Canvas — no emoji, no symbol-font fallback, crisp at any size.
  */
-enum class Glyph { Bolt, Clip, Send, Stop, Back, More, Down, Chevron, Terminal, File, Pencil, Search, Spark, Check, Cross, Copy, Camera, Photo, Refresh }
+enum class Glyph { Bolt, Clip, Plus, Send, Stop, Back, More, Down, Chevron, Terminal, File, Pencil, Search, Spark, Wand, Check, Cross, Copy, Camera, Photo, Refresh }
 
 @Composable
 fun GlyphIcon(glyph: Glyph, tint: Color, size: Dp = 20.dp, modifier: Modifier = Modifier) {
@@ -68,6 +68,10 @@ fun DrawScope.drawGlyph(glyph: Glyph, tint: Color) {
                 lineTo(19.5f * u, 12.5f * u)
             }
             drawPath(clip, tint, style = line)
+        }
+        Glyph.Plus -> {
+            drawLine(tint, p(12f, 5f), p(12f, 19f), 1.9f * u, StrokeCap.Round)
+            drawLine(tint, p(5f, 12f), p(19f, 12f), 1.9f * u, StrokeCap.Round)
         }
         Glyph.Send -> {
             val w = Stroke(width = 2.1f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -111,6 +115,21 @@ fun DrawScope.drawGlyph(glyph: Glyph, tint: Color) {
                 close()
             }
             drawPath(star, tint)
+        }
+        Glyph.Wand -> {
+            // A skill: the wand that casts it, one bright star at the tip, two embers.
+            drawLine(tint, p(4.5f, 19.5f), p(13.5f, 10.5f), 2f * u, StrokeCap.Round)
+            val star = Path().apply {
+                moveTo(17f * u, 3f * u)
+                quadraticTo(17.6f * u, 6.4f * u, 21f * u, 7f * u)
+                quadraticTo(17.6f * u, 7.6f * u, 17f * u, 11f * u)
+                quadraticTo(16.4f * u, 7.6f * u, 13f * u, 7f * u)
+                quadraticTo(16.4f * u, 6.4f * u, 17f * u, 3f * u)
+                close()
+            }
+            drawPath(star, tint)
+            drawCircle(tint, 1.05f * u, p(9.5f, 4.5f))
+            drawCircle(tint, 0.9f * u, p(20f, 14.5f))
         }
         Glyph.Check -> drawPath(path(5f to 12.5f, 10f to 17.5f, 19f to 7f), tint, style = Stroke(2.1f * u, cap = StrokeCap.Round, join = StrokeJoin.Round))
         Glyph.Cross -> {

@@ -442,7 +442,7 @@ private fun ConversationScreen(
             items(rows, key = { it.key }, contentType = { it::class }) { item ->
                 val mod = Modifier.animateItem(fadeInSpec = tween(220), placementSpec = spring(dampingRatio = 0.9f, stiffness = 380f), fadeOutSpec = tween(140))
                 when (item) {
-                    is UserTurn -> UserBubble(item, p, mod)
+                    is UserTurn -> UserBubble(item, p, expanded[item.key] == true, { expanded[item.key] = expanded[item.key] != true }, mod)
                     is AssistantText -> AssistantProse(item, p, mod)
                     is Reasoning -> ReasoningRow(item, p, expanded[item.key] == true, { expanded[item.key] = expanded[item.key] != true }, mod)
                     is ToolCall -> ToolCallCard(item, p, expanded[item.key] == true, state.serverSkewMs, { expanded[item.key] = expanded[item.key] != true }, mod)

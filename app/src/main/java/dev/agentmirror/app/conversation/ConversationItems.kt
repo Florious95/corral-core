@@ -17,6 +17,7 @@
 package dev.agentmirror.app.conversation
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -57,6 +58,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -69,7 +71,9 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -97,25 +101,20 @@ internal val MonoSmall = TextStyle(fontFamily = ConversationMono, fontSize = 12.
 /** Spring used by every disclosure: settles fast, a hint of give, no wobble. */
 internal fun <T> disclosureSpring() = spring<T>(dampingRatio = 0.86f, stiffness = 420f)
 
+/** A pasted log or a long brief folds to this many lines; the rest is one tap away. */
+private const val USER_FOLD_LINES = 8
+
 @Composable
-fun UserBubble(turn: UserTurn, p: ConversationPalette, modifier: Modifier = Modifier) {
-    val shape = RoundedRectangle(22.dp)
+fun UserBubble(turn: UserTurn, p: ConversationPalette, expanded: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth().padding(top = 14.dp), horizontalAlignment = Alignment.End) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Spacer(Modifier.weight(0.14f))
-            Box(
-                Modifier
-                    .weight(0.86f, fill = false)
-                    .clip(shape)
-                    .background(p.userBubble)
-                    .border(0.6.dp, Brush.verticalGradient(listOf(p.surfaceGlint, Color.Transparent)), shape)
-                    .padding(horizontal = 15.dp, vertical = 10.dp)
-                    .testTag("conversation-user"),
-            ) {
-                SelectionContainer {
-                    Text(turn.text, style = BodyStyle.copy(color = p.userInk))
-                }
-            }
+        val skill = turn.skill
+        if (skill != null) {
+            SkillCard(skill, p, expanded, onToggle)
+            skill.request?.let { UserText(it, p, folded = false, onToggle = null, Modifier.padding(top = 8.dp)) }
+        } else {
+            val lines = remember(turn.text) { turn.text.count { it == '\n' } + 1 }
+            val foldable = lines > USER_FOLD_LINES + 4 || turn.text.length > 1_200
+            UserText(turn.text, p, folded = foldable && !expanded, onToggle = if (foldable) onToggle else null, lines = lines)
         }
         val meta = buildList {
             if (turn.imageCount > 0) add("${turn.imageCount} 张图片")
@@ -133,6 +132,167 @@ fun UserBubble(turn: UserTurn, p: ConversationPalette, modifier: Modifier = Modi
         }
     }
 }
+
+@Composable
+private fun UserText(text: String, p: ConversationPalette, folded: Boolean, onToggle: (() -> Unit)?, modifier: Modifier = Modifier, lines: Int = 0) {
+    val shape = RoundedRectangle(22.dp)
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Spacer(Modifier.weight(0.14f))
+        Column(
+            Modifier
+                .weight(0.86f, fill = false)
+                .clip(shape)
+                .background(p.userBubble)
+                .border(0.6.dp, Brush.verticalGradient(listOf(p.surfaceGlint, Color.Transparent)), shape)
+                .animateContentSize(disclosureSpring())
+                .padding(horizontal = 15.dp, vertical = 10.dp)
+                .testTag("conversation-user"),
+        ) {
+            SelectionContainer {
+                Text(
+                    text,
+                    style = BodyStyle.copy(color = p.userInk),
+                    maxLines = if (folded) USER_FOLD_LINES else Int.MAX_VALUE,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (onToggle != null) {
+                Text(
+                    if (folded) "展开全文 · $lines 行" else "收起",
+                    style = CaptionStyle.copy(color = p.userInk.copy(alpha = 0.72f), fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier
+                        .padding(top = 6.dp)
+                        .clip(Capsule())
+                        .clickable(onClick = onToggle)
+                        .padding(vertical = 4.dp)
+                        .testTag("conversation-user-fold"),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Pi's `/skill:name` expansion, folded: the wand, the skill's name, how much it brings and its
+ * first line. The body (often hundreds of lines of instructions) opens on demand with the same
+ * disclosure spring as tools, and is never parsed while folded.
+ */
+@Composable
+fun SkillCard(skill: SkillBlock, p: ConversationPalette, expanded: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedRectangle(20.dp)
+    val chevron by animateFloatAsState(if (expanded) 180f else 0f, disclosureSpring(), label = "skill-chevron")
+    val lines = remember(skill.content) { if (skill.content.isEmpty()) 0 else skill.content.count { it == '\n' } + 1 }
+    val summary = remember(skill.content) { skillSummary(skill.content) }
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Spacer(Modifier.weight(0.06f))
+        Column(
+            Modifier
+                .weight(0.94f)
+                .clip(shape)
+                .background(p.surface)
+                .border(0.5.dp, p.surfaceStroke, shape)
+                .drawBehind {
+                    drawRect(Brush.verticalGradient(listOf(p.accent.copy(alpha = if (p.dark) 0.10f else 0.07f), Color.Transparent), endY = 64.dp.toPx()))
+                }
+                .testTag("conversation-skill"),
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggle)
+                    .heightIn(min = 58.dp)
+                    .padding(start = 11.dp, end = 12.dp, top = 9.dp, bottom = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .clip(RoundedRectangle(11.dp))
+                        .background(Brush.linearGradient(listOf(p.accent.copy(alpha = 0.22f), p.accent.copy(alpha = 0.08f)))),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    GlyphIcon(Glyph.Wand, p.accentInk, 19.dp)
+                }
+                Column(Modifier.weight(1f).padding(start = 11.dp, end = 8.dp)) {
+                    Text(
+                        skill.name,
+                        style = MonoSmall.copy(color = p.ink, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("conversation-skill-name"),
+                    )
+                    Text(
+                        listOf("调用技能", summary).filter { it.isNotBlank() }.joinToString(" · "),
+                        style = CaptionStyle.copy(color = p.inkSoft, fontSize = 12.sp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+                Text(
+                    "$lines 行",
+                    style = CaptionStyle.copy(color = p.inkSoft, fontFamily = ConversationMono),
+                    modifier = Modifier.clip(Capsule()).background(p.ink.copy(alpha = 0.05f)).padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+                GlyphIcon(Glyph.Chevron, p.inkSoft, 16.dp, Modifier.padding(start = 6.dp).rotate(chevron))
+            }
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(disclosureSpring(), expandFrom = Alignment.Top) + fadeIn(tween(180, delayMillis = 40)),
+                exit = shrinkVertically(disclosureSpring(), shrinkTowards = Alignment.Top) + fadeOut(tween(110)),
+            ) {
+                SkillBody(skill, p)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SkillBody(skill: SkillBlock, p: ConversationPalette) {
+    val clipboard = LocalClipboardManager.current
+    var copied by remember(skill) { mutableStateOf(false) }
+    Column {
+        Box(Modifier.fillMaxWidth().height(0.5.dp).background(p.surfaceStroke))
+        Box(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+            SelectionContainer(Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 4.dp)) {
+                MarkdownText(skill.content, p)
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                skill.location,
+                style = MonoSmall.copy(color = p.inkSoft, fontSize = 11.sp),
+                maxLines = 1,
+                overflow = TextOverflow.StartEllipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Row(
+                Modifier
+                    .padding(start = 8.dp)
+                    .clip(Capsule())
+                    .clickable {
+                        clipboard.setText(AnnotatedString(listOfNotNull(skill.content, skill.request).joinToString("\n\n")))
+                        copied = true
+                    }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .testTag("conversation-skill-copy"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                GlyphIcon(if (copied) Glyph.Check else Glyph.Copy, if (copied) p.success else p.inkSoft, 14.dp)
+                Text(if (copied) "已复制" else "复制", style = CaptionStyle.copy(color = if (copied) p.success else p.inkSoft))
+            }
+        }
+    }
+}
+
+/** The skill's first real line, without Markdown markers: usually its title. */
+internal fun skillSummary(content: String): String = content.lineSequence()
+    .map { it.trim() }
+    .firstOrNull { it.isNotEmpty() && !it.startsWith("```") }
+    ?.trimStart('#', '>', '-', '*', ' ')
+    .orEmpty()
+    .take(120)
 
 @Composable
 fun AssistantProse(item: AssistantText, p: ConversationPalette, modifier: Modifier = Modifier) {
@@ -228,7 +388,7 @@ fun ToolCallCard(tool: ToolCall, p: ConversationPalette, expanded: Boolean, skew
                     .background(tone.copy(alpha = if (p.dark) 0.16f else 0.11f)),
                 contentAlignment = Alignment.Center,
             ) {
-                GlyphIcon(toolGlyph(tool.name), tone, 17.dp)
+                GlyphIcon(if (skillRead(tool) != null) Glyph.Wand else toolGlyph(tool.name), tone, 17.dp)
             }
             Column(Modifier.weight(1f).padding(start = 11.dp, end = 8.dp)) {
                 Text(toolTitle(tool), style = LabelStyle.copy(color = p.ink), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -473,7 +633,17 @@ internal fun Shimmer(text: String, p: ConversationPalette) {
 
 private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 
-internal fun toolTitle(tool: ToolCall): String = when (tool.name.lowercase()) {
+/** A `read` of some skill's SKILL.md: the model loading a skill on its own. */
+private fun skillRead(tool: ToolCall): String? {
+    if (tool.name.lowercase() != "read") return null
+    val path = tool.arguments?.let { it.text("path") ?: it.text("file_path") } ?: return null
+    if (!path.endsWith("/SKILL.md") && path != "SKILL.md") return null
+    return path.removeSuffix("SKILL.md").trimEnd('/').substringAfterLast('/').ifBlank { "skill" }
+}
+
+internal fun toolTitle(tool: ToolCall): String = if (skillRead(tool) != null) {
+    if (tool.finished) "加载了技能" else "加载技能"
+} else when (tool.name.lowercase()) {
     "bash", "shell", "exec" -> if (tool.finished) "运行了命令" else "运行命令"
     "read", "view" -> if (tool.finished) "读取了文件" else "读取文件"
     "edit", "multiedit", "patch", "apply_patch" -> if (tool.finished) "编辑了文件" else "编辑文件"
@@ -486,6 +656,7 @@ internal fun toolTitle(tool: ToolCall): String = when (tool.name.lowercase()) {
 
 /** One-line gist: the command, the path, or the pattern — readable while still streaming. */
 internal fun toolSummary(tool: ToolCall): String {
+    skillRead(tool)?.let { return it }
     val args = tool.arguments
     if (args == null) {
         // Arguments still streaming: show the first string value as it types itself out.

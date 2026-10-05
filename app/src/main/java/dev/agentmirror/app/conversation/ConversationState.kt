@@ -47,7 +47,15 @@ data class UserTurn(
     val imageCount: Int = 0,
     val delivery: Delivery = Delivery.Delivered,
     val timestamp: Long = 0,
+    /** Set when [text] is Pi's own `/skill:name` expansion; rendered as a folded card. */
+    val skill: SkillBlock? = null,
 ) : ConversationItem
+
+/**
+ * Pi's explicit skill invocation as the model receives it (agent-session.js parseSkillBlock):
+ * `<skill name location>` wrapper, the SKILL.md body, then the user's own request, if any.
+ */
+data class SkillBlock(val name: String, val location: String, val content: String, val request: String?)
 
 data class AssistantText(
     override val key: String,
@@ -226,16 +234,17 @@ data class ConversationState(
         val key = "m$seq"
         return when (message.str("role")) {
             "user" -> {
-                val (text, images) = userContent(message["content"])
+                val content = userContent(message["content"])
                 // Prompts are delivered in send order: the oldest optimistic echo is this one.
                 val echo = items.indexOfFirst { it is UserTurn && it.delivery != Delivery.Delivered }
                 val base = if (echo >= 0) items.toMutableList().apply { removeAt(echo) } else items
-                copy(items = bounded(base + UserTurn(key, text, images, Delivery.Delivered, message.long("timestamp") ?: ts)))
+                val turn = UserTurn(key, content.text, content.images, Delivery.Delivered, message.long("timestamp") ?: ts, content.skill)
+                copy(items = bounded(base + turn))
             }
             "assistant" -> copy(active = ActiveMessage(key))
             "compactionSummary", "branchSummary" -> notice(seq, NoticeTone.Divider, "上下文已摘要")
             "custom" -> if (message.bool("display") == true) {
-                notice(seq, NoticeTone.Info, userContent(message["content"]).first.ifBlank { "扩展消息" })
+                notice(seq, NoticeTone.Info, userContent(message["content"]).text.ifBlank { "扩展消息" })
             } else {
                 this
             }
@@ -292,12 +301,12 @@ data class ConversationState(
 
     private fun messageEnd(seq: Long, ts: Long, message: JsonObject): ConversationState = when (message.str("role")) {
         "user" -> {
-            val (text, images) = userContent(message["content"])
+            val content = userContent(message["content"])
             val stamp = message.long("timestamp")
             val at = items.indexOfLast { it is UserTurn && it.delivery == Delivery.Delivered }
             val existing = items.getOrNull(at) as? UserTurn
             if (existing != null && (stamp == null || existing.timestamp == stamp)) {
-                replaceAt(at, existing.copy(text = text, imageCount = images))
+                replaceAt(at, existing.copy(text = content.text, imageCount = content.images, skill = content.skill))
             } else {
                 messageStart(seq, ts, message)
             }
@@ -535,16 +544,53 @@ internal fun JsonObject.bool(key: String): Boolean? = (this[key] as? JsonPrimiti
 internal fun JsonObject.int(key: String): Int? = (this[key] as? JsonPrimitive)?.intOrNull
 internal fun JsonObject.long(key: String): Long? = (this[key] as? JsonPrimitive)?.longOrNull
 
-/** User content is a string or text/image blocks. */
-internal fun userContent(content: JsonElement?): Pair<String, Int> = when (content) {
-    is JsonPrimitive -> clip(content.contentOrNull.orEmpty()) to 0
-    is JsonArray -> {
-        val text = content.mapNotNull { (it as? JsonObject)?.takeIf { b -> b.str("type") == "text" }?.str("text") }
-            .joinToString("\n")
-        clip(text) to content.count { (it as? JsonObject)?.str("type") == "image" }
+internal class UserContent(val text: String, val images: Int, val skill: SkillBlock?)
+
+/**
+ * User content is a string or text/image blocks. The skill wrapper is recognised on the raw
+ * text, before clipping, so a long skill never loses its closing tag to the display bound.
+ */
+internal fun userContent(content: JsonElement?): UserContent {
+    val (raw, images) = when (content) {
+        is JsonPrimitive -> content.contentOrNull.orEmpty() to 0
+        is JsonArray -> content.mapNotNull { (it as? JsonObject)?.takeIf { b -> b.str("type") == "text" }?.str("text") }
+            .joinToString("\n") to content.count { (it as? JsonObject)?.str("type") == "image" }
+        else -> "" to 0
     }
-    else -> "" to 0
+    return UserContent(clip(raw), images, parseSkillBlock(raw))
 }
+
+private val SkillHead = Regex("""^<skill name="([^"]+)" location="([^"]+)">\n""")
+private const val SKILL_CLOSE = "\n</skill>"
+
+/**
+ * Exactly Pi's whole-text match `^<skill …>\n(body)\n</skill>(?:\n\n(request))?$`, without
+ * regex backtracking over a large body; anything else (a quoted example, a truncated wrapper)
+ * stays an ordinary message.
+ */
+internal fun parseSkillBlock(text: String): SkillBlock? {
+    val head = SkillHead.find(text) ?: return null
+    val start = head.range.last + 1
+    var close = text.indexOf(SKILL_CLOSE, start)
+    while (close >= 0) {
+        val tail = close + SKILL_CLOSE.length
+        val request = when {
+            tail == text.length -> ""
+            text.startsWith("\n\n", tail) && text.length > tail + 2 -> text.substring(tail + 2)
+            else -> null
+        }
+        if (request != null) {
+            val body = text.substring(start, close)
+            // Pi prefixes the body with where its references resolve; the card shows the location itself.
+            val content = body.replaceFirst(SkillPreamble, "")
+            return SkillBlock(head.groupValues[1], head.groupValues[2], clip(content), request.trim().ifEmpty { null }?.let(::clip))
+        }
+        close = text.indexOf(SKILL_CLOSE, close + 1)
+    }
+    return null
+}
+
+private val SkillPreamble = Regex("""^References are relative to [^\n]*\n\n?""")
 
 /** Tool result text: text blocks, else a structured "output" field. */
 internal fun resultText(result: JsonObject): String {

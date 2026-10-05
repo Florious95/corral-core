@@ -139,5 +139,49 @@ class ConversationStateTest {
         assertTrue(state.historyTruncated)
     }
 
+    @Test
+    fun realSkillInvocationFoldsIntoOneSkillTurnWithItsRequest() {
+        val echo = ConversationState().withLocalEcho("c1", "/skill:demo-skill extract report.pdf\nplease", 0, 1)
+        val state = reduceAll("pi-skill-invocation.jsonl", echo)
+        val turn = state.items.single() as UserTurn
+        assertEquals("m1", turn.key)
+        val skill = turn.skill!!
+        assertEquals("demo-skill", skill.name)
+        assertEquals("/Users/dev/project/.pi/skills/demo-skill/SKILL.md", skill.location)
+        assertTrue(skill.content.startsWith("# Demo skill\n"))
+        assertTrue(skill.content.endsWith("```"))
+        assertEquals("extract report.pdf\nplease", skill.request)
+        // Replay of the same records stays one turn with the same key.
+        assertEquals(state, records("pi-skill-invocation.jsonl").fold(state) { s, (seq, ts, e) -> s.apply(seq, ts, e) })
+    }
+
+    @Test
+    fun onlyPisExactSkillWrapperFolds() {
+        val head = "<skill name=\"s\" location=\"/x/SKILL.md\">\n"
+        assertEquals(SkillBlock("s", "/x/SKILL.md", "body", null), parseSkillBlock(head + "References are relative to /x.\n\nbody\n</skill>"))
+        assertEquals(SkillBlock("s", "/x/SKILL.md", "", null), parseSkillBlock(head + "\n</skill>"))
+        assertEquals("go", parseSkillBlock(head + "a\n</skill>\n\n  go  ")!!.request)
+        // A body that quotes the closing tag still ends at the real one.
+        assertEquals("a\n</skill> quoted\nb", parseSkillBlock(head + "a\n</skill> quoted\nb\n</skill>")!!.content)
+        // Not Pi's wrapper: prose around it, a truncated tail, a code example, a missing body newline.
+        listOf(
+            "see " + head + "a\n</skill>",
+            head + "a\n</skill>\n…",
+            head + "a",
+            "```\n" + head + "a\n</skill>\n```",
+            "<skill name=\"s\" location=\"/x\">\n</skill>",
+        ).forEach { assertEquals(it, null, parseSkillBlock(it)) }
+    }
+
+    @Test
+    fun clippedSkillStillFoldsBecauseRecognitionPrecedesTheBound() {
+        val body = "x".repeat(ConversationState.MAX_TEXT + 10)
+        val text = "<skill name=\"big\" location=\"/b/SKILL.md\">\n$body\n</skill>"
+        val state = ConversationState().apply(1, 1, event("""{"type":"message_start","message":{"role":"user","content":${kotlinx.serialization.json.JsonPrimitive(text)},"timestamp":1}}"""))
+        val turn = state.items.single() as UserTurn
+        assertEquals("big", turn.skill!!.name)
+        assertTrue(turn.skill!!.content.length <= ConversationState.MAX_TEXT + 2)
+    }
+
     private fun event(json: String) = Json.parseToJsonElement(json).jsonObject
 }
