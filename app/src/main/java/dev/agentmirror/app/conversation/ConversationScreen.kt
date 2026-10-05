@@ -54,6 +54,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -79,6 +80,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -87,18 +89,23 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalFontFamilyResolver
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -115,6 +122,7 @@ import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.perf.PerfTrace
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.session.Attachment
+import dev.agentmirror.app.session.ClearFocusWhenImeHides
 import dev.agentmirror.app.session.HttpUrlConnectionUploader
 import dev.agentmirror.app.session.SharedPreferencesShortcutCommandStore
 import dev.agentmirror.app.session.ShortcutResolution
@@ -178,7 +186,6 @@ fun ConversationRoute(
     val state by session.state.collectAsState()
     val phase by session.phase.collectAsState()
     val commands by session.commands.collectAsState()
-    android.util.Log.d("ConvTrace", "route_compose phase=$phase items=${state.items.size} t=${android.os.SystemClock.elapsedRealtime()}")
     LaunchedEffect(phase) {
         if (phase == LinkPhase.Unavailable && !session.everReady) {
             DiagLog.record("conversation", "fallback_tui ref_hash=${ref.hashCode()} reason=unavailable_before_ready")
@@ -203,6 +210,7 @@ fun ConversationRoute(
     }
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun ConversationScreen(
     ref: String,
@@ -227,9 +235,29 @@ private fun ConversationScreen(
     var slashDismissedFor by remember { mutableStateOf<String?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
     var toast by remember { mutableStateOf<String?>(null) }
-    var headerPx by remember { mutableIntStateOf(0) }
-    var dockPx by remember { mutableIntStateOf(0) }
+    // Geometry is read at layout time only (list padding, overlay offsets): the dock rising or the
+    // IME sliding re-measures, it never recomposes the screen.
+    val headerPx = remember { mutableIntStateOf(0) }
+    val dockPx = remember { mutableIntStateOf(0) }
     val imageIds = remember { AtomicLong() }
+
+    // ---- composer focus: one intent source (TUI dock state machine) ------------------------
+    val keyboard = LocalSoftwareKeyboardController.current
+    var editorFocused by remember(ref) { mutableStateOf(false) }
+    val expansion = remember(ref) { mutableIntStateOf(0) }
+    var collapseRequested by remember(ref) { mutableStateOf(false) }
+    fun collapseComposer(source: String) {
+        if (collapseRequested || !editorFocused) return
+        collapseRequested = true
+        ConvTrace.log("dock collapse source=$source generation=${expansion.intValue}")
+        keyboard?.hide()
+        focus.clearFocus(force = true)
+    }
+    ClearFocusWhenImeHides(
+        collapseRequested = collapseRequested,
+        expansionRequest = expansion,
+        onImeHideStarted = { collapseComposer("ime-hide") },
+    )
 
     val connected = phase == LinkPhase.Live
     val slashActive = draft.text.startsWith("/") && !draft.text.contains(' ') && !draft.text.contains('\n') && slashDismissedFor != draft.text
@@ -325,7 +353,12 @@ private fun ConversationScreen(
     }
 
     // ---- sending --------------------------------------------------------------------------
-    fun scrollToLatest() = scope.launch { if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0) listState.animateScrollToItem(0) }
+    fun scrollToLatest() = scope.launch {
+        if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0) {
+            ConvTrace.log("jump from=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset}")
+            listState.animateScrollToItem(0)
+        }
+    }
 
     fun send() {
         val text = promptText(draft.text)
@@ -385,14 +418,16 @@ private fun ConversationScreen(
         sheet = ComposerSheet.None
     }
 
-    BackHandler(enabled = activeSheet != ComposerSheet.None || menuOpen) {
+    // Back peels one layer at a time: menu → panel → composer → leave.
+    BackHandler(enabled = activeSheet != ComposerSheet.None || menuOpen || editorFocused) {
         when {
             menuOpen -> menuOpen = false
             sheet != ComposerSheet.None -> sheet = ComposerSheet.None
-            else -> slashDismissedFor = draft.text
+            activeSheet == ComposerSheet.Slash -> slashDismissedFor = draft.text
+            else -> collapseComposer("back")
         }
     }
-    BackHandler(enabled = activeSheet == ComposerSheet.None && !menuOpen, onBack = onBack)
+    BackHandler(enabled = activeSheet == ComposerSheet.None && !menuOpen && !editorFocused, onBack = onBack)
 
     // ---- layout -----------------------------------------------------------------------------
     val backdrop = rememberLayerBackdrop {
@@ -406,21 +441,48 @@ private fun ConversationScreen(
         )
         drawContent()
     }
-    val topPad = with(density) { headerPx.toDp() } + 10.dp
-    val bottomPad = with(density) { dockPx.toDp() } + 14.dp
-    val following by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < 24 } }
+    val listPadding = remember(density) { LiveListPadding(density, headerPx, dockPx) }
+    val followSlackPx = with(density) { FOLLOW_SLACK.roundToPx() }
+    val following by remember(followSlackPx) {
+        derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset <= followSlackPx }
+    }
     // PerfTrace first_draw (setprop-gated, free when off): the first frame that paints transcript
     // rows, comparable with the terminal path's route_enter → first_draw.
     val perfOpenId = remember(ref) { PerfTrace.idFor(ref) }
     val firstDrawn = remember(ref) { booleanArrayOf(perfOpenId == null) }
 
-    androidx.compose.runtime.SideEffect { android.util.Log.d("ConvTrace", "applied items=${state.items.size} t=${android.os.SystemClock.elapsedRealtime()}") }
-    Box(Modifier.fillMaxSize().background(p.canvas).testTag("conversation-screen").drawWithContent { android.util.Log.d("ConvTrace", "root_draw items=${state.items.size} t=${android.os.SystemClock.elapsedRealtime()}"); drawContent() }) {
+    if (ConvTrace.enabled) {
+        LaunchedEffect(listState) {
+            snapshotFlow {
+                val info = listState.layoutInfo
+                "scroll first=${listState.firstVisibleItemIndex} key=${info.visibleItemsInfo.firstOrNull()?.key} " +
+                    "offset=${listState.firstVisibleItemScrollOffset} back=${listState.canScrollBackward} " +
+                    "scrolling=${listState.isScrollInProgress} following=$following dockPx=${dockPx.intValue} headerPx=${headerPx.intValue} " +
+                    "viewport=${info.viewportStartOffset}..${info.viewportEndOffset} before=${info.beforeContentPadding} after=${info.afterContentPadding} items=${info.totalItemsCount}"
+            }.collect(ConvTrace::log)
+        }
+    }
+    // Test tags double as resource ids so device automation can address controls, never coordinates.
+    Box(Modifier.fillMaxSize().background(p.canvas).semantics { testTagsAsResourceId = true }.testTag("conversation-screen")) {
         val rows = remember(state.items) { state.items.asReversed() }
+        val working = workingLabel(state)
+        // LazyList keeps its first visible row by key, so a row inserted at the bottom would land
+        // below the fold. A reader already at the newest row stays pinned to the new newest row;
+        // a reader up in history keeps their place.
+        val newestKey: Any? = if (working != null) "working" else rows.firstOrNull()?.key
+        val newestSeen = remember { arrayOfNulls<Any>(1) }
+        val pin = following && newestSeen[0] != null && newestSeen[0] != newestKey
+        newestSeen[0] = newestKey
+        if (pin) {
+            androidx.compose.runtime.SideEffect {
+                ConvTrace.log("pin newest=$newestKey")
+                listState.requestScrollToItem(0)
+            }
+        }
         LazyColumn(
             state = listState,
             reverseLayout = true,
-            contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = topPad, bottom = bottomPad),
+            contentPadding = listPadding,
             verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.Bottom),
             modifier = Modifier
                 .fillMaxSize()
@@ -432,15 +494,21 @@ private fun ConversationScreen(
                         PerfTrace.firstDraw(perfOpenId!!, rows.size)
                     }
                 }
-                .pointerInput(Unit) { detectTapGestures(onTap = { focus.clearFocus(); sheet = ComposerSheet.None }) }
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = {
+                        sheet = ComposerSheet.None
+                        collapseComposer("outside-tap")
+                    })
+                }
                 .testTag("conversation-list"),
         ) {
-            val working = workingLabel(state)
             if (working != null) {
-                item(key = "working") { WorkingIndicator(working, p, Modifier.animateItem()) }
+                item(key = "working") { WorkingIndicator(working, p, Modifier.animateItem(placementSpec = null)) }
             }
             items(rows, key = { it.key }, contentType = { it::class }) { item ->
-                val mod = Modifier.animateItem(fadeInSpec = tween(220), placementSpec = spring(dampingRatio = 0.9f, stiffness = 380f), fadeOutSpec = tween(140))
+                // No placement spring: a row moved by its neighbour growing (streaming, disclosure,
+                // dock rise) must track it in the same frame, never lag and overlap it.
+                val mod = Modifier.animateItem(fadeInSpec = tween(220), placementSpec = null, fadeOutSpec = tween(140))
                 when (item) {
                     is UserTurn -> UserBubble(item, p, expanded[item.key] == true, { expanded[item.key] = expanded[item.key] != true }, mod)
                     is AssistantText -> AssistantProse(item, p, mod)
@@ -451,12 +519,12 @@ private fun ConversationScreen(
             }
             if (state.historyTruncated) {
                 item(key = "truncated") {
-                    NoticeRow(Notice("truncated", NoticeTone.Divider, "更早的消息未保留"), p, Modifier.animateItem())
+                    NoticeRow(Notice("truncated", NoticeTone.Divider, "更早的消息未保留"), p, Modifier.animateItem(placementSpec = null))
                 }
             }
             if (state.items.isEmpty()) {
                 item(key = "empty") {
-                    Box(Modifier.fillMaxWidth().fillParentMaxHeight(0.82f).animateItem(), contentAlignment = Alignment.Center) {
+                    Box(Modifier.fillMaxWidth().fillParentMaxHeight(0.82f).animateItem(placementSpec = null), contentAlignment = Alignment.Center) {
                         if (connected && !state.running) {
                             ConversationEmpty(state.model, p, onSuggestion = { s -> draft = TextFieldValue(s, TextRange(s.length)) })
                         } else if (!connected) {
@@ -482,7 +550,7 @@ private fun ConversationScreen(
             backdrop = backdrop,
             onBack = onBack,
             onMore = { menuOpen = !menuOpen },
-            modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { headerPx = it.height }.zIndex(2f),
+            modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { headerPx.intValue = it.height }.zIndex(2f),
         )
 
         // Inline, non-blocking connection capsule.
@@ -490,7 +558,7 @@ private fun ConversationScreen(
             visible = phase == LinkPhase.Reconnecting || phase == LinkPhase.Ended,
             enter = fadeIn(tween(200)) + slideInVertically(spring(dampingRatio = 0.8f, stiffness = 400f)) { -it / 2 },
             exit = fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 2 },
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = with(density) { headerPx.toDp() } + 6.dp).zIndex(3f),
+            modifier = Modifier.align(Alignment.TopCenter).offset { IntOffset(0, headerPx.intValue) }.padding(top = 6.dp).zIndex(3f),
         ) {
             ConnectionCapsule(
                 phase = phase,
@@ -509,7 +577,7 @@ private fun ConversationScreen(
             open = menuOpen,
             p = p,
             backdrop = backdrop,
-            topPadding = with(density) { headerPx.toDp() },
+            topPx = { headerPx.intValue },
             onDismiss = { menuOpen = false },
             onTerminal = { menuOpen = false; onOpenTerminal() },
             onCompact = { menuOpen = false; hub.send(ref, "compact") { ok, r -> if (!ok) toast = "压缩未执行：${r ?: "主机没有确认"}" } },
@@ -517,15 +585,15 @@ private fun ConversationScreen(
             enabled = connected,
         )
 
-        // Bottom stack: toast · jump-to-latest · dock.
+        // Overlays ride on top of the dock but are not part of its measure: the jump control or a
+        // toast appearing never changes the transcript's bottom edge (that feedback loop was the
+        // landing jolt), and a panel floats over the transcript instead of shoving it up.
         Column(
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                // Measured outside the insets: the transcript must clear the whole stack.
-                .onSizeChanged { dockPx = it.height }
-                .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
-                .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
+                .offset { IntOffset(0, -dockPx.intValue) }
+                .padding(start = 12.dp, end = 12.dp)
                 .zIndex(4f),
         ) {
             Box(Modifier.fillMaxWidth()) {
@@ -547,7 +615,7 @@ private fun ConversationScreen(
                     )
                 }
                 androidx.compose.animation.AnimatedVisibility(
-                    visible = !following && state.items.isNotEmpty(),
+                    visible = !following && state.items.isNotEmpty() && activeSheet == ComposerSheet.None,
                     enter = fadeIn(tween(160)) + scaleIn(spring(dampingRatio = 0.7f, stiffness = 500f), 0.6f),
                     exit = fadeOut(tween(120)) + scaleOut(tween(140), 0.6f),
                     modifier = Modifier.align(Alignment.CenterEnd).padding(bottom = 10.dp),
@@ -555,32 +623,66 @@ private fun ConversationScreen(
                     GlassCircleButton(Glyph.Down, p, backdrop, "conversation-jump") { scrollToLatest() }
                 }
             }
-            ConversationDock(
-                value = draft,
-                onValueChange = {
-                    draft = it
-                    if (slashDismissedFor != null && slashDismissedFor != it.text) slashDismissedFor = null
-                },
-                images = images,
-                onRemoveImage = { id -> images.removeAll { it.id == id } },
-                sheet = activeSheet,
-                sheetEntries = sheetEntries,
-                onSheet = { sheet = it },
-                onSheetEntry = ::onSheetEntry,
-                running = state.running,
-                connected = connected,
-                placeholder = when {
-                    !connected -> "连接后即可发送"
-                    state.running -> "补充指令，Pi 会在下一步看到"
-                    else -> "给 Pi 发消息，输入 / 查看命令"
-                },
-                onSend = ::send,
-                onStop = { hub.send(ref, "abort") { ok, r -> if (!ok) toast = "停止未生效：${r ?: "主机没有确认"}" } },
-                backdrop = backdrop,
-                p = p,
-            )
+            ComposerSheetOverlay(activeSheet, sheetEntries, ::onSheetEntry, backdrop, p)
         }
+
+        // The dock alone owns the transcript's bottom clearance: composer + nav/IME insets.
+        ConversationDock(
+            value = draft,
+            onValueChange = {
+                draft = it
+                if (slashDismissedFor != null && slashDismissedFor != it.text) slashDismissedFor = null
+            },
+            images = images,
+            onRemoveImage = { id -> images.removeAll { it.id == id } },
+            sheet = activeSheet,
+            onSheet = { sheet = it },
+            expanded = editorFocused,
+            onFocusChanged = { focused ->
+                if (focused && !editorFocused) {
+                    expansion.intValue++
+                    collapseRequested = false
+                }
+                if (focused != editorFocused) ConvTrace.log("dock focus=$focused generation=${expansion.intValue}")
+                editorFocused = focused
+                if (!focused && sheet == ComposerSheet.Shortcuts) sheet = ComposerSheet.None
+            },
+            running = state.running,
+            connected = connected,
+            placeholder = when {
+                !connected -> "连接后即可发送"
+                state.running -> "补充指令，Pi 会在下一步看到"
+                else -> "给 Pi 发消息，输入 / 查看命令"
+            },
+            onSend = ::send,
+            onStop = { hub.send(ref, "abort") { ok, r -> if (!ok) toast = "停止未生效：${r ?: "主机没有确认"}" } },
+            backdrop = backdrop,
+            p = p,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                // Measured outside the insets: the transcript must clear the keyboard too.
+                .onSizeChanged { dockPx.intValue = it.height }
+                .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
+                .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
+                .zIndex(4f),
+        )
     }
+}
+
+/** Following tolerance: a hair above the newest row still counts as reading the latest. */
+private val FOLLOW_SLACK = 24.dp
+
+/** List padding resolved at measure time from the measured header and dock. */
+@androidx.compose.runtime.Stable
+private class LiveListPadding(
+    private val density: androidx.compose.ui.unit.Density,
+    private val headerPx: androidx.compose.runtime.IntState,
+    private val dockPx: androidx.compose.runtime.IntState,
+) : PaddingValues {
+    override fun calculateLeftPadding(layoutDirection: androidx.compose.ui.unit.LayoutDirection) = 18.dp
+    override fun calculateRightPadding(layoutDirection: androidx.compose.ui.unit.LayoutDirection) = 18.dp
+    override fun calculateTopPadding() = with(density) { headerPx.intValue.toDp() } + 10.dp
+    override fun calculateBottomPadding() = with(density) { dockPx.intValue.toDp() } + 14.dp
 }
 
 /**
@@ -667,11 +769,12 @@ private fun ConversationHeader(
                 Column(Modifier.weight(1f)) {
                     Text(
                         name,
-                        style = TextStyle(fontFamily = ConversationSans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = p.ink, letterSpacing = (-0.1).sp),
+                        style = TextStyle(fontFamily = ConversationSans, fontSize = 15.sp, lineHeight = 20.sp, lineHeightStyle = StableLines, fontWeight = FontWeight.SemiBold, color = p.ink, letterSpacing = (-0.1).sp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.lineBox(20.sp),
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.lineBox(CaptionStyle.lineHeight), verticalAlignment = Alignment.CenterVertically) {
                         Breathing(pulsing) { a -> Box(Modifier.size(6.dp).clip(Capsule()).background(statusTone.copy(alpha = a))) }
                         Text(
                             status,
@@ -722,7 +825,7 @@ private fun HeaderMenu(
     open: Boolean,
     p: ConversationPalette,
     backdrop: Backdrop,
-    topPadding: androidx.compose.ui.unit.Dp,
+    topPx: () -> Int,
     onDismiss: () -> Unit,
     onTerminal: () -> Unit,
     onCompact: () -> Unit,
@@ -737,7 +840,7 @@ private fun HeaderMenu(
             visible = open,
             enter = fadeIn(tween(120)) + scaleIn(spring(dampingRatio = 0.8f, stiffness = 600f), 0.9f, androidx.compose.ui.graphics.TransformOrigin(1f, 0f)),
             exit = fadeOut(tween(100)) + scaleOut(tween(120), 0.95f, androidx.compose.ui.graphics.TransformOrigin(1f, 0f)),
-            modifier = Modifier.padding(top = topPadding, end = 12.dp),
+            modifier = Modifier.offset { IntOffset(0, topPx()) }.padding(end = 12.dp),
         ) {
             Column(
                 Modifier
@@ -771,6 +874,17 @@ private fun MenuRow(glyph: Glyph, title: String, detail: String, p: Conversation
             Text(detail, style = CaptionStyle.copy(color = p.inkSoft))
         }
     }
+}
+
+/**
+ * Reports exactly one line box and centres the text in it. Android widens a line for a CJK
+ * fallback font beyond lineHeight, so "Pi · model" ↔ "工作中 · model" resized the header by 4px
+ * every turn; the glyphs may now overhang by a hair instead.
+ */
+internal fun Modifier.lineBox(lineHeight: androidx.compose.ui.unit.TextUnit): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
+    val height = lineHeight.roundToPx()
+    layout(placeable.width, height) { placeable.place(0, (height - placeable.height) / 2) }
 }
 
 private fun workingLabel(state: ConversationState): String? = when {

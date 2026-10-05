@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -53,12 +54,21 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
@@ -79,6 +89,8 @@ import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
+import dev.agentmirror.app.session.SessionDockMotion
+import kotlin.math.roundToInt
 
 /** An image picked for the next prompt: shown as a thumbnail while it uploads to the host. */
 data class PendingImage(val id: Long, val preview: Bitmap?, val hostPath: String? = null, val failed: Boolean = false)
@@ -131,8 +143,11 @@ private fun sourceLabel(source: String) = when (source) {
 }
 
 /**
- * Floating frosted capsule: ⚡ shortcuts, attachments, the prompt, and one round action that is
- * Send, Stop (agent working, nothing typed) or disabled. No terminal key row exists here.
+ * Two-stage composer modelled on the terminal dock. Idle it is one compact row — `+` · prompt ·
+ * action — so the prompt gets the width. Focused, it rises by one auxiliary row carrying ⚡, and
+ * the editor opens to its real height; both are driven by a single 250ms Standard progress read
+ * at layout/draw time, so the rise re-measures the capsule without recomposing it per frame.
+ * Panels (slash, shortcuts, attach) are not part of this measure: the screen floats them above.
  */
 @Composable
 fun ConversationDock(
@@ -141,9 +156,9 @@ fun ConversationDock(
     images: List<PendingImage>,
     onRemoveImage: (Long) -> Unit,
     sheet: ComposerSheet,
-    sheetEntries: List<SheetEntry>,
     onSheet: (ComposerSheet) -> Unit,
-    onSheetEntry: (SheetEntry) -> Unit,
+    expanded: Boolean,
+    onFocusChanged: (Boolean) -> Unit,
     running: Boolean,
     connected: Boolean,
     placeholder: String,
@@ -160,54 +175,126 @@ fun ConversationDock(
         running && !hasContent && connected -> DockAction.Stop
         else -> DockAction.Disabled
     }
-    Column(modifier.fillMaxWidth()) {
-        AnimatedVisibility(
-            visible = sheet != ComposerSheet.None && sheetEntries.isNotEmpty(),
-            enter = fadeIn(tween(140)) + slideInVertically(spring(dampingRatio = 0.82f, stiffness = 520f)) { it / 5 } +
-                scaleIn(spring(dampingRatio = 0.82f, stiffness = 520f), initialScale = 0.97f, transformOrigin = TransformOrigin(0.5f, 1f)),
-            exit = fadeOut(tween(110)) + slideOutVertically(tween(140)) { it / 8 } + scaleOut(tween(140), targetScale = 0.98f, transformOrigin = TransformOrigin(0.5f, 1f)),
-        ) {
-            ComposerSheetPanel(sheetEntries, onSheetEntry, backdrop, p, Modifier.padding(bottom = 8.dp))
-        }
-        val shape = RoundedRectangle(26.dp)
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .frostedGlass(backdrop, shape, p)
-                .testTag("conversation-dock"),
-        ) {
-            if (images.isNotEmpty()) {
-                Row(
-                    Modifier.horizontalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    images.forEach { image -> ImageChip(image, onRemoveImage, p) }
-                }
-            }
-            Row(Modifier.fillMaxWidth().padding(6.dp), verticalAlignment = Alignment.Bottom) {
-                DockIconButton(Glyph.Bolt, p, sheet == ComposerSheet.Shortcuts, "conversation-shortcuts") {
+    val progress = animateFloatAsState(
+        if (expanded) 1f else 0f,
+        tween(SessionDockMotion.InputHeightMillis, easing = SessionDockMotion.Standard),
+        label = "dock-rise",
+    )
+    val auxPresent by remember { derivedStateOf { progress.value > 0f } }
+    val oneLine = with(LocalDensity.current) { (BodyStyle.lineHeight.toPx() + 16.dp.toPx()).roundToInt() }
+    Column(
+        modifier
+            .fillMaxWidth()
+            .frostedGlass(backdrop, RoundedRectangle(26.dp), p)
+            .testTag("conversation-dock"),
+    ) {
+        if (auxPresent) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clipToBounds()
+                    .layout { measurable, constraints ->
+                        val placeable = measurable.measure(constraints.copy(minHeight = 0))
+                        val height = (placeable.height * progress.value).roundToInt()
+                        layout(placeable.width, height) { placeable.place(0, height - placeable.height) }
+                    }
+                    .graphicsLayer {
+                        // Revealed only once the rising edge has cleared it (TUI dock: 0.7 → 1).
+                        val f = ((progress.value - AUX_REVEAL_START) / (1f - AUX_REVEAL_START)).coerceIn(0f, 1f)
+                        alpha = f
+                        translationY = (1f - f) * AUX_RISE.toPx()
+                    }
+                    .padding(start = 8.dp, end = 8.dp, top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                DockChip(Glyph.Bolt, "快捷指令", p, active = sheet == ComposerSheet.Shortcuts, enabled = expanded, tag = "conversation-shortcuts") {
                     onSheet(if (sheet == ComposerSheet.Shortcuts) ComposerSheet.None else ComposerSheet.Shortcuts)
                 }
-                DockIconButton(Glyph.Clip, p, sheet == ComposerSheet.Attach, "conversation-attach") {
-                    onSheet(if (sheet == ComposerSheet.Attach) ComposerSheet.None else ComposerSheet.Attach)
-                }
-                Box(Modifier.weight(1f).heightIn(min = 40.dp).padding(start = 6.dp, end = 6.dp), contentAlignment = Alignment.CenterStart) {
-                    if (value.text.isEmpty()) {
-                        Text(placeholder, style = BodyStyle.copy(color = p.inkSoft), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    BasicTextField(
-                        value = value,
-                        onValueChange = onValueChange,
-                        textStyle = BodyStyle.copy(color = p.ink),
-                        cursorBrush = SolidColor(p.accent),
-                        maxLines = 6,
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("conversation-input"),
-                    )
-                }
-                SendButton(action, p, onSend = onSend, onStop = onStop)
             }
         }
+        if (images.isNotEmpty()) {
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                images.forEach { image -> ImageChip(image, onRemoveImage, p) }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(6.dp), verticalAlignment = Alignment.Bottom) {
+            DockIconButton(Glyph.Plus, p, sheet == ComposerSheet.Attach, "conversation-attach") {
+                onSheet(if (sheet == ComposerSheet.Attach) ComposerSheet.None else ComposerSheet.Attach)
+            }
+            Box(
+                Modifier
+                    .weight(1f)
+                    .heightIn(min = 40.dp)
+                    .padding(start = 6.dp, end = 6.dp)
+                    .drawWithContent {
+                        // Idle: the editor's bottom padding stays empty instead of showing line 2's tops.
+                        clipRect(bottom = size.height - (1f - progress.value) * 8.dp.toPx()) { this@drawWithContent.drawContent() }
+                    }
+                    .layout { measurable, constraints ->
+                        // Idle shows one line of a multi-line draft; focus opens it on the same progress.
+                        val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
+                        val closed = minOf(placeable.height, maxOf(oneLine, constraints.minHeight))
+                        val height = (closed + (placeable.height - closed) * progress.value).roundToInt()
+                            .coerceIn(constraints.minHeight, constraints.maxHeight)
+                        layout(placeable.width, height) { placeable.place(0, 0) }
+                    },
+                contentAlignment = Alignment.TopStart,
+            ) {
+                if (value.text.isEmpty()) {
+                    Text(
+                        placeholder,
+                        style = BodyStyle.copy(color = p.inkSoft),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    textStyle = BodyStyle.copy(color = p.ink),
+                    cursorBrush = SolidColor(p.accent),
+                    maxLines = 6,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                        .onFocusChanged { onFocusChanged(it.isFocused) }
+                        .testTag("conversation-input"),
+                )
+            }
+            SendButton(action, p, onSend = onSend, onStop = onStop)
+        }
+    }
+}
+
+private const val AUX_REVEAL_START = 0.7f
+private val AUX_RISE = 8.dp
+
+/** Glyph + label pill of the auxiliary row; never takes focus from the editor. */
+@Composable
+private fun DockChip(glyph: Glyph, label: String, p: ConversationPalette, active: Boolean, enabled: Boolean, tag: String, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.94f else 1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium), label = "chip-press")
+    val fill by animateColorAsState(if (active) p.accent.copy(alpha = 0.16f) else p.ink.copy(alpha = 0.05f), tween(160), label = "chip-fill")
+    Row(
+        Modifier
+            .height(32.dp)
+            .scale(scale)
+            .clip(Capsule())
+            .background(fill)
+            .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
+            .padding(start = 10.dp, end = 12.dp)
+            .testTag(tag),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        GlyphIcon(glyph, if (active) p.accentInk else p.inkSoft, 16.dp)
+        Text(label, style = CaptionStyle.copy(color = if (active) p.accentInk else p.inkSoft, fontSize = 12.5.sp, fontWeight = FontWeight.Medium))
     }
 }
 
@@ -303,6 +390,19 @@ private fun ImageChip(image: PendingImage, onRemove: (Long) -> Unit, p: Conversa
         ) {
             GlyphIcon(Glyph.Cross, p.canvas, 10.dp)
         }
+    }
+}
+
+/** Rises above the dock (slash, ⚡ shortcuts, attach); floats over the transcript, never resizes it. */
+@Composable
+internal fun ComposerSheetOverlay(sheet: ComposerSheet, entries: List<SheetEntry>, onEntry: (SheetEntry) -> Unit, backdrop: Backdrop, p: ConversationPalette) {
+    AnimatedVisibility(
+        visible = sheet != ComposerSheet.None && entries.isNotEmpty(),
+        enter = fadeIn(tween(140)) + slideInVertically(spring(dampingRatio = 0.82f, stiffness = 520f)) { it / 5 } +
+            scaleIn(spring(dampingRatio = 0.82f, stiffness = 520f), initialScale = 0.97f, transformOrigin = TransformOrigin(0.5f, 1f)),
+        exit = fadeOut(tween(110)) + slideOutVertically(tween(140)) { it / 8 } + scaleOut(tween(140), targetScale = 0.98f, transformOrigin = TransformOrigin(0.5f, 1f)),
+    ) {
+        ComposerSheetPanel(entries, onEntry, backdrop, p, Modifier.padding(bottom = 8.dp))
     }
 }
 

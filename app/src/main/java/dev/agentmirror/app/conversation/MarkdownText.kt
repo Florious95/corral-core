@@ -53,6 +53,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
@@ -239,7 +240,14 @@ fun inlineMarkdown(text: String, p: ConversationPalette, codeBackground: android
     flushPlain()
 }
 
-val BodyStyle = TextStyle(fontFamily = ConversationSans, fontSize = 15.sp, lineHeight = 23.sp, letterSpacing = 0.05.sp)
+/**
+ * Every line box is exactly its lineHeight, whatever script fills it. The default trim follows
+ * the first/last line's font metrics, so a status flipping Latin ↔ CJK (or a streaming line
+ * gaining its first 汉字) changed a row's height by a few px and nudged everything above it.
+ */
+internal val StableLines = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)
+
+val BodyStyle = TextStyle(fontFamily = ConversationSans, fontSize = 15.sp, lineHeight = 23.sp, letterSpacing = 0.05.sp, lineHeightStyle = StableLines)
 
 @Composable
 fun MarkdownText(text: String, p: ConversationPalette, modifier: Modifier = Modifier) {

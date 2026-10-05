@@ -94,9 +94,9 @@ import java.util.Locale
  * cards that open with a spring; system moments are quiet dividers. Nothing shouts.
  */
 
-internal val CaptionStyle = TextStyle(fontFamily = ConversationSans, fontSize = 11.5.sp, lineHeight = 15.sp, letterSpacing = 0.15.sp)
-internal val LabelStyle = TextStyle(fontFamily = ConversationSans, fontSize = 13.5.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
-internal val MonoSmall = TextStyle(fontFamily = ConversationMono, fontSize = 12.sp, lineHeight = 16.sp)
+internal val CaptionStyle = TextStyle(fontFamily = ConversationSans, fontSize = 11.5.sp, lineHeight = 15.sp, letterSpacing = 0.15.sp, lineHeightStyle = StableLines)
+internal val LabelStyle = TextStyle(fontFamily = ConversationSans, fontSize = 13.5.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold, lineHeightStyle = StableLines)
+internal val MonoSmall = TextStyle(fontFamily = ConversationMono, fontSize = 12.sp, lineHeight = 16.sp, lineHeightStyle = StableLines)
 
 /** Spring used by every disclosure: settles fast, a hint of give, no wobble. */
 internal fun <T> disclosureSpring() = spring<T>(dampingRatio = 0.86f, stiffness = 420f)
