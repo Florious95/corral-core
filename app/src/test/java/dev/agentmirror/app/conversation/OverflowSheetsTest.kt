@@ -28,7 +28,11 @@ class OverflowSheetsTest {
         val grok = resolveActions("grok", connected = true, restoring = false, compacting = false)
         assertEquals(ConversationAction.History, grok.first().action)
         assertTrue("native list/load history is connected", grok.first().enabled)
-        assertFalse("no usage row for an agent without stats", grok.any { it.action == ConversationAction.Usage })
+        assertTrue(grok.any { it.action == ConversationAction.Usage && it.enabled })
+        val unknown = resolveActions("unknown", connected = true, restoring = false, compacting = false)
+        assertFalse("unsupported history stays visible with a reason", unknown.first().enabled)
+        assertFalse(unknown.any { it.action == ConversationAction.Usage })
+        assertFalse(AgentAbilities.of("grok").compactInstructions)
     }
 
     @Test
@@ -110,6 +114,23 @@ class OverflowSheetsTest {
         assertFalse(bare.hasContext)
         assertNull(bare.promptTokens)
         assertNull(usdText(bare.cost))
+    }
+
+    @Test
+    fun grokContextSnapshotDoesNotInventCumulativeUsage() {
+        val s = usageSnapshot(json("""{"sessionId":"grok-sid","source":"native_slash","modelName":"grok-4.6","turnCount":0,
+            "contextUsage":{"tokens":1359,"contextWindow":500000,"percent":0.2718}}"""), 10)
+        assertTrue(s.nativeSlash)
+        assertEquals("grok-4.6", s.modelName)
+        assertEquals(0L, s.turnCount)
+        assertEquals(1_359L, s.contextTokens)
+        assertEquals(500_000L, s.contextWindow)
+        assertNull(s.promptTokens)
+        assertNull(s.cost)
+        assertNull(s.cacheHitPercent)
+        val unknown = usageSnapshot(json("""{"sessionId":"grok-sid","source":"native_slash"}"""), 11)
+        assertNull(unknown.turnCount)
+        assertFalse(unknown.hasContext)
     }
 
     @Test

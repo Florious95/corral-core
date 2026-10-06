@@ -68,6 +68,7 @@ type grokACP struct {
 	cwd                                 string
 	remember                            func(string) error
 	sessionChanging                     bool
+	stats                               *grokStatsRead
 	models                              acpModels
 	config                              []acpConfig
 	commands                            []map[string]any
@@ -302,6 +303,12 @@ func (g *grokACP) Write(raw []byte) (int, error) {
 	}
 	if json.Unmarshal(raw, &c) != nil {
 		return 0, errors.New("invalid conversation command")
+	}
+	if c.Type == "get_session_stats" {
+		if err := g.readStats(c.ID); err != nil {
+			return 0, err
+		}
+		return len(raw), nil
 	}
 	g.mu.Lock()
 	sid := g.session
@@ -584,6 +591,9 @@ func (g *grokACP) ingest(raw []byte) {
 		}
 		wasRunning, wasAdmitted := g.running, g.admitted
 		g.running, g.queued = queue.Running != "", len(queue.Entries)
+		if g.stats != nil {
+			return // read-only native queries are not user turns
+		}
 		if g.running {
 			g.admitLocked()
 			if !wasRunning && (g.promptID == "" || wasAdmitted) {
@@ -598,6 +608,9 @@ func (g *grokACP) ingest(raw []byte) {
 			Stop string `json:"stop_reason"`
 		}
 		_ = json.Unmarshal(params.Update, &update)
+		if g.stats != nil {
+			return
+		}
 		if update.Kind == "turn_completed" && g.promptID == "" {
 			g.finishMessageLocked(update.Stop)
 			g.running = false
@@ -661,6 +674,19 @@ func (g *grokACP) updateLocked(raw json.RawMessage) {
 		Commands []map[string]any `json:"availableCommands"`
 	}
 	if json.Unmarshal(raw, &u) != nil {
+		return
+	}
+	if g.stats != nil && (u.Kind == "agent_message_chunk" || u.Kind == "agent_thought_chunk" || u.Kind == "user_message_chunk") {
+		if u.Kind == "agent_message_chunk" {
+			var content struct{ Type, Text string }
+			if json.Unmarshal(u.Content, &content) == nil && content.Type == "text" {
+				if g.stats.text.Len()+len(content.Text) > 64<<10 {
+					g.stats.overflow = true
+				} else {
+					g.stats.text.WriteString(content.Text)
+				}
+			}
+		}
 		return
 	}
 	switch u.Kind {

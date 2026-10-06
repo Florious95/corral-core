@@ -82,6 +82,9 @@ internal data class UsageSnapshot(
     val toolResults: Long?,
     val totalMessages: Long?,
     val sampledAt: Long,
+    val turnCount: Long? = null,
+    val modelName: String? = null,
+    val nativeSlash: Boolean = false,
 ) {
     /** Everything the model read: uncached input + cache reads + cache writes. */
     val promptTokens: Long? get() = if (input != null && cacheRead != null && cacheWrite != null) input + cacheRead + cacheWrite else null
@@ -113,6 +116,9 @@ internal fun usageSnapshot(data: JsonObject, sampledAt: Long): UsageSnapshot {
         toolResults = data.long("toolResults"),
         totalMessages = data.long("totalMessages"),
         sampledAt = sampledAt,
+        turnCount = data.long("turnCount"),
+        modelName = data.str("modelName").takeIf { it.isNotBlank() },
+        nativeSlash = data.str("source") == "native_slash",
     )
 }
 
@@ -239,14 +245,20 @@ private fun UsageBody(s: UsageSnapshot, load: UsageLoad, running: Boolean, p: Co
         }
     }
 
+    if (s.modelName != null) SheetFact("模型", s.modelName, p)
+    if (s.turnCount != null) SheetFact("会话轮次", groupedCount(s.turnCount), p, tag = "conversation-usage-turns")
+
     // ---- session totals ----
     SheetLabel("会话累计", p, Modifier.padding(top = 18.dp, bottom = 8.dp))
+    if (s.nativeSlash) {
+        Text("来自 Grok 原生 /context 与 /session-info；未报告的 Token 与费用显示 —，上下文占用不冒充累计消耗。", style = CaptionStyle.copy(color = p.inkSoft, fontSize = 12.sp), modifier = Modifier.padding(bottom = 8.dp))
+    }
     val hit = s.cacheHitPercent
     MetricGrid(
         listOf(
             Metric("输入", s.promptTokens, "含缓存读写"),
             Metric("输出", s.output, null),
-            Metric("缓存读取", s.cacheRead, hit?.let { "命中 ${percentText(it)}" } ?: "尚无输入"),
+            Metric("缓存读取", s.cacheRead, hit?.let { "命中 ${percentText(it)}" } ?: if (s.promptTokens == 0L) "尚无输入" else "未报告命中率"),
             Metric("缓存写入", s.cacheWrite, null),
             Metric("总计", s.total, null),
             Metric(
@@ -277,7 +289,7 @@ private fun UsageBody(s: UsageSnapshot, load: UsageLoad, running: Boolean, p: Co
     val stamp = remember(s.sampledAt) { SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(s.sampledAt)) }
     Text(
         listOfNotNull(
-            "更新于 $stamp · 原生累计统计",
+            "更新于 $stamp · " + if (s.nativeSlash) "原生上下文快照" else "原生累计统计",
             "Agent 工作中，本轮结束后自动刷新".takeIf { running },
             "刷新失败：${load.error}".takeIf { load.error != null },
         ).joinToString("\n"),
