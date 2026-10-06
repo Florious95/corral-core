@@ -37,6 +37,8 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -90,6 +92,10 @@ internal enum class ConversationAction(val glyph: Glyph, val title: String, val 
     History(Glyph.History, "历史会话", null, 0, "conversation-menu-history"),
     Compact(Glyph.Compress, "压缩上下文", "/compact", 1, "conversation-menu-compact"),
     NewSession(Glyph.NewChat, "开始新会话", "/new", 1, "conversation-menu-new"),
+    Fork(Glyph.NewChat, "从消息分叉", null, 1, "conversation-menu-fork"),
+    Clone(Glyph.NewChat, "克隆当前会话", null, 1, "conversation-menu-clone"),
+    Rewind(Glyph.History, "回滚轮次", null, 1, "conversation-menu-rewind"),
+    Tasks(Glyph.Terminal, "原生任务与命令", null, 2, "conversation-menu-tasks"),
     Export(Glyph.File, "导出会话", null, 2, "conversation-menu-export"),
     Usage(Glyph.Gauge, "用量与上下文", null, 2, "conversation-menu-usage"),
     Terminal(Glyph.Terminal, "切换到终端", null, 3, "conversation-menu-terminal"),
@@ -119,6 +125,10 @@ internal fun resolveActions(provider: String, connected: Boolean, restoring: Boo
                 else -> ResolvedAction(action, offline ?: if (can.compactInstructions) "可指定保留重点" else "整理模型上下文", offline == null)
             }
             ConversationAction.NewSession -> ResolvedAction(action, offline ?: "当前会话保存在历史中", offline == null)
+            ConversationAction.Fork -> ResolvedAction(action, offline ?: if (provider == "pi") "选择用户消息，新上下文停在它之前" else "Grok 仅证实完整克隆，不伪造节点分叉", offline == null && provider == "pi")
+            ConversationAction.Clone -> if (provider !in setOf("pi", "grok")) null else ResolvedAction(action, offline ?: "复制完整当前上下文，原会话保持不变", offline == null)
+            ConversationAction.Rewind -> ResolvedAction(action, offline ?: if (provider == "grok") "原生回滚未取得成功闭包，不伪造截断" else "Pi RPC 没有原生回滚；可使用分叉", false)
+            ConversationAction.Tasks -> if (provider != "grok") null else ResolvedAction(action, offline ?: "研究、工作流、目标及已广告原生命令", offline == null)
             ConversationAction.Export -> if (!can.export) null else ResolvedAction(action, offline ?: "下载并分享原生会话文件", offline == null)
             ConversationAction.Usage -> if (!can.usage) null else ResolvedAction(action, offline ?: "Token、费用与上下文占用", offline == null)
             ConversationAction.Terminal -> ResolvedAction(action, offline ?: "同一面板运行原生终端", offline == null)
@@ -151,8 +161,10 @@ internal fun HeaderMenu(
             Column(
                 Modifier
                     .widthIn(min = 248.dp, max = 284.dp)
+                    .heightIn(max = 500.dp)
                     .panelSurface(look, backdrop, 22.dp, p, reading = true)
                     .padding(vertical = if (look.glass) 6.dp else 0.dp)
+                    .verticalScroll(rememberScrollState())
                     .testTag("conversation-menu"),
             ) {
                 actions.forEachIndexed { i, resolved ->

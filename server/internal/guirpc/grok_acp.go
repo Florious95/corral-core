@@ -65,6 +65,7 @@ type grokACP struct {
 	next                                uint64
 	pending                             map[string]*acpPending
 	session                             string
+	sessionName                         string
 	permissions                         map[string]grokPermission
 	cwd                                 string
 	remember                            func(string) error

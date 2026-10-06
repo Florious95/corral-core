@@ -156,14 +156,31 @@ func (c *wsConn) handleConversationHistoryCommand(cmd protocol.ConversationComma
 		event, _ := json.Marshal(response)
 		c.send(&protocol.ConversationEvent{Ref: cmd.Ref, Event: event})
 	}
-	if c.conversationSub(cmd.Ref) == nil {
+	sub := c.conversationSub(cmd.Ref)
+	if sub == nil {
 		reply(nil, errors.New("conversation is not attached"))
 		return
 	}
+	sub.writeMu.Lock()
+	stream := sub.stream
+	sub.writeMu.Unlock()
 	c.historyRequest(func(ctx context.Context) {
 		pane, err := c.s.historyPane(ctx, cmd.Ref, "")
 		if err != nil {
 			reply(nil, err)
+			return
+		}
+		if kind != "list_sessions" && kind != "resume_session" {
+			operator, ok := c.s.conversations.(guirpc.SessionOperator)
+			if !ok {
+				reply(nil, errors.New("服务端不支持原生会话操作"))
+				return
+			}
+			var command map[string]json.RawMessage
+			_ = json.Unmarshal(raw, &command)
+			command["_stream"], _ = json.Marshal(stream)
+			data, err := operator.OperateSession(ctx, pane, command)
+			reply(data, err)
 			return
 		}
 		browser, err := c.s.historyBrowser()

@@ -259,6 +259,12 @@ private fun ConversationScreen(
     var usage by remember(ref) { mutableStateOf(UsageLoad()) }
     var usageGeneration by remember(ref) { mutableIntStateOf(0) }
     var exporting by remember(ref) { mutableStateOf(false) }
+    var points by remember(ref) { mutableStateOf(emptyList<NativePoint>()) }
+    var pointsLoading by remember(ref) { mutableStateOf(false) }
+    var pointsError by remember(ref) { mutableStateOf<String?>(null) }
+    var mutationConsent by remember(ref) { mutableStateOf<Pair<String, NativePoint?>?>(null) }
+    var mutationForce by remember(ref) { mutableStateOf(false) }
+    var mutationDraft by remember(ref) { mutableStateOf<String?>(null) }
     var editorApplied by remember(ref) { mutableStateOf(0L) }
     LaunchedEffect(state.extensionEditor) {
         state.extensionEditor?.let { (seq, text) -> if (seq > editorApplied) {
@@ -535,6 +541,11 @@ private fun ConversationScreen(
             if (historyStream != null && state.stream == historyStream &&
                 state.lastSeq >= historyHead && state.sessionId == historyTarget?.id && phase == LinkPhase.Live) {
                 historyTitle = historyTarget
+                mutationDraft?.let { text ->
+                    val merged = if (draft.text.isBlank()) text else draft.text + "\n" + text
+                    draft = TextFieldValue(merged, TextRange(merged.length))
+                }
+                mutationDraft = null
                 historyRestoring = false
                 if (overlay == Overlay.History) overlay = Overlay.None
                 historyError = null
@@ -639,6 +650,38 @@ private fun ConversationScreen(
             }
         }
     }
+    fun loadPoints(rewind: Boolean) {
+        overlay = if (rewind) Overlay.Rewind else Overlay.Fork
+        pointsLoading = true; pointsError = null; points = emptyList()
+        hub.controlWithData(ref, command(if (rewind) "rewind_points" else "fork_points")) { ok, reason, data ->
+            pointsLoading = false
+            if (ok && data != null) points = nativePoints(data) else pointsError = reason ?: "原生节点未返回"
+        }
+    }
+    fun mutate(kind: String, point: NativePoint?, force: Boolean) {
+        mutationConsent = null; mutationForce = false
+        historyRestoring = true; historyStream = null; historyTarget = null
+        mutationDraft = null; collapseComposer("native-session-mutation")
+        val generation = ++historyGeneration
+        hub.controlWithData(ref, buildJsonObject {
+            put("type", kind); put("force", force)
+            point?.let { put("pointId", it.id) }
+        }) { ok, reason, data ->
+            if (generation == historyGeneration) {
+                if (ok && data != null && data.str("session_id").isNotBlank() && data.str("stream").isNotBlank()) {
+                    historyTarget = SessionHistoryChoice(data.str("session_id"), data.str("sessionName").ifBlank { "新会话" }, "", 0L, false)
+                    historyStream = data.str("stream"); historyHead = data.long("head_seq") ?: Long.MAX_VALUE
+                    mutationDraft = data.str("draft").ifBlank { null }
+                    overlay = Overlay.None
+                    historyTitle = null
+                } else {
+                    historyRestoring = false
+                    if (!force && data?.bool("busy") == true) { mutationConsent = kind to point; mutationForce = true }
+                    toast = reason ?: "主机未确认原生会话操作"
+                }
+            }
+        }
+    }
     fun runAction(action: ConversationAction) {
         // Re-resolved at click time: a row painted enabled a moment ago cannot act on stale state.
         val resolved = resolveActions(state.agentProvider, connected, historyRestoring, state.compacting).firstOrNull { it.action == action }
@@ -647,7 +690,11 @@ private fun ConversationScreen(
         when (action) {
             ConversationAction.History -> loadHistory()
             ConversationAction.Compact -> openCompact()
-            ConversationAction.NewSession -> hub.send(ref, "new_session") { ok, r -> if (!ok) toast = "新会话未创建：${r ?: "主机没有确认"}" }
+            ConversationAction.NewSession -> mutate("new_session", null, false)
+            ConversationAction.Fork -> loadPoints(false)
+            ConversationAction.Rewind -> loadPoints(true)
+            ConversationAction.Clone -> { mutationConsent = "clone_session" to null; mutationForce = false }
+            ConversationAction.Tasks -> overlay = Overlay.Tasks
             ConversationAction.Export -> exportSession()
             ConversationAction.Usage -> openUsage()
             ConversationAction.Terminal -> if (inFlight) {
@@ -796,7 +843,7 @@ private fun ConversationScreen(
 
         // Frosted header.
         ConversationHeader(
-            name = state.sessionName ?: historyTitle?.takeIf { it.id == state.sessionId }?.title ?: name,
+            name = if (historyRestoring && historyTarget != null) historyTarget!!.title else state.sessionName ?: historyTitle?.takeIf { it.id == state.sessionId }?.title ?: if (state.stream != null) "新会话" else name,
             status = headerStatus(state, phase),
             statusTone = when {
                 phase == LinkPhase.Ended -> p.danger
@@ -846,6 +893,27 @@ private fun ConversationScreen(
             onLevel = ::chooseLevel,
         )
 
+        NativePointsSheet(overlay == Overlay.Fork || overlay == Overlay.Rewind, overlay == Overlay.Rewind, pointsLoading || historyRestoring, points, pointsError, p, backdrop,
+            onDismiss = { overlay = Overlay.None }, onReload = { loadPoints(overlay == Overlay.Rewind) },
+            onChoose = { mutationConsent = (if (overlay == Overlay.Rewind) "rewind_session" else "fork_session") to it; mutationForce = false })
+        NativeTasksSheet(overlay == Overlay.Tasks, commands, p, backdrop, { overlay = Overlay.None }, onMapped = { native ->
+            when (native) {
+                "model", "models", "think" -> openPicker()
+                "usage", "context", "session-info" -> openUsage()
+                "resume", "history" -> loadHistory()
+                "compact" -> openCompact()
+                "export" -> exportSession()
+                "new", "clear" -> { mutationConsent = "new_session" to null; mutationForce = false }
+                "fork" -> { mutationConsent = "clone_session" to null; mutationForce = false }
+                "rewind", "undo" -> { overlay = Overlay.None; toast = "Grok 原生回滚尚未取得成功闭包，未提交或伪造截断" }
+                else -> return@NativeTasksSheet false
+            }
+            true
+        }) { text, callback -> hub.send(ref, "prompt", text, onResult = callback) }
+        mutationConsent?.let { (kind, point) -> NativeDecisionDialog(
+            if (mutationForce) "确认停止当前任务" else if (kind == "rewind_session") "确认回滚轮次" else "确认创建分支会话",
+            (if (mutationForce) "将停止当前任务与排队输入。\n" else "") + if (kind == "rewind_session") "只回滚对话，不还原文件；原生失败将明确显示。" else "原会话保持不变。现有草稿与附件保留；原生返回文本追加到草稿，不自动发送。",
+            p, { mutationConsent = null }) { mutate(kind, point, mutationForce) } }
         SessionHistoryPicker(
             open = overlay == Overlay.History,
             choices = historyChoices,
@@ -1040,7 +1108,7 @@ private fun ConversationScreen(
 }
 
 /** The one floating layer above the transcript; [None] when the conversation has the stage. */
-private enum class Overlay { None, Menu, Picker, History, Compact, Usage, Export }
+private enum class Overlay { None, Menu, Picker, History, Compact, Usage, Export, Fork, Rewind, Tasks }
 
 /** Following tolerance: a hair above the newest row still counts as reading the latest. */
 private val FOLLOW_SLACK = 24.dp

@@ -103,17 +103,17 @@ func (s *session) resumeGrok(ctx context.Context, id string, force bool) (map[st
 	if err != nil {
 		return nil, err
 	}
-	found := false
+	found, title := false, ""
 	for _, item := range sessions {
 		if item.ID == id {
-			found = true
+			found, title = true, item.Name
 			break
 		}
 	}
 	if !found {
 		return nil, errors.New("当前目录中不存在该 Grok 历史会话")
 	}
-	g, process, err := s.verifiedGrok(ctx)
+	g, _, err := s.verifiedGrok(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -140,6 +140,15 @@ func (s *session) resumeGrok(ctx context.Context, id string, force bool) (map[st
 			}
 		}
 	}
+	return s.loadGrok(ctx, id, title)
+}
+
+func (s *session) loadGrok(ctx context.Context, id, title string) (map[string]any, error) {
+	g, process, err := s.verifiedGrok(ctx)
+	if err != nil {
+		return nil, err
+	}
+	g.cancelPermissions()
 	capture := newWorker(nil)
 	defer capture.shutdown()
 	s.mu.Lock()
@@ -148,7 +157,7 @@ func (s *session) resumeGrok(ctx context.Context, id string, force bool) (map[st
 	defer func() { s.mu.Lock(); s.hydrating, s.replay = false, nil; s.mu.Unlock() }()
 	g.mu.Lock()
 	g.sessionChanging, g.replaying = true, true
-	g.session = id
+	g.session, g.sessionName = id, title
 	g.mu.Unlock()
 	defer func() { g.mu.Lock(); g.sessionChanging, g.replaying = false, false; g.mu.Unlock() }()
 	fail := func(message string) (map[string]any, error) { s.cancel(); return nil, errors.New(message) }
@@ -185,6 +194,7 @@ func (s *session) resumeGrok(ctx context.Context, id string, force bool) (map[st
 		g.mu.Unlock()
 		return fail("Grok 恢复提交时会话身份改变")
 	}
+	title = g.sessionName
 	state, _ := json.Marshal(g.stateLocked())
 	s.mu.Lock()
 	history := capture.historySnapshot()
@@ -192,13 +202,13 @@ func (s *session) resumeGrok(ctx context.Context, id string, force bool) (map[st
 	s.replay, s.hydrating = nil, false
 	s.mu.Unlock()
 	g.mu.Unlock()
-	return map[string]any{"session_id": id, "stream": stream, "head_seq": head, "history_truncated": history.truncated, "content_clipped": history.clipped}, nil
+	return map[string]any{"session_id": id, "sessionName": title, "stream": stream, "head_seq": head, "history_truncated": history.truncated, "content_clipped": history.clipped}, nil
 }
 
 // stateLocked is shared by live get_state and the atomic replay commit.
 func (g *grokACP) stateLocked() map[string]any {
 	level, _ := g.thinkingLocked()
-	return map[string]any{"sessionId": g.session, "agentProvider": "grok", "model": g.modelLocked(), "thinkingLevel": level, "isStreaming": g.running, "isCompacting": g.promptCommand == "compact" && g.running, "pendingMessageCount": g.queued}
+	return map[string]any{"sessionId": g.session, "sessionName": g.sessionName, "agentProvider": "grok", "model": g.modelLocked(), "thinkingLevel": level, "isStreaming": g.running, "isCompacting": g.promptCommand == "compact" && g.running, "pendingMessageCount": g.queued}
 }
 
 func (w *worker) historySnapshot() piHistory {

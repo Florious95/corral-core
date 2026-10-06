@@ -189,7 +189,8 @@ data class ConversationState(
         models = models,
         thinkingLevels = thinkingLevels,
         thinkingLevel = thinkingLevel,
-        sessionName = sessionName,
+        sessionName = sessionName.takeIf { stream == this.stream },
+        sessionId = sessionId.takeIf { stream == this.stream },
         historyTruncated = truncated,
         stream = stream,
     )
@@ -247,7 +248,7 @@ data class ConversationState(
         }
         "interaction_resolved" -> copy(interactions = interactions.filterNot { it.id == e.str("id") }).notice(seq, NoticeTone.Info, e.str("reason"))
         "extension_error" -> notice(seq, NoticeTone.Error, "扩展出错", e.str("error").ifBlank { null })
-        "session_info_changed" -> copy(sessionName = e.str("name").ifBlank { null })
+        "session_info_changed" -> if (e.str("sessionId").isNotBlank() && e.str("sessionId") != sessionId) this else copy(sessionName = e.str("name").ifBlank { null })
         "thinking_level_changed" -> copy(thinkingLevel = e.str("level").ifBlank { null })
         "history_window" -> copy(
             historyTruncated = historyTruncated || e.bool("older_omitted") == true || e.bool("content_clipped") == true,
@@ -263,6 +264,7 @@ data class ConversationState(
             models = models,
             thinkingLevels = thinkingLevels,
             thinkingLevel = thinkingLevel,
+            sessionName = e.str("sessionName").ifBlank { null },
             sessionId = e.str("sessionId").ifBlank { null },
             historyTruncated = historyTruncated,
             stream = stream,
@@ -504,6 +506,7 @@ data class ConversationState(
         return when (e.str("command")) {
             "get_state" -> {
                 val data = e.obj("data") ?: return this
+                if (!ok || (sessionId != null && data.str("sessionId").isNotBlank() && data.str("sessionId") != sessionId)) return this
                 val model = data.obj("model")
                 (model?.let(::withModel) ?: this).copy(
                     agentProvider = data.str("agentProvider").ifBlank { agentProvider },

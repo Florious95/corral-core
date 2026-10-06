@@ -267,78 +267,7 @@ func (s *session) resumePi(ctx context.Context, id string, force bool) (map[stri
 		return map[string]any{"cancelled": true}, errors.New("Pi 扩展取消了会话切换")
 	}
 	switched = true
-	// Any subsequent failure closes only the bridge: the native context may
-	// already have changed, so keeping the old transcript writable is unsafe.
-	fail := func(err error) (map[string]any, error) { s.cancel(); return nil, err }
-	state, err := s.w.requestContext(ctx, map[string]any{"type": "get_state"}, switchReplyTimeout)
-	if err != nil {
-		return fail(err)
-	}
-	s.w.mu.Lock()
-	actualID, actualFile := s.w.sessionID, s.w.sessionFile
-	s.w.mu.Unlock()
-	if actualID != id || filepath.Clean(actualFile) != filepath.Clean(target.path) {
-		return fail(errors.New("Pi 恢复后的会话身份不一致"))
-	}
-	if _, err = s.verifiedPi(ctx); err != nil {
-		return fail(err)
-	}
-	file, err := openPiSession(target.path)
-	if err != nil {
-		return fail(errors.New("恢复后历史文件不可读"))
-	}
-	defer file.Close()
-	last, err := lastPiEntry(ctx, file)
-	if err != nil {
-		return fail(err)
-	}
-	command := map[string]any{"type": "get_entries"}
-	if last != "" {
-		command["since"] = last
-	}
-	raw, err := s.w.requestContext(ctx, command, switchReplyTimeout)
-	if err != nil {
-		return fail(err)
-	}
-	var snapshot struct {
-		Entries []piSessionEntry `json:"entries"`
-		Leaf    *string          `json:"leafId"`
-	}
-	// A null leaf is the official empty branch; a missing field is unknown.
-	var fields map[string]json.RawMessage
-	if json.Unmarshal(raw, &snapshot) != nil || json.Unmarshal(raw, &fields) != nil || fields["leafId"] == nil {
-		return fail(errors.New("Pi 未报告历史分支"))
-	}
-	leaf := ""
-	if snapshot.Leaf != nil {
-		leaf = *snapshot.Leaf
-	}
-	history, err := readPiBranch(ctx, file, leaf, snapshot.Entries)
-	if err != nil {
-		return fail(err)
-	}
-	// The input gate stays closed through one atomic stream replacement. Existing
-	// local clients reconnect and replay from the new generation, rather than
-	// overflowing their 256-record live queues with a large history burst.
-	s.mu.Lock()
-	// The GUI input gate covers all bridge clients, not an independent host
-	// writer or an extension that starts a new turn during switch_session.
-	// Such content cannot safely be classified as snapshot or live: fail visibly
-	// instead of silently dropping it or replaying a duplicate/mixed transcript.
-	for _, record := range s.pending {
-		var event header
-		_ = json.Unmarshal(record, &event)
-		if strings.HasPrefix(event.Type, "message_") || strings.HasPrefix(event.Type, "tool_execution_") || event.Type == "agent_start" {
-			s.mu.Unlock()
-			return fail(errors.New("Pi 已切换，但历史读取期间出现并发任务；请重连核对，主机任务未终止"))
-		}
-	}
-	s.pending = nil
-	s.pendingBytes = 0
-	stream, seq := s.w.replacePiHistory(history, state, id)
-	s.hydrating = false
-	s.mu.Unlock()
-	return map[string]any{"session_id": id, "stream": stream, "head_seq": seq, "history_truncated": history.truncated, "content_clipped": history.clipped}, nil
+	return s.commitPiHistory(ctx, id, target.path)
 }
 
 func (w *worker) replacePiHistory(history piHistory, state json.RawMessage, id string) (string, uint64) {
@@ -354,7 +283,11 @@ func (w *worker) replacePiHistory(history piHistory, state json.RawMessage, id s
 	w.stream = newStreamID()
 	w.resetHistory()
 	w.lastTool = make(map[string]time.Time)
-	reset, _ := json.Marshal(map[string]any{"type": "session_reset", "sessionId": id, "replace": true})
+	var meta struct {
+		Name string `json:"sessionName"`
+	}
+	_ = json.Unmarshal(state, &meta)
+	reset, _ := json.Marshal(map[string]any{"type": "session_reset", "sessionId": id, "sessionName": meta.Name, "replace": true})
 	w.publish(reset, entry{kind: "session_reset"}, true)
 	for _, record := range history.records {
 		w.seq++

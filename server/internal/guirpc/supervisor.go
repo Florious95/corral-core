@@ -209,26 +209,27 @@ func (f inputFunc) Write(raw []byte) (int, error) {
 }
 
 type session struct {
-	ctx          context.Context
-	cancel       context.CancelFunc
-	pane         discovery.Pane
-	created      time.Time
-	bridge       *bridge.Pane
-	w            *worker
-	ready        chan struct{}
-	done         chan struct{}
-	err          error // immutable after ready is closed
-	mu           sync.Mutex
-	process      bridge.NativeProcess
-	grok         *grokACP
-	grokSource   bridge.NativeProcess
-	switching    bool
-	tuiFrom      time.Time
-	stopIO       func()
-	hydrating    bool
-	replay       *worker // bounded native replay, never an agent/process owner
-	pending      [][]byte
-	pendingBytes int
+	ctx           context.Context
+	cancel        context.CancelFunc
+	pane          discovery.Pane
+	created       time.Time
+	bridge        *bridge.Pane
+	w             *worker
+	ready         chan struct{}
+	done          chan struct{}
+	err           error // immutable after ready is closed
+	mu            sync.Mutex
+	process       bridge.NativeProcess
+	grok          *grokACP
+	grokSource    bridge.NativeProcess
+	switching     bool
+	tuiFrom       time.Time
+	stopIO        func()
+	hydrating     bool
+	replay        *worker // bounded native replay, never an agent/process owner
+	pending       [][]byte
+	pendingBytes  int
+	pointsByToken map[string]sessionPoint
 }
 
 func (s *session) isSwitching() bool { s.mu.Lock(); defer s.mu.Unlock(); return s.switching }

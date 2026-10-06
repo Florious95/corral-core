@@ -256,9 +256,13 @@ func projectHistoryEntry(e piSessionEntry) (piHistoryRecord, bool) {
 }
 
 func readPiBranch(ctx context.Context, file *os.File, leaf string, extra []piSessionEntry) (piHistory, error) {
-	lines, err := newReverseJSONL(file)
-	if err != nil {
-		return piHistory{}, err
+	var lines *reverseJSONL
+	if file != nil {
+		var err error
+		lines, err = newReverseJSONL(file)
+		if err != nil {
+			return piHistory{}, err
+		}
 	}
 	result := piHistory{}
 	bytesUsed := 0
@@ -297,6 +301,9 @@ func readPiBranch(ctx context.Context, file *os.File, leaf string, extra []piSes
 		}
 	}
 	for leaf != "" && !full {
+		if lines == nil {
+			return piHistory{}, errors.New("Pi native memory branch parent is missing")
+		}
 		raw, err := lines.next(ctx)
 		if err == io.EOF {
 			return piHistory{}, errors.New("Pi history branch parent is missing")

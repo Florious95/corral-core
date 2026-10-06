@@ -20,16 +20,20 @@ class OverflowSheetsTest {
         val pi = resolveActions("pi", connected = true, restoring = false, compacting = false)
         assertEquals(ConversationAction.History, pi.first().action)
         assertEquals(
-            listOf(ConversationAction.History, ConversationAction.Compact, ConversationAction.NewSession, ConversationAction.Export, ConversationAction.Usage, ConversationAction.Terminal),
+            listOf(ConversationAction.History, ConversationAction.Compact, ConversationAction.NewSession, ConversationAction.Fork, ConversationAction.Clone, ConversationAction.Rewind, ConversationAction.Export, ConversationAction.Usage, ConversationAction.Terminal),
             pi.map { it.action },
         )
-        assertTrue(pi.all { it.enabled })
+        assertTrue(pi.filterNot { it.action == ConversationAction.Rewind }.all { it.enabled })
+        assertFalse("Pi RPC does not implement native rewind", pi.single { it.action == ConversationAction.Rewind }.enabled)
 
         val grok = resolveActions("grok", connected = true, restoring = false, compacting = false)
         assertEquals(ConversationAction.History, grok.first().action)
         assertTrue("native list/load history is connected", grok.first().enabled)
         assertTrue(grok.any { it.action == ConversationAction.Usage && it.enabled })
         assertTrue(grok.any { it.action == ConversationAction.Export && it.enabled })
+        assertTrue(grok.any { it.action == ConversationAction.Clone && it.enabled })
+        assertTrue(grok.any { it.action == ConversationAction.Tasks && it.enabled })
+        assertFalse("unproven message-point fork is never faked", grok.single { it.action == ConversationAction.Fork }.enabled)
         val unknown = resolveActions("unknown", connected = true, restoring = false, compacting = false)
         assertFalse("unsupported history stays visible with a reason", unknown.first().enabled)
         assertFalse(unknown.any { it.action == ConversationAction.Usage || it.action == ConversationAction.Export })

@@ -50,6 +50,7 @@ type conversationSub struct {
 	writeMu    sync.Mutex
 	switchable bool // ready.mode is the D5 supervisor capability, not Pi's.
 	mode       string
+	stream     string
 }
 
 func (c *wsConn) conversationSub(ref string) *conversationSub {
@@ -143,7 +144,7 @@ func (c *wsConn) relayConversation(sub *conversationSub, hello guirpc.Hello) {
 	}
 	sub.writeMu.Lock()
 	sub.switchable = ready.Mode == guirpc.ModeRPC || ready.Mode == guirpc.ModeTUI
-	sub.mode = ready.Mode
+	sub.mode, sub.stream = ready.Mode, ready.Stream
 	sub.writeMu.Unlock()
 	c.sendConversationFrame(sub.ctx, mustFrame(&protocol.ConversationReady{
 		Ref:              sub.ref,
@@ -237,7 +238,7 @@ func (c *wsConn) handleConversationCommand(cmd protocol.ConversationCommand) {
 		c.rejectConversationCommand(cmd, kind, reason)
 		return
 	}
-	if kind == "list_sessions" || kind == "resume_session" {
+	if kind == "list_sessions" || kind == "resume_session" || kind == "fork_points" || kind == "rewind_points" || kind == "fork_session" || kind == "clone_session" || kind == "rewind_session" || kind == "new_session" {
 		c.handleConversationHistoryCommand(cmd, kind, forwarded)
 		return
 	}
@@ -285,7 +286,7 @@ func (s *Server) conversationCommand(id string, raw json.RawMessage) (string, []
 	switch kind {
 	case "prompt", "steer", "follow_up", "abort", "clear_queue", "compact", "new_session", "get_state", "get_commands",
 		"get_available_models", "get_available_thinking_levels":
-	case "list_sessions", "get_session_stats":
+	case "fork_points", "rewind_points", "list_sessions", "get_session_stats":
 		command = map[string]json.RawMessage{"type": command["type"]}
 	case "resume_session":
 		var sessionID string
@@ -298,6 +299,21 @@ func (s *Server) conversationCommand(id string, raw json.RawMessage) (string, []
 		}
 		forceJSON, _ := json.Marshal(force)
 		command = map[string]json.RawMessage{"type": command["type"], "sessionId": command["sessionId"], "force": forceJSON}
+	case "clone_session", "fork_session", "rewind_session":
+		var force bool
+		if v := command["force"]; v != nil && json.Unmarshal(v, &force) != nil {
+			return kind, nil, "force must be a boolean"
+		}
+		clean := map[string]json.RawMessage{"type": command["type"]}
+		clean["force"], _ = json.Marshal(force)
+		if kind != "clone_session" {
+			var point string
+			if json.Unmarshal(command["pointId"], &point) != nil || len(point) != 32 {
+				return kind, nil, "pointId is missing or malformed"
+			}
+			clean["pointId"] = command["pointId"]
+		}
+		command = clean
 	case "interaction_reply":
 		var request string
 		if json.Unmarshal(command["requestId"], &request) != nil || len(request) != 32 {
