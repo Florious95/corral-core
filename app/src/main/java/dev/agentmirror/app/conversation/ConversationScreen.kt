@@ -533,19 +533,21 @@ private fun ConversationScreen(
             }
         }
     }
-    LaunchedEffect(historyRestoring, historyStream, historyHead, state.stream, state.lastSeq, phase) {
-        if (historyRestoring && historyStream != null && state.stream == historyStream &&
-            state.lastSeq >= historyHead && state.sessionId == historyTarget?.id && phase == LinkPhase.Live) {
-            historyTitle = historyTarget
-            historyRestoring = false
-            historyOpen = false
-            historyError = null
-            expanded.clear()
-            listState.scrollToItem(0)
+    // Ordinary streaming must not recreate a no-op job for every lastSeq change.
+    // Keep every stream/session/head/Live barrier while an actual restore is in progress.
+    if (historyRestoring) {
+        LaunchedEffect(historyStream, historyHead, state.stream, state.lastSeq, state.sessionId, historyTarget?.id, phase) {
+            if (historyStream != null && state.stream == historyStream &&
+                state.lastSeq >= historyHead && state.sessionId == historyTarget?.id && phase == LinkPhase.Live) {
+                historyTitle = historyTarget
+                historyRestoring = false
+                historyOpen = false
+                historyError = null
+                expanded.clear()
+                listState.scrollToItem(0)
+            }
         }
-    }
-    LaunchedEffect(historyGeneration, historyRestoring) {
-        if (historyRestoring) {
+        LaunchedEffect(historyGeneration) {
             delay(45_000)
             historyError = "历史流尚未完整到达，请重连重试；输入暂未开放"
         }
