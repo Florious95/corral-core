@@ -115,10 +115,8 @@ import androidx.core.view.WindowCompat
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.shadow.Shadow
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
-import com.kyant.shapes.RoundedRectangularShape
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.perf.PerfTrace
 import dev.agentmirror.app.service.ServiceWire
@@ -133,8 +131,6 @@ import dev.agentmirror.app.session.textFileAttachment
 import dev.agentmirror.app.session.textFileReference
 import dev.agentmirror.app.ui.components.RuleEdge
 import dev.agentmirror.app.ui.components.edgeRule
-import dev.agentmirror.app.ui.components.glassControl
-import dev.agentmirror.app.ui.components.glassReadable
 import dev.agentmirror.app.ui.theme.AppTheme
 import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.LocalThemeSuite
@@ -158,19 +154,6 @@ import java.util.concurrent.atomic.AtomicLong
  * The transcript uses reverseLayout, so streaming growth stays pinned to the bottom with zero
  * scroll calls per token, and reading history is never yanked away.
  */
-
-/** Liquid-glass surface from the app's own material system, tinted by the conversation palette. */
-internal fun Modifier.frostedGlass(backdrop: Backdrop, shape: RoundedRectangularShape, p: ConversationPalette): Modifier =
-    glassControl(
-        backdrop = backdrop,
-        shape = shape,
-        surface = p.glass.glassReadable(),
-        blurRadius = 20.dp,
-        lensHeight = 10.dp,
-        lensAmount = 16.dp,
-        crystalHighlight = true,
-        shadow = Shadow(radius = 18.dp, color = Color.Black.copy(alpha = if (p.dark) 0.32f else 0.10f)),
-    )
 
 private const val LONG_TEXT_BYTES = 24_000
 
@@ -894,7 +877,7 @@ private fun ConversationScreen(
                     } else {
                         // Modernism: a full-bleed brushed sill under a heavy ink rule, down to the edge.
                         Modifier
-                            .background(Brush.verticalGradient(listOf(p.panel, p.panelEnd)))
+                            .brushedMetal(p)
                             .edgeRule(RuleEdge.Top, p.ink, look.rule)
                     },
                 )
@@ -1004,7 +987,7 @@ private fun ConversationHeader(
                 } else {
                     // Modernism: an opaque brushed lintel standing on a heavy ink rule.
                     Modifier
-                        .background(Brush.verticalGradient(listOf(p.panel, p.panelEnd)))
+                        .brushedMetal(p)
                         .edgeRule(RuleEdge.Bottom, p.ink, look.rule)
                 },
             )

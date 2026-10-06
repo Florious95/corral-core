@@ -53,7 +53,6 @@ data class ConversationPalette(
     val userInk: Color,
     val surface: Color,
     val surfaceStroke: Color,
-    val surfaceGlint: Color,
     val code: Color,
     val codeInk: Color,
     val codeSoft: Color,
@@ -86,7 +85,7 @@ data class ConversationPalette(
         }
 
         /**
-         * Depth and glints follow the canvas's real lightness, not the app appearance: a slot may
+         * Depth follows the canvas's real lightness, not the app appearance: a slot may
          * carry a dark scheme in light appearance (single-variant families such as Vesper).
          */
         fun from(scheme: TermPalette.Scheme): ConversationPalette {
@@ -128,7 +127,6 @@ data class ConversationPalette(
                 userInk = c(ensureContrast(scheme.userBlockFg, bubble, BODY_TARGET)),
                 surface = c(surface),
                 surfaceStroke = c(ink).copy(alpha = if (dark) 0.10f else 0.09f),
-                surfaceGlint = Color.White.copy(alpha = if (dark) 0.07f else 0.75f),
                 code = c(code),
                 codeInk = c(ensureContrast(ink, code, BODY_TARGET)),
                 codeSoft = c(ensureContrast(mix(ink, code, 0.42), code, TEXT_MIN + 0.1)),

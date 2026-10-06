@@ -143,10 +143,7 @@ private fun UserText(text: String, p: ConversationPalette, folded: Boolean, onTo
                 .weight(0.86f, fill = false)
                 .clip(shape)
                 .background(p.userBubble)
-                .then(
-                    if (LocalConversationLook.current.glass) Modifier.border(0.6.dp, Brush.verticalGradient(listOf(p.surfaceGlint, Color.Transparent)), shape)
-                    else Modifier.border(LocalConversationLook.current.hairline, p.rule, shape),
-                )
+                .hairlineBorder(LocalConversationLook.current, p, shape)
                 .animateContentSize(disclosureSpring())
                 .padding(horizontal = 15.dp, vertical = 10.dp)
                 .testTag("conversation-user"),
@@ -193,10 +190,7 @@ fun SkillCard(skill: SkillBlock, p: ConversationPalette, expanded: Boolean, onTo
                 .weight(0.94f)
                 .clip(shape)
                 .background(p.surface)
-                .border(0.5.dp, p.surfaceStroke, shape)
-                .drawBehind {
-                    drawRect(Brush.verticalGradient(listOf(p.accent.copy(alpha = if (p.dark) 0.10f else 0.07f), Color.Transparent), endY = 64.dp.toPx()))
-                }
+                .hairlineBorder(LocalConversationLook.current, p, shape)
                 .testTag("conversation-skill"),
         ) {
             Row(
@@ -208,10 +202,7 @@ fun SkillCard(skill: SkillBlock, p: ConversationPalette, expanded: Boolean, onTo
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    Modifier
-                        .size(36.dp)
-                        .clip(lookShape(11.dp))
-                        .background(Brush.linearGradient(listOf(p.accent.copy(alpha = 0.22f), p.accent.copy(alpha = 0.08f)))),
+                    Modifier.size(36.dp).glyphTile(p.accent, p, lookShape(11.dp)),
                     contentAlignment = Alignment.Center,
                 ) {
                     GlyphIcon(Glyph.Wand, p.accentInk, 19.dp)
@@ -364,22 +355,14 @@ fun ToolCallCard(tool: ToolCall, p: ConversationPalette, expanded: Boolean, skew
         ToolPhase.Succeeded -> p.success
         else -> p.accentInk
     }
+    // A flat pane: surface fill and one hairline. A failed call is outlined in danger so it
+    // reads from across the transcript without any glow.
     Column(
         modifier
             .fillMaxWidth()
             .clip(shape)
             .background(p.surface)
-            .border(0.5.dp, p.surfaceStroke, shape)
-            .then(
-                if (LocalConversationLook.current.glass) {
-                    Modifier.drawBehind {
-                        // Specular glint along the top edge: the card catches light, it is not a box.
-                        drawRect(Brush.verticalGradient(listOf(p.surfaceGlint.copy(alpha = p.surfaceGlint.alpha * 0.6f), Color.Transparent), endY = 18.dp.toPx()))
-                    }
-                } else {
-                    Modifier.border(LocalConversationLook.current.hairline, p.rule, shape)
-                },
-            )
+            .hairlineBorder(LocalConversationLook.current, p, shape, tone = p.danger.copy(alpha = 0.36f).takeIf { tool.phase == ToolPhase.Failed })
             .testTag("conversation-tool-${tool.id}"),
     ) {
         Row(
@@ -391,10 +374,7 @@ fun ToolCallCard(tool: ToolCall, p: ConversationPalette, expanded: Boolean, skew
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                Modifier
-                    .size(32.dp)
-                    .clip(lookShape(10.dp))
-                    .background(tone.copy(alpha = if (p.dark) 0.16f else 0.11f)),
+                Modifier.size(32.dp).glyphTile(tone, p, lookShape(10.dp)),
                 contentAlignment = Alignment.Center,
             ) {
                 GlyphIcon(if (skillRead(tool) != null) Glyph.Wand else toolGlyph(tool.name), tone, 17.dp)
@@ -573,7 +553,7 @@ fun ConversationEmpty(model: String?, p: ConversationPalette, onSuggestion: (Str
             Modifier
                 .size(60.dp)
                 .clip(lookShape(20.dp))
-                .background(Brush.linearGradient(listOf(p.accent, p.accent.copy(alpha = 0.62f)))),
+                .background(p.accent),
             contentAlignment = Alignment.Center,
         ) {
             GlyphIcon(Glyph.Spark, p.onAccent, 28.dp)
@@ -592,7 +572,7 @@ fun ConversationEmpty(model: String?, p: ConversationPalette, onSuggestion: (Str
                         .fillMaxWidth()
                         .clip(shape)
                         .background(p.surface)
-                        .border(0.5.dp, p.surfaceStroke, shape)
+                        .hairlineBorder(LocalConversationLook.current, p, shape)
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSuggestion(text) }
                         .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
