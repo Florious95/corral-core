@@ -69,6 +69,7 @@ type grokACP struct {
 	remember                            func(string) error
 	sessionChanging                     bool
 	stats                               *grokStatsRead
+	usage                               func(context.Context, string) (*grokUsage, error)
 	models                              acpModels
 	config                              []acpConfig
 	commands                            []map[string]any

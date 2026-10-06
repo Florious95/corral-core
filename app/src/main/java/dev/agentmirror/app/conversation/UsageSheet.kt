@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
 import dev.agentmirror.app.ui.components.RuleEdge
 import dev.agentmirror.app.ui.components.edgeRule
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -85,12 +86,16 @@ internal data class UsageSnapshot(
     val turnCount: Long? = null,
     val modelName: String? = null,
     val nativeSlash: Boolean = false,
+    val nativeUsage: JsonObject? = null,
+    val usageError: String? = null,
+    val reasoning: Long? = null,
+    val modelCalls: Long? = null,
 ) {
     /** Everything the model read: uncached input + cache reads + cache writes. */
-    val promptTokens: Long? get() = if (input != null && cacheRead != null && cacheWrite != null) input + cacheRead + cacheWrite else null
+    val promptTokens: Long? get() = if (nativeSlash) input else if (input != null && cacheRead != null && cacheWrite != null) input + cacheRead + cacheWrite else null
 
     /** Cache reads over all prompt input; undefined (null) before any input. */
-    val cacheHitPercent: Double? get() = promptTokens?.takeIf { it > 0 }?.let { (cacheRead ?: 0L) * 100.0 / it }
+    val cacheHitPercent: Double? get() = if (nativeSlash) null else promptTokens?.takeIf { it > 0 }?.let { (cacheRead ?: 0L) * 100.0 / it }
 
     /** Derived from this snapshot's own used/limit pair only. */
     val contextPercent: Double? get() = if (contextTokens != null && contextWindow != null && contextWindow > 0) contextTokens * 100.0 / contextWindow else null
@@ -118,7 +123,11 @@ internal fun usageSnapshot(data: JsonObject, sampledAt: Long): UsageSnapshot {
         sampledAt = sampledAt,
         turnCount = data.long("turnCount"),
         modelName = data.str("modelName").takeIf { it.isNotBlank() },
-        nativeSlash = data.str("source") == "native_slash",
+        nativeSlash = data.str("agentProvider") == "grok" || data.str("source") == "native_slash",
+        nativeUsage = data.obj("grokUsage"),
+        usageError = data.str("usageError").takeIf { it.isNotBlank() },
+        reasoning = tokens?.long("reasoning"),
+        modelCalls = data.long("modelCalls"),
     )
 }
 
@@ -251,24 +260,27 @@ private fun UsageBody(s: UsageSnapshot, load: UsageLoad, running: Boolean, p: Co
     // ---- session totals ----
     SheetLabel("会话累计", p, Modifier.padding(top = 18.dp, bottom = 8.dp))
     if (s.nativeSlash) {
-        Text("来自 Grok 原生 /context 与 /session-info；未报告的 Token 与费用显示 —，上下文占用不冒充累计消耗。", style = CaptionStyle.copy(color = p.inkSoft, fontSize = 12.sp), modifier = Modifier.padding(bottom = 8.dp))
+        Text("Token / 回合来自官方 grok usage 当前会话账本（含继承历史）；上下文另取 /context 与 /session-info，不混算两者。", style = CaptionStyle.copy(color = p.inkSoft, fontSize = 12.sp), modifier = Modifier.padding(bottom = 8.dp))
+        s.usageError?.let { SheetCallout(Glyph.Gauge, it, p.warning, p, Modifier.padding(bottom = 8.dp), "conversation-usage-native-error") }
     }
     val hit = s.cacheHitPercent
     MetricGrid(
         listOf(
-            Metric("输入", s.promptTokens, "含缓存读写"),
+            Metric("输入", s.promptTokens, if (s.nativeSlash) "原生 CLI 口径" else "含缓存读写"),
             Metric("输出", s.output, null),
             Metric("缓存读取", s.cacheRead, hit?.let { "命中 ${percentText(it)}" } ?: if (s.promptTokens == 0L) "尚无输入" else "未报告命中率"),
             Metric("缓存写入", s.cacheWrite, null),
             Metric("总计", s.total, null),
-            Metric(
+            if (s.nativeSlash) Metric("推理", s.reasoning, "原生已记录 tokens") else Metric(
                 "消息",
                 s.totalMessages,
                 listOfNotNull(s.userMessages?.let { "用户 $it" }, s.assistantMessages?.let { "助手 $it" }, s.toolResults?.let { "工具 $it" }).joinToString(" · ").ifEmpty { null },
             ),
-        ),
+        ).map { if (s.nativeSlash) it.copy(missing = "未报告") else it },
         p,
     )
+    if (s.modelCalls != null) SheetFact("模型调用", groupedCount(s.modelCalls), p)
+    s.nativeUsage?.let { GrokUsageDetails(it, p) }
     if (s.toolCalls != null) {
         Text(
             "模型发起工具调用 ${s.toolCalls} 次",
@@ -279,9 +291,9 @@ private fun UsageBody(s: UsageSnapshot, load: UsageLoad, running: Boolean, p: Co
 
     // ---- cost ----
     SheetLabel("费用", p, Modifier.padding(top = 18.dp, bottom = 2.dp))
-    SheetFact("会话估算", usdText(s.cost) ?: "—", p, tag = "conversation-usage-cost")
+    SheetFact("会话估算", usdText(s.cost) ?: if (s.nativeSlash) "原生未报告" else "—", p, tag = "conversation-usage-cost")
     Text(
-        "按 Provider 报价记录的累计估算，含工具与摘要调用；不是账户账单。",
+        if (s.nativeSlash && s.cost == null) "官方本地用量账本未返回费用；Token 数不推算成账单，不填 USD 0。" else if (s.nativeSlash) "官方本地用量账本记录 · 10¹⁰ ticks / USD；不是账户额度余额。" else "按 Provider 报价记录的累计估算，含工具与摘要调用；不是账户账单。",
         style = CaptionStyle.copy(color = p.inkSoft, fontSize = 12.sp, lineHeight = 17.sp),
         modifier = Modifier.padding(top = 6.dp),
     )
@@ -298,7 +310,30 @@ private fun UsageBody(s: UsageSnapshot, load: UsageLoad, running: Boolean, p: Co
     )
 }
 
-private data class Metric(val label: String, val value: Long?, val note: String?)
+/** Native per-model/turn counters, not reconstructed from GUI message counts. */
+@Composable
+private fun GrokUsageDetails(data: JsonObject, p: ConversationPalette) {
+    fun cost(counts: JsonObject): String? = counts.long("costUsdTicks")?.takeIf { it >= 0 }?.let { usdText(BigDecimal.valueOf(it).movePointLeft(10).toPlainString()) }
+    data.obj("session")?.obj("modelUsage")?.let { models ->
+        SheetLabel("按模型记录", p, Modifier.padding(top = 16.dp))
+        models.entries.take(64).forEach { (model, raw) ->
+            val counts = raw as? JsonObject ?: return@forEach
+            SheetFact(model, counts.long("totalTokens")?.let { "${groupedCount(it)} tokens" } ?: "未报告", p)
+            Text(listOfNotNull(counts.long("inputTokens")?.let { "输入 ${groupedCount(it)}" }, counts.long("outputTokens")?.let { "输出 ${groupedCount(it)}" }, counts.long("modelCalls")?.let { "调用 $it" }, cost(counts)).joinToString(" · "), style = CaptionStyle.copy(color = p.inkSoft))
+        }
+    }
+    val turns = data["turns"] as? JsonArray ?: return
+    if (turns.isNotEmpty()) {
+        SheetLabel("最近回合 · 最多 50 条", p, Modifier.padding(top = 16.dp))
+        turns.takeLast(50).forEach { raw ->
+            val turn = raw as? JsonObject ?: return@forEach
+            SheetFact("回合 ${turn.long("turnNumber")?.let(::groupedCount) ?: "未报告"}", turn.long("totalTokens")?.let { "${groupedCount(it)} tokens" } ?: "未报告", p)
+            Text(listOfNotNull(turn.long("inputTokens")?.let { "输入 ${groupedCount(it)}" }, turn.long("outputTokens")?.let { "输出 ${groupedCount(it)}" }, turn.long("modelCalls")?.let { "调用 $it" }, cost(turn)).joinToString(" · "), style = CaptionStyle.copy(color = p.inkSoft))
+        }
+    }
+}
+
+private data class Metric(val label: String, val value: Long?, val note: String?, val missing: String = "—")
 
 /** Two columns: glass tiles on an 8dp gutter, or a ruled Modernist grid with shared hairlines. */
 @Composable
@@ -338,7 +373,7 @@ private fun MetricCell(metric: Metric, p: ConversationPalette, modifier: Modifie
     ) {
         Text(metric.label, style = CaptionStyle.copy(color = p.inkSoft, fontSize = 12.sp))
         Text(
-            metric.value?.let(::groupedCount) ?: "—",
+            metric.value?.let(::groupedCount) ?: metric.missing,
             style = TextStyle(fontFamily = ConversationSans, fontFeatureSettings = "tnum", color = p.ink, fontSize = 19.sp, lineHeight = 25.sp, fontWeight = look.titleWeight),
             modifier = Modifier.padding(top = 2.dp),
         )

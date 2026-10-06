@@ -1,8 +1,8 @@
 package guirpc
 
 // Grok exposes context through native read-only slash output, not Pi usage.
-// Only known labelled metrics are projected; credentials/cwd/auth/native text
-// never leave this collector. Missing cumulative/turn token metrics stay absent.
+// Context labels and official local CLI ledger counters are projected separately;
+// credentials/cwd/auth/native text never leave this collector. No inferred billing.
 // @contract
 // @pre idle verified ACP session; no concurrent native context mutation
 // @post context uses one native used/limit pair, never invented token/cost zero
@@ -24,6 +24,8 @@ type grokStatsRead struct {
 	text        strings.Builder
 	context     string
 	overflow    bool
+	usage       *grokUsage
+	usageError  error
 }
 
 func (g *grokACP) readStats(id string) error {
@@ -35,7 +37,17 @@ func (g *grokACP) readStats(id string) error {
 	read := &grokStatsRead{id: id, session: g.session}
 	g.stats, g.sessionChanging = read, true
 	g.mu.Unlock()
-	g.statsQuery(read, "/context", false)
+	go func() {
+		if g.usage != nil {
+			read.usage, read.usageError = g.usage(g.ctx, read.session)
+		}
+		g.mu.Lock()
+		current := g.stats == read && g.session == read.session
+		g.mu.Unlock()
+		if current {
+			g.statsQuery(read, "/context", false)
+		}
+	}()
 	return nil
 }
 
@@ -79,6 +91,13 @@ func (g *grokACP) statsQuery(read *grokStatsRead, command string, last bool) {
 			metrics["modelName"] = model.ID
 		}
 		metrics["source"] = "native_slash"
+		if g.usage != nil {
+			if read.usageError == nil {
+				projectGrokUsage(metrics, read.usage)
+			} else {
+				metrics["usageError"] = "Grok 原生用量 CLI 未返回有效记录（空账本或读取失败）"
+			}
+		}
 		g.response(read.id, "get_session_stats", metrics, nil)
 	})
 	if err != nil {

@@ -312,6 +312,7 @@ func (s *session) attachRPC(ctx context.Context) error {
 	var grok *grokACP
 	if process.Provider == "grok" {
 		grok = newGrokACP(live, write, s.ingest, s.cancel)
+		grok.usage = s.readGrokUsage
 		grok.remember = func(id string) error {
 			if err := s.bridge.RememberNativeSession(live, process, id); err != nil {
 				return err
