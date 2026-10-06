@@ -180,8 +180,8 @@ private fun Eyebrow(text: String, p: ConversationPalette) {
 
 @Composable
 private fun ModelChip(choice: ModelChoice, current: Boolean, pending: Boolean, p: ConversationPalette, onClick: () -> Unit) {
-    val fill by animateColorAsState(if (current) p.accent else p.ink.copy(alpha = 0.06f), tween(180), label = "model-fill")
-    val ink = if (current) p.onAccent else p.ink
+    val fill = p.canvas
+    val ink = p.ink
     val shape = lookPill()
     Row(
         Modifier
@@ -189,7 +189,7 @@ private fun ModelChip(choice: ModelChoice, current: Boolean, pending: Boolean, p
             .widthIn(max = 260.dp)
             .clip(shape)
             .background(fill)
-            .border(0.5.dp, if (current) Color.Transparent else p.surfaceStroke, shape)
+            .border(0.5.dp, if (current) p.ink.copy(alpha = 0.56f) else p.surfaceStroke, shape)
             .clickable(enabled = !current && !pending, interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(horizontal = 13.dp, vertical = 8.dp)
             .testTag("conversation-model-${choice.provider}/${choice.id}"),
@@ -214,7 +214,8 @@ private fun Segmented(levels: List<String>, selected: String?, pending: Boolean,
             .fillMaxWidth()
             .height(38.dp)
             .clip(lookPill())
-            .background(p.ink.copy(alpha = 0.06f))
+            .background(p.canvas)
+            .border(0.5.dp, p.rule, lookPill())
             .padding(3.dp)
             .testTag("conversation-thinking"),
     ) {
@@ -227,7 +228,8 @@ private fun Segmented(levels: List<String>, selected: String?, pending: Boolean,
                     .width(segment)
                     .fillMaxHeight()
                     .clip(lookPill())
-                    .background(if (pending) p.accent.copy(alpha = 0.55f) else p.accent),
+                    .background(p.canvas)
+                    .border(0.5.dp, p.ink.copy(alpha = if (pending) 0.32f else 0.56f), lookPill()),
             )
         }
         Row(Modifier.fillMaxSize()) {
@@ -244,7 +246,7 @@ private fun Segmented(levels: List<String>, selected: String?, pending: Boolean,
                 ) {
                     Text(
                         thinkingLabel(level),
-                        style = LabelStyle.copy(color = if (on) p.onAccent else p.ink, fontSize = 12.5.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium),
+                        style = LabelStyle.copy(color = p.ink, fontSize = 12.5.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium),
                         textAlign = TextAlign.Center,
                         maxLines = 1,
                     )

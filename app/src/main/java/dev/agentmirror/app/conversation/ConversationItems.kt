@@ -428,7 +428,7 @@ private fun ToolStatus(tool: ToolCall, p: ConversationPalette, skewMs: Long, str
         else -> null
     }
     val shape = look.pill()
-    val fill = tone?.copy(alpha = if (p.dark) 0.14f else 0.10f) ?: p.ink.copy(alpha = 0.05f)
+    val fill = p.surface
     Row(
         Modifier
             .clip(shape)
@@ -500,7 +500,7 @@ fun NoticeRow(notice: Notice, p: ConversationPalette, modifier: Modifier = Modif
         modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(tone.copy(alpha = if (p.dark) 0.09f else 0.06f))
+            .background(p.surface)
             .border(0.5.dp, tone.copy(alpha = 0.22f), shape)
             .padding(horizontal = 13.dp, vertical = 11.dp),
         verticalAlignment = Alignment.Top,

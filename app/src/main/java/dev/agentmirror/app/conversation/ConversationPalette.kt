@@ -30,10 +30,9 @@ import kotlin.math.abs
 import kotlin.math.hypot
 
 /*
- * The conversation surface takes its colour from the user's terminal theme (all 30 families ×
- * light/dark slots), so GUI and TUI feel like one product. Every derived pair is computed in OkLab
- * and contrast-repaired: text never lands below WCAG AA on its own surface, whatever the theme —
- * the white-on-white class of bug is impossible by construction, not by review.
+ * Native GUI uses one true-black reading surface, independent of terminal theme/appearance.
+ * Terminal colours remain unchanged in TUI. Only semantic foreground signals use the terminal
+ * palette, contrast-repaired against #000000; surfaces never inherit its warm/accent tint.
  */
 
 @Immutable
@@ -84,72 +83,47 @@ data class ConversationPalette(
             return palette
         }
 
-        /**
-         * Depth follows the canvas's real lightness, not the app appearance: a slot may
-         * carry a dark scheme in light appearance (single-variant families such as Vesper).
-         */
+        /** All native GUI slots are pure black; separation comes from geometry and hairlines. */
         fun from(scheme: TermPalette.Scheme): ConversationPalette {
-            val bg = scheme.defaultBg
-            val dark = TermPalette.toOkLab(bg).L < 0.6
-            val ink = ensureContrast(scheme.defaultFg, bg, BODY_TARGET)
-            val accentBase = listOf(12, 4, 14, 6, 13, 5).mapNotNull { scheme.ansi16[it] }
-                .filter { distance(it, bg) > 0.12 }
-                .maxByOrNull { chroma(it) } ?: ink
-            val onAccent = listOf(0xFFFFFFFF.toInt(), 0xFF0E0F13.toInt()).maxBy { TermPalette.contrast(it, ensureContrast(accentBase, bg, 3.0)) }
-            // The send button carries its glyph: the fill moves away from the glyph until both
-            // the glyph (AA) and the fill against the canvas (3:1 UI component) hold.
-            val accent = ensureContrast(ensureContrast(accentBase, bg, 3.0), onAccent, TEXT_MIN + 0.1)
-            val accentInk = ensureContrast(accentBase, bg, TEXT_MIN + 0.1)
-            val bubble = tint(scheme.userBlockBg, accentBase, 0.16)
-            // Quantisation collapses tiny OkLab shifts near pure black/white, so each layer is
-            // also held to a minimum luminance separation from the canvas.
-            val surface = ensureContrast(shift(bg, if (dark) 0.042 else -0.018, accentBase, 0.006), bg, if (dark) 1.12 else 1.05)
-            val code = if (dark) {
-                ensureContrast(shift(bg, -0.018, accentBase, 0.004), bg, 1.03)
-            } else {
-                ensureContrast(shift(bg, -0.034, accentBase, 0.004), bg, 1.11)
+            val black = 0xFF000000.toInt()
+            val white = Color.White
+            val soft = c(0xFFB6BDC8.toInt())
+            fun signal(vararg slots: Int): Color {
+                val fg = slots.toList().mapNotNull { scheme.ansi16[it] }.maxByOrNull { chroma(it) } ?: 0xFFFFFFFF.toInt()
+                return c(ensureContrast(fg, black, TEXT_MIN + 0.1))
             }
-            val inkSoft = ensureContrast(ensureContrast(mix(ink, bg, 0.42), bg, TEXT_MIN + 0.1), surface, TEXT_MIN + 0.1)
-            // Alternate solid surface tone; no gradient or texture is drawn.
-            val panelEnd = shift(surface, if (dark) -0.016 else 0.014, accentBase, 0.0)
-            fun signal(vararg slots: Int): Int = slots.toList().mapNotNull { scheme.ansi16[it] }.maxByOrNull { chroma(it) } ?: ink
             return ConversationPalette(
-                dark = dark,
-                canvas = c(bg),
-                glow = c(shift(bg, if (dark) 0.06 else 0.03, accentBase, 0.03)).copy(alpha = 0.9f),
-                ink = c(ink),
-                inkSoft = c(inkSoft),
-                inkFaint = c(mix(ink, bg, 0.84)),
-                accent = c(accent),
-                accentInk = c(accentInk),
-                onAccent = c(onAccent),
-                userBubble = c(bubble),
-                userInk = c(ensureContrast(scheme.userBlockFg, bubble, BODY_TARGET)),
-                surface = c(surface),
-                surfaceStroke = c(ink).copy(alpha = if (dark) 0.10f else 0.09f),
-                code = c(code),
-                codeInk = c(ensureContrast(ink, code, BODY_TARGET)),
-                codeSoft = c(ensureContrast(mix(ink, code, 0.42), code, TEXT_MIN + 0.1)),
-                success = c(ensureContrast(signal(10, 2), surface, TEXT_MIN + 0.1)),
-                warning = c(ensureContrast(signal(11, 3), surface, TEXT_MIN + 0.1)),
-                danger = c(ensureContrast(signal(9, 1), surface, TEXT_MIN + 0.1)),
-                glass = c(bg).copy(alpha = if (dark) 0.64f else 0.72f),
-                glassStroke = (if (dark) Color.White else Color.Black).copy(alpha = if (dark) 0.10f else 0.07f),
-                panel = c(surface),
-                panelEnd = c(panelEnd),
-                rule = c(ink).copy(alpha = if (dark) 0.24f else 0.20f),
+                dark = true,
+                canvas = Color.Black,
+                glow = Color.Transparent,
+                ink = white,
+                inkSoft = soft,
+                inkFaint = white.copy(alpha = 0.24f),
+                accent = white,
+                accentInk = white,
+                onAccent = Color.Black,
+                userBubble = Color.Black,
+                userInk = white,
+                surface = Color.Black,
+                surfaceStroke = white.copy(alpha = 0.16f),
+                code = Color.Black,
+                codeInk = white,
+                codeSoft = soft,
+                success = signal(10, 2),
+                warning = signal(11, 3),
+                danger = signal(9, 1),
+                // Opaque protection also blocks warm colours sampled from logos/transcript.
+                glass = Color.Black,
+                glassStroke = white.copy(alpha = 0.16f),
+                panel = Color.Black,
+                panelEnd = Color.Black,
+                rule = white.copy(alpha = 0.24f),
             )
         }
 
         private fun c(argb: Int) = Color(argb.toLong() and 0xFFFFFFFFL)
 
         private fun chroma(argb: Int): Double = TermPalette.toOkLab(argb).let { hypot(it.a, it.b) }
-
-        private fun distance(a: Int, b: Int): Double {
-            val x = TermPalette.toOkLab(a)
-            val y = TermPalette.toOkLab(b)
-            return hypot(x.L - y.L, hypot(x.a - y.a, x.b - y.b))
-        }
 
         private fun lab(L: Double, a: Double, b: Double): Int =
             TermPalette.fromOkLab(L.coerceIn(0.0, 1.0), TermPalette.OkLab(L, a, b), hypot(a, b))
@@ -159,21 +133,6 @@ data class ConversationPalette(
             val x = TermPalette.toOkLab(from)
             val y = TermPalette.toOkLab(to)
             return lab(x.L + (y.L - x.L) * t, x.a + (y.a - x.a) * t, x.b + (y.b - x.b) * t)
-        }
-
-        /** Lightness shift with a whisper of [hueFrom]'s hue, so surfaces belong to the theme. */
-        private fun shift(base: Int, dL: Double, hueFrom: Int, chromaAdd: Double): Int {
-            val x = TermPalette.toOkLab(base)
-            val h = TermPalette.toOkLab(hueFrom)
-            val n = hypot(h.a, h.b).takeIf { it > 1e-6 } ?: 1.0
-            return lab(x.L + dL, x.a + h.a / n * chromaAdd, x.b + h.b / n * chromaAdd)
-        }
-
-        /** Moves [base] toward [toward]'s hue only; lightness stays (keeps the bubble's depth). */
-        private fun tint(base: Int, toward: Int, t: Double): Int {
-            val x = TermPalette.toOkLab(base)
-            val y = TermPalette.toOkLab(toward)
-            return lab(x.L, x.a + (y.a - x.a) * t, x.b + (y.b - x.b) * t)
         }
 
         /**

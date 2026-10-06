@@ -1243,11 +1243,11 @@ private fun ConfirmDialog(
                     )
                     Text(
                         confirm,
-                        // Danger ink on a danger wash: the ink is contrast-repaired for every theme.
+                        // Danger is a contrast-repaired foreground, never a warm surface wash.
                         style = LabelStyle.copy(color = p.danger, fontSize = 14.sp),
                         modifier = Modifier
                             .clip(look.pill())
-                            .background(p.danger.copy(alpha = if (p.dark) 0.18f else 0.12f))
+                            .background(p.surface)
                             .clickable(onClick = onConfirm)
                             .padding(horizontal = 18.dp, vertical = 10.dp)
                             .testTag("conversation-confirm-ok"),

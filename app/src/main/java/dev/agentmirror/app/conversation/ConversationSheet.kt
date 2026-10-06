@@ -276,25 +276,20 @@ internal fun SheetButton(
     val shape = look.pill()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val (fill, ink) = when {
-        !enabled -> p.ink.copy(alpha = 0.06f) to p.inkSoft
-        kind == SheetButtonKind.Primary -> p.accent to p.onAccent
-        kind == SheetButtonKind.Danger -> p.danger.copy(alpha = if (p.dark) 0.18f else 0.12f) to p.danger
-        else -> p.ink.copy(alpha = if (look.glass) 0.07f else 0f) to p.ink
+    val fill = p.canvas
+    val ink = when {
+        !enabled -> p.inkSoft
+        kind == SheetButtonKind.Danger -> p.danger
+        else -> p.ink
     }
-    val outline = when {
-        look.glass -> null
-        kind == SheetButtonKind.Danger && enabled -> p.danger
-        kind == SheetButtonKind.Secondary || !enabled -> p.rule
-        else -> null
-    }
+    val outline = if (enabled && (pressed || kind == SheetButtonKind.Primary)) p.ink.copy(alpha = 0.56f) else p.rule
     Box(
         modifier
             .heightIn(min = 48.dp)
             .clip(shape)
             .background(fill)
-            .then(if (outline != null) Modifier.border(look.hairline, outline, shape) else Modifier)
-            .background(if (pressed) p.ink.copy(alpha = 0.08f) else Color.Transparent)
+            .border(look.hairline, outline, shape)
+            // Press feedback is a neutral hairline, never a wash under danger text.
             .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
             .padding(horizontal = 18.dp)
             .testTag(tag),
@@ -330,7 +325,7 @@ internal fun SheetFact(label: String, value: String, p: ConversationPalette, val
     }
 }
 
-/** A calm callout: glyph + text on a tone wash; Modernism adds a ruled edge instead of a fill. */
+/** A true-black callout: semantic tone is foreground/edge only, never a warm colour wash. */
 @Composable
 internal fun SheetCallout(glyph: Glyph, text: String, tone: Color, p: ConversationPalette, modifier: Modifier = Modifier, tag: String? = null) {
     val look = LocalConversationLook.current
@@ -339,7 +334,7 @@ internal fun SheetCallout(glyph: Glyph, text: String, tone: Color, p: Conversati
         modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(tone.copy(alpha = if (look.glass) (if (p.dark) 0.10f else 0.07f) else 0.05f))
+            .background(p.surface)
             .then(if (look.glass) Modifier else Modifier.edgeRule(RuleEdge.Start, tone, 2.dp))
             .padding(horizontal = 12.dp, vertical = 10.dp)
             .then(if (tag != null) Modifier.testTag(tag) else Modifier),

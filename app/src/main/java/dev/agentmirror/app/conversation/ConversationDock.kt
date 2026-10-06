@@ -306,9 +306,7 @@ private fun SendButton(action: DockAction, p: ConversationPalette, onSend: () ->
     val scale by animateFloatAsState(if (pressed) 0.9f else 1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium), label = "send-press")
     val fill by animateColorAsState(
         when (action) {
-            DockAction.Send -> p.accent
-            DockAction.Stop -> p.ink
-            DockAction.Disabled -> p.ink.copy(alpha = 0.08f)
+            DockAction.Send, DockAction.Stop, DockAction.Disabled -> p.canvas
         },
         tween(180),
         label = "send-fill",
@@ -319,6 +317,7 @@ private fun SendButton(action: DockAction, p: ConversationPalette, onSend: () ->
             .scale(scale)
             .clip(LocalConversationLook.current.pill())
             .background(fill)
+            .border(0.5.dp, p.rule, LocalConversationLook.current.pill())
             .clickable(interactionSource = interaction, indication = null, enabled = action != DockAction.Disabled) {
                 if (action == DockAction.Stop) onStop() else onSend()
             }
@@ -331,8 +330,8 @@ private fun SendButton(action: DockAction, p: ConversationPalette, onSend: () ->
             label = "send-glyph",
         ) { a ->
             when (a) {
-                DockAction.Send -> GlyphIcon(Glyph.Send, p.onAccent, 20.dp)
-                DockAction.Stop -> GlyphIcon(Glyph.Stop, p.canvas, 18.dp)
+                DockAction.Send -> GlyphIcon(Glyph.Send, p.ink, 20.dp)
+                DockAction.Stop -> GlyphIcon(Glyph.Stop, p.ink, 18.dp)
                 DockAction.Disabled -> GlyphIcon(Glyph.Send, p.inkSoft.copy(alpha = 0.7f), 20.dp)
             }
         }
@@ -374,7 +373,7 @@ private fun ImageChip(image: PendingImage, onRemove: (Long) -> Unit, p: Conversa
                 }
             }
             if (image.failed) {
-                Box(Modifier.size(48.dp).background(p.danger.copy(alpha = 0.28f)), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(48.dp).background(p.canvas), contentAlignment = Alignment.Center) {
                     GlyphIcon(Glyph.Cross, p.ink, 16.dp)
                 }
             }

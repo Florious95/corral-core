@@ -45,8 +45,8 @@ import dev.agentmirror.app.ui.theme.ResolvedThemeSuite
 
 /*
  * The app style (Settings › 界面风格) applied to the conversation: material, geometry and type
- * weight only. Colour stays with the terminal theme through [ConversationPalette], so every one of
- * the 30 families keeps its contrast-repaired pairs in both styles.
+ * weight only. Native GUI keeps [ConversationPalette]'s true-black reading surface in both
+ * styles; terminal-theme colours are used only for contrast-repaired semantic foregrounds.
  *
  *   Liquid Glass — planar frosted panels sampling the transcript, squircles, one even 0.5dp
  *                  hairline. No bevel, no specular glint, no lens bulge, no inner shadow: depth
@@ -143,6 +143,6 @@ internal fun Modifier.flatPanel(p: ConversationPalette, shape: Shape = Rectangle
 internal fun Modifier.hairlineBorder(look: ConversationLook, p: ConversationPalette, shape: Shape, tone: Color? = null): Modifier =
     border(look.hairline, tone ?: if (look.glass) p.surfaceStroke else p.rule, shape)
 
-/** A flat tinted tile behind a glyph: one colour, no gradient, no glow. */
+/** A true-black glyph tile; semantic tone belongs to the glyph, never its reading surface. */
 internal fun Modifier.glyphTile(tone: Color, p: ConversationPalette, shape: Shape): Modifier =
-    clip(shape).background(tone.copy(alpha = if (p.dark) 0.16f else 0.11f))
+    clip(shape).background(p.canvas).border(0.5.dp, p.rule, shape)

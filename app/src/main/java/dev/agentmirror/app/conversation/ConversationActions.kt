@@ -183,7 +183,7 @@ private fun MenuRow(resolved: ResolvedAction, p: ConversationPalette, onClick: (
             .fillMaxWidth()
             .padding(horizontal = if (look.glass) 6.dp else 0.dp)
             .clip(look.shape(14.dp))
-            .background(if (pressed) p.accent.copy(alpha = 0.12f) else Color.Transparent)
+            .background(p.canvas)
             .clickable(enabled = resolved.enabled, interactionSource = interaction, indication = null, onClick = onClick)
             .heightIn(min = 52.dp)
             .padding(horizontal = 10.dp, vertical = 8.dp)

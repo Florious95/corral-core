@@ -74,16 +74,20 @@ class ConversationPaletteTest {
     }
 
     @Test
-    fun surfacesStayDistinctFromTheCanvas() {
+    fun everyNativeSurfaceIsOpaqueTrueBlackRegardlessOfTerminalTheme() {
         for (family in TermSchemeCatalog.families) {
             TermPalette.bindSelectionForTest(family.id, family.id)
             for (dark in listOf(false, true)) {
                 val p = ConversationPalette.from(TermPalette.of(dark))
-                assertTrue("${family.id} bubble invisible", p.userBubble != p.canvas)
-                assertTrue("${family.id} surface invisible", p.surface != p.canvas)
-                assertTrue("${family.id} code invisible", p.code != p.surface)
-                assertTrue(p.canvas.alpha == 1f && p.surface.alpha == 1f && p.userBubble.alpha == 1f && p.code.alpha == 1f)
-                assertTrue(p.glass.alpha < 1f && p.ink != Color.Unspecified)
+                for ((name, color) in listOf("canvas" to p.canvas, "bubble" to p.userBubble,
+                    "surface" to p.surface, "code" to p.code, "panel" to p.panel,
+                    "panelEnd" to p.panelEnd, "glass" to p.glass)) {
+                    assertTrue("${family.id}/$dark $name must be #000000 opaque", color.toArgb() == 0xFF000000.toInt())
+                    // Even a saturated colour behind a reading surface cannot bleed into it.
+                    assertTrue(color.compositeOver(Color(0xFFB34F20)).toArgb() == 0xFF000000.toInt())
+                }
+                assertTrue(p.dark && p.ink == Color.White && p.glow.alpha == 0f)
+                assertTrue(p.inkSoft.blue >= p.inkSoft.red && p.codeSoft.blue >= p.codeSoft.red)
             }
         }
     }
