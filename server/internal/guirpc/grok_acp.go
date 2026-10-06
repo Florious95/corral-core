@@ -766,6 +766,7 @@ func (g *grokACP) updateLocked(raw json.RawMessage) {
 		g.publish(map[string]any{"type": "thinking_level_changed", "level": level})
 	case "available_commands_update":
 		g.commands = u.Commands
+		g.response("", "get_commands", map[string]any{"commands": g.commands}, nil)
 	case "user_message_chunk":
 		var c struct{ Type, Text string }
 		_ = json.Unmarshal(u.Content, &c)

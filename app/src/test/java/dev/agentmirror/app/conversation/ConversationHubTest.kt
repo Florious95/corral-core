@@ -119,6 +119,10 @@ class ConversationHubTest {
         val resume = frames(next, "conversation_subscribe").single()["payload"]!!.jsonObject
         assertEquals("s1", resume["stream"]!!.jsonPrimitive.content)
         assertEquals("3", resume["after_seq"]!!.jsonPrimitive.content)
+        next.listener.onText("""{"v":1,"type":"conversation_ready","payload":{"ref":"r1","stream":"s1","head_seq":3,"reset":false,"history_truncated":false,"running":false,"server_time_ms":1}}""")
+        settle()
+        val refreshed = frames(next, "conversation_command").map { it["payload"]!!.jsonObject["command"]!!.jsonObject["type"]!!.jsonPrimitive.content }
+        assertEquals("native commands may have changed while disconnected", listOf("get_state", "get_commands"), refreshed)
     }
 
     @Test

@@ -93,7 +93,6 @@ class ConversationSession internal constructor(val ref: String) {
     internal var subscribed = false
     internal var lostRetries = 0
     internal var resubscribe: ScheduledFuture<*>? = null
-    internal var commandsRequested = false
     internal var lastUse = 0L
 }
 
@@ -395,10 +394,8 @@ class ConversationHub(
         _refs.update { it + ref }
         DiagLog.record("conversation", "ready ref_hash=${ref.hashCode()} stream=$stream head=${payload.long("head_seq")} reset=${payload.bool("reset")}")
         internalCommand(s, "get_state")
-        if (!s.commandsRequested) {
-            s.commandsRequested = true
-            internalCommand(s, "get_commands")
-        }
+        // Metadata can change while detached; one read per ready, never polling.
+        internalCommand(s, "get_commands")
     }
 
     private fun onStreamClosed(ref: String, reason: String) {
