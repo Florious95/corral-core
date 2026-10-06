@@ -248,9 +248,9 @@ internal fun SheetIconButton(glyph: Glyph, label: String, p: ConversationPalette
             .padding(start = 4.dp)
             .size(40.dp)
             .clip(shape)
-            .background(p.ink.copy(alpha = if (look.glass) 0.06f else 0f))
+            .background(p.canvas)
             .then(if (look.glass) Modifier else Modifier.border(look.hairline, p.rule, shape))
-            .clickable(onClick = onClick)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .semantics { contentDescription = label; role = Role.Button }
             .testTag(tag),
         contentAlignment = Alignment.Center,
@@ -261,7 +261,7 @@ internal fun SheetIconButton(glyph: Glyph, label: String, p: ConversationPalette
 
 internal enum class SheetButtonKind { Primary, Danger, Secondary }
 
-/** A 48dp action: accent fill (primary), danger wash (destructive), or a quiet tonal/ruled one. */
+/** A 48dp opaque-black action; semantic colour stays in foreground and outline. */
 @Composable
 internal fun SheetButton(
     label: String,
