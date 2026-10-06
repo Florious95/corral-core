@@ -375,6 +375,8 @@ func (w *worker) ingest(raw []byte) {
 			data = projectState(raw)
 		case "get_available_models", "set_model":
 			data = projectModels(raw)
+		case "get_session_stats":
+			data = projectStats(raw)
 		}
 		w.mu.Lock()
 		w.publish(data, entry{kind: h.Type}, false)
@@ -841,6 +843,23 @@ func projectState(raw []byte) []byte {
 	if json.Unmarshal(raw, &resp) != nil {
 		return raw
 	}
+	out, err := json.Marshal(resp)
+	if err != nil {
+		return raw
+	}
+	return out
+}
+
+// projectStats keeps Pi's session statistics verbatim (cost stays the native
+// decimal literal) but drops sessionFile: the host path never reaches a phone.
+func projectStats(raw []byte) []byte {
+	var resp map[string]json.RawMessage
+	var data map[string]json.RawMessage
+	if json.Unmarshal(raw, &resp) != nil || json.Unmarshal(resp["data"], &data) != nil {
+		return raw
+	}
+	delete(data, "sessionFile")
+	resp["data"], _ = json.Marshal(data)
 	out, err := json.Marshal(resp)
 	if err != nil {
 		return raw

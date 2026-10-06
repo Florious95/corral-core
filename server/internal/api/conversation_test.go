@@ -233,6 +233,7 @@ func TestConversationModelCommandsAreValidatedAndMinimal(t *testing.T) {
 		{`{"type":"set_thinking_level","level":"max"}`, "", `{"id":"c1","level":"max","type":"set_thinking_level"}`},
 		{`{"type":"set_thinking_level","level":"ultra"}`, "thinking level is not supported", ""},
 		{`{"type":"cycle_model"}`, "command is not available from the phone", ""},
+		{`{"type":"get_session_stats","outputPath":"/etc"}`, "", `{"id":"c1","type":"get_session_stats"}`},
 		{`{"type":"switch_mode","mode":"tui","force":true,"argv":["sh"]}`, "", `{"force":true,"id":"c1","mode":"tui","type":"switch_mode"}`},
 		{`{"type":"switch_mode","mode":"rpc"}`, "", `{"force":false,"id":"c1","mode":"rpc","type":"switch_mode"}`},
 		{`{"type":"switch_mode","mode":"bash"}`, "mode is not supported", ""},

@@ -364,3 +364,20 @@ func TestModelResponsesAreSlimmed(t *testing.T) {
 		t.Fatalf("failure projected %s", failed)
 	}
 }
+
+func TestSessionStatsDropTheHostPathOnly(t *testing.T) {
+	raw := `{"id":"s","type":"response","command":"get_session_stats","success":true,"data":{"sessionFile":"/Users/x/.pi/s.jsonl","sessionId":"sid","tokens":{"input":1016,"output":228,"cacheRead":340,"cacheWrite":452,"total":2036},"cost":0.02036,"contextUsage":{"tokens":1916,"contextWindow":128000,"percent":1.496875}}}`
+	got := string(projectStats([]byte(raw)))
+	if strings.Contains(got, "sessionFile") || strings.Contains(got, "/Users/x") {
+		t.Fatalf("host path leaked: %s", got)
+	}
+	for _, want := range []string{`"cost":0.02036`, `"sessionId":"sid"`, `"cacheWrite":452`, `"contextWindow":128000`, `"command":"get_session_stats"`} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %s in %s", want, got)
+		}
+	}
+	failed := `{"id":"f","type":"response","command":"get_session_stats","success":false,"error":"boom"}`
+	if got := string(projectStats([]byte(failed))); got != failed {
+		t.Fatalf("failure reshaped: %s", got)
+	}
+}

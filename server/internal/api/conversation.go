@@ -285,7 +285,7 @@ func (s *Server) conversationCommand(id string, raw json.RawMessage) (string, []
 	switch kind {
 	case "prompt", "steer", "follow_up", "abort", "clear_queue", "compact", "new_session", "get_state", "get_commands",
 		"get_available_models", "get_available_thinking_levels":
-	case "list_sessions":
+	case "list_sessions", "get_session_stats":
 		command = map[string]json.RawMessage{"type": command["type"]}
 	case "resume_session":
 		var sessionID string
