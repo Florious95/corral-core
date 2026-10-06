@@ -280,6 +280,24 @@ func (s *session) mutatePi(ctx context.Context, kind, token string) (map[string]
 	}()
 	raw, err := s.w.requestContext(ctx, native, interactionTTL+5*time.Second)
 	if err != nil {
+		var rejection *nativeCommandError
+		if kind == "clone_session" && errors.As(err, &rejection) && rejection.command == "clone" {
+			reason := ""
+			switch rejection.reason {
+			case "This session has not been saved yet. Send a message before cloning or forking it.":
+				reason = "Pi 原生会话尚未持久化；先发送消息后再克隆，原会话未改变"
+			case "Cannot clone session: no current entry selected":
+				reason = "当前上下文为空，没有可克隆的原生节点；原会话未改变"
+			}
+			if reason != "" && s.confirmStateContext(ctx, switchReplyTimeout) == nil {
+				s.w.mu.Lock()
+				unchanged := s.w.sessionID == old
+				s.w.mu.Unlock()
+				if unchanged {
+					return map[string]any{"unchanged": true, "session_id": old}, errors.New(reason)
+				}
+			}
+		}
 		s.cancel()
 		return nil, errors.New("Pi 未确认原生会话操作；桥接已关闭，进程未终止")
 	}

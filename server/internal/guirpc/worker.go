@@ -200,6 +200,13 @@ func (w *worker) setInput(stdin io.Writer) {
 	w.inputMu.Unlock()
 }
 
+// nativeCommandError separates an explicit native rejection from transport loss.
+type nativeCommandError struct {
+	command, reason string
+}
+
+func (e *nativeCommandError) Error() string { return e.command + ": " + e.reason }
+
 // request sends a worker-internal command and waits for the agent's response.
 func (w *worker) request(command map[string]any, timeout time.Duration) (json.RawMessage, error) {
 	return w.requestContext(context.Background(), command, timeout)
@@ -232,8 +239,11 @@ func (w *worker) requestContext(ctx context.Context, command map[string]any, tim
 			Error   string          `json:"error"`
 			Data    json.RawMessage `json:"data"`
 		}
-		if json.Unmarshal(raw, &resp) != nil || !resp.Success {
-			return nil, fmt.Errorf("%s: %s", command["type"], resp.Error)
+		if json.Unmarshal(raw, &resp) != nil {
+			return nil, errors.New("原生回复无法解析")
+		}
+		if !resp.Success {
+			return nil, &nativeCommandError{command: fmt.Sprint(command["type"]), reason: resp.Error}
 		}
 		return resp.Data, nil
 	case <-w.done:

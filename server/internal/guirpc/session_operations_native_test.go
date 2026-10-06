@@ -176,6 +176,34 @@ func TestNativePiForkCloneRenameNewAndInteractiveVeto(t *testing.T) {
 		t.Fatalf("fork before-user semantics wrong: %s", text.String())
 	}
 	attach()
+	points, err = s.operation(command("fork_points", map[string]any{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	token = ""
+	for _, row := range points["points"].([]map[string]any) {
+		if row["text"] == "first request" {
+			token = row["id"].(string)
+		}
+	}
+	if token == "" {
+		t.Fatal("native first user not selectable")
+	}
+	emptyFork, err := mutate("fork_session", map[string]any{"pointId": token}, true)
+	if err != nil || emptyFork["draft"] != "first request" {
+		t.Fatalf("empty before-first fork=%v err=%v", emptyFork, err)
+	}
+	attach()
+	_, rejected := mutate("clone_session", map[string]any{}, true)
+	if rejected == nil || !strings.Contains(rejected.Error(), "尚未持久化") {
+		t.Fatalf("native empty clone needs an exact visible reason: %v", rejected)
+	}
+	if s.ctx.Err() != nil {
+		t.Fatal("explicit native rejection closed a healthy bridge")
+	}
+	if err := s.confirmStateContext(ctx, time.Second*5); err != nil || s.w.sessionID != emptyFork["session_id"] {
+		t.Fatalf("rejected clone lost unchanged native context: %v", err)
+	}
 	created, err := s.operation(command("new_session", map[string]any{}))
 	if err != nil {
 		t.Fatal(err)

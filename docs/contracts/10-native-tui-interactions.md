@@ -23,7 +23,7 @@ All commands use the existing outer `{ref,id,command}`. `id` correlates an ordin
 | `new_session` | optional explicit stop consent | Native new, current new SID/state confirmation and the same atomic replay commit; `sessionName:""` clears old title. |
 | `interaction_reply` | `requestId`, exactly one cancelled:true / confirmed:boolean / value:string; optional confirmPermanent:true for permanent options | Opaque bridge callback mapping described below. No arbitrary native ID forwarding. |
 
-Mutation receipt: `{session_id,sessionName,stream,head_seq,history_truncated,content_clipped,draft?}`. Busy returns a finite failure with busy:true; force is a separate explicit user decision and stops queued work. A native veto keeps old session/history/draft. Grok clone partial success reports the already-created child ID if loading fails; it is not silently forked a second time.
+Mutation receipt: `{session_id,sessionName,stream,head_seq,history_truncated,content_clipped,draft?}`. Busy returns a finite failure with busy:true; force is a separate explicit user decision and stops queued work. A native veto keeps old session/history/draft. Pi cloning an unsaved session (for example, immediately after a before-first-user fork) returns its native unsaved/no-node rejection, not success. These two known precondition rejections preserve the bridge only after get_state confirms the same SID, with a visible reason to send a message first; no automatic prompt, synthetic clone or persistence/file edit occurs. Unknown outcome, changed SID or lost confirmation still closes only the bridge. Grok clone partial success reports the already-created child ID if loading fails; it is not silently forked a second time.
 
 ### Atomic mutation timeline (Android and future iOS)
 
