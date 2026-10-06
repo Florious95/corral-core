@@ -356,7 +356,7 @@ fun ReasoningRow(item: Reasoning, p: ConversationPalette, expanded: Boolean, onT
 }
 
 @Composable
-fun ToolCallCard(tool: ToolCall, p: ConversationPalette, expanded: Boolean, skewMs: Long, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+fun ToolCallCard(tool: ToolCall, p: ConversationPalette, expanded: Boolean, skewMs: Long, onToggle: () -> Unit, modifier: Modifier = Modifier, streaming: Boolean = false) {
     val shape = lookShape(18.dp)
     val chevron by animateFloatAsState(if (expanded) 180f else 0f, disclosureSpring(), label = "tool-chevron")
     val tone = when (tool.phase) {
@@ -406,7 +406,7 @@ fun ToolCallCard(tool: ToolCall, p: ConversationPalette, expanded: Boolean, skew
                     Text(summary, style = MonoSmall.copy(color = p.inkSoft), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                 }
             }
-            ToolStatus(tool, p, skewMs)
+            ToolStatus(tool, p, skewMs, tool.shouldAnimate(streaming))
             GlyphIcon(Glyph.Chevron, p.inkSoft, 16.dp, Modifier.padding(start = 6.dp).rotate(chevron))
         }
         AnimatedVisibility(
@@ -435,7 +435,7 @@ fun ToolCallCard(tool: ToolCall, p: ConversationPalette, expanded: Boolean, skew
 }
 
 @Composable
-private fun ToolStatus(tool: ToolCall, p: ConversationPalette, skewMs: Long) {
+private fun ToolStatus(tool: ToolCall, p: ConversationPalette, skewMs: Long, streaming: Boolean) {
     Row(
         Modifier
             .clip(lookPill())
@@ -446,16 +446,19 @@ private fun ToolStatus(tool: ToolCall, p: ConversationPalette, skewMs: Long) {
     ) {
         when (tool.phase) {
             ToolPhase.Composing, ToolPhase.Pending -> {
-                Breathing(true) { a -> Box(Modifier.size(6.dp).clip(lookPill()).background(p.inkSoft.copy(alpha = a))) }
+                // Pending can be an unfinished historical call, even during a new live turn.
+                Breathing(streaming) { a -> Box(Modifier.size(6.dp).clip(lookPill()).background(p.inkSoft.copy(alpha = a))) }
                 Text(if (tool.phase == ToolPhase.Composing) "生成中" else "排队", style = CaptionStyle.copy(color = p.inkSoft))
             }
             ToolPhase.Running -> {
-                Breathing(true) { a -> Box(Modifier.size(6.dp).clip(lookPill()).background(p.accent.copy(alpha = a))) }
-                var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-                LaunchedEffect(tool.key) {
-                    while (true) {
-                        now = System.currentTimeMillis()
-                        delay(100)
+                Breathing(streaming) { a -> Box(Modifier.size(6.dp).clip(lookPill()).background(p.accent.copy(alpha = a))) }
+                var now by remember(tool.key, streaming) { mutableLongStateOf(System.currentTimeMillis()) }
+                if (streaming) {
+                    LaunchedEffect(tool.key) {
+                        while (true) {
+                            now = System.currentTimeMillis()
+                            delay(100)
+                        }
                     }
                 }
                 val elapsed = if (tool.startedAt > 0) (now + skewMs - tool.startedAt).coerceAtLeast(0) else 0

@@ -90,6 +90,9 @@ data class ToolCall(
     val endedAt: Long? = null,
 ) : ConversationItem {
     val finished: Boolean get() = phase == ToolPhase.Succeeded || phase == ToolPhase.Failed || phase == ToolPhase.Interrupted
+
+    /** Render activity is not completion: unfinished historical Pending stays pending but static. */
+    fun shouldAnimate(streaming: Boolean): Boolean = streaming && (phase == ToolPhase.Composing || phase == ToolPhase.Running)
 }
 
 enum class NoticeTone { Info, Warning, Error, Divider }

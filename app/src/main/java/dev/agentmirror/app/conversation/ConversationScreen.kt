@@ -672,7 +672,7 @@ private fun ConversationScreen(
                     is UserTurn -> UserBubble(item, p, expanded[item.key] == true, { expanded[item.key] = expanded[item.key] != true }, mod)
                     is AssistantText -> AssistantProse(item, p, mod)
                     is Reasoning -> ReasoningRow(item, p, expanded[item.key] == true, { expanded[item.key] = expanded[item.key] != true }, mod)
-                    is ToolCall -> ToolCallCard(item, p, expanded[item.key] == true, state.serverSkewMs, { expanded[item.key] = expanded[item.key] != true }, mod)
+                    is ToolCall -> ToolCallCard(item, p, expanded[item.key] == true, state.serverSkewMs, { expanded[item.key] = expanded[item.key] != true }, mod, streaming = item.shouldAnimate(state.running))
                     is Notice -> NoticeRow(item, p, mod)
                 }
             }
