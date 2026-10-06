@@ -237,6 +237,10 @@ func (c *wsConn) handleConversationCommand(cmd protocol.ConversationCommand) {
 		c.rejectConversationCommand(cmd, kind, reason)
 		return
 	}
+	if kind == "list_sessions" || kind == "resume_session" {
+		c.handleConversationHistoryCommand(cmd, kind, forwarded)
+		return
+	}
 	sub := c.conversationSub(cmd.Ref)
 	if sub == nil {
 		c.rejectConversationCommand(cmd, kind, "conversation is not attached")
@@ -281,6 +285,19 @@ func (s *Server) conversationCommand(id string, raw json.RawMessage) (string, []
 	switch kind {
 	case "prompt", "steer", "follow_up", "abort", "clear_queue", "compact", "new_session", "get_state", "get_commands",
 		"get_available_models", "get_available_thinking_levels":
+	case "list_sessions":
+		command = map[string]json.RawMessage{"type": command["type"]}
+	case "resume_session":
+		var sessionID string
+		var force bool
+		if json.Unmarshal(command["sessionId"], &sessionID) != nil || sessionID == "" || len(sessionID) > 128 {
+			return kind, nil, "sessionId is missing or malformed"
+		}
+		if raw := command["force"]; raw != nil && json.Unmarshal(raw, &force) != nil {
+			return kind, nil, "force must be a boolean"
+		}
+		forceJSON, _ := json.Marshal(force)
+		command = map[string]json.RawMessage{"type": command["type"], "sessionId": command["sessionId"], "force": forceJSON}
 	case "set_model":
 		// Only a model Pi already lists can be named; Pi itself checks the provider's auth.
 		var provider, modelID string

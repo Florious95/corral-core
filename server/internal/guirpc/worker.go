@@ -75,7 +75,8 @@ type entry struct {
 }
 
 type client struct {
-	ch chan []byte
+	ch    chan []byte
+	close func()
 }
 
 type pendingUpdate struct {
@@ -160,8 +161,20 @@ func (w *worker) send(data []byte) error { return w.sendInput(data, false) }
 func (w *worker) sendUser(data []byte) error { return w.sendInput(data, true) }
 
 func (w *worker) sendInput(data []byte, user bool) error {
+	return w.sendInputInStream(data, user, "")
+}
+
+func (w *worker) sendInputInStream(data []byte, user bool, stream string) error {
 	w.inputMu.Lock()
 	defer w.inputMu.Unlock()
+	if stream != "" {
+		w.mu.Lock()
+		current := stream == w.stream
+		w.mu.Unlock()
+		if !current {
+			return errors.New("历史会话已切换，旧输入未提交")
+		}
+	}
 	if user && w.switching {
 		return errors.New("会话正在切换，输入未提交")
 	}
@@ -187,6 +200,13 @@ func (w *worker) setInput(stdin io.Writer) {
 
 // request sends a worker-internal command and waits for the agent's response.
 func (w *worker) request(command map[string]any, timeout time.Duration) (json.RawMessage, error) {
+	return w.requestContext(context.Background(), command, timeout)
+}
+
+func (w *worker) requestContext(ctx context.Context, command map[string]any, timeout time.Duration) (json.RawMessage, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	w.mu.Lock()
 	w.reqSeq++
 	id := internalID + strconv.FormatUint(w.reqSeq, 10)
@@ -216,6 +236,8 @@ func (w *worker) request(command map[string]any, timeout time.Duration) (json.Ra
 		return resp.Data, nil
 	case <-w.done:
 		return nil, errNoAgent
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-time.After(timeout):
 		return nil, fmt.Errorf("%s: no response in %s", command["type"], timeout)
 	}
@@ -629,6 +651,15 @@ func (w *worker) serve(ctx context.Context, conn net.Conn) {
 	}
 	_ = conn.SetReadDeadline(time.Time{})
 	ready, replay, c := w.attach(hello, !hello.Probe)
+	if c != nil {
+		w.mu.Lock()
+		c.close = func() { _ = conn.Close() }
+		_, attached := w.clients[c]
+		w.mu.Unlock()
+		if !attached {
+			return
+		}
+	}
 	write := func(line []byte) error {
 		_ = conn.SetWriteDeadline(time.Now().Add(writeTimeout))
 		_, err := conn.Write(line)
@@ -647,7 +678,13 @@ func (w *worker) serve(ctx context.Context, conn net.Conn) {
 			if !json.Valid(scan.Bytes()) {
 				break
 			}
-			w.command(append([]byte(nil), scan.Bytes()...))
+			w.mu.Lock()
+			current := w.stream == ready.Stream
+			w.mu.Unlock()
+			if !current {
+				break
+			}
+			w.commandInStream(append([]byte(nil), scan.Bytes()...), ready.Stream)
 		}
 		conn.Close()
 	}()
@@ -670,7 +707,9 @@ func (w *worker) serve(ctx context.Context, conn net.Conn) {
 
 // command routes one client record: switch_mode is the worker's own; everything
 // else goes to the structured agent, or fails visibly while none is attached.
-func (w *worker) command(raw []byte) {
+func (w *worker) command(raw []byte) { w.commandInStream(raw, "") }
+
+func (w *worker) commandInStream(raw []byte, stream string) {
 	var c struct {
 		ID    string `json:"id"`
 		Type  string `json:"type"`
@@ -688,7 +727,7 @@ func (w *worker) command(raw []byte) {
 		}()
 		return
 	}
-	if err := w.sendUser(raw); err != nil {
+	if err := w.sendInputInStream(raw, true, stream); err != nil {
 		if errors.Is(err, errNoAgent) {
 			err = errors.New("Agent 正在终端中运行，切回原生对话后再发送")
 		}
@@ -794,6 +833,7 @@ func projectState(raw []byte) []byte {
 			IsStreaming         bool          `json:"isStreaming"`
 			IsCompacting        bool          `json:"isCompacting"`
 			SessionName         string        `json:"sessionName,omitempty"`
+			SessionID           string        `json:"sessionId,omitempty"`
 			MessageCount        int           `json:"messageCount"`
 			PendingMessageCount int           `json:"pendingMessageCount"`
 		} `json:"data"`

@@ -132,7 +132,10 @@ data class ConversationState(
     val thinkingLevels: List<String> = emptyList(),
     val thinkingLevel: String? = null,
     val sessionName: String? = null,
+    val sessionId: String? = null,
     val historyTruncated: Boolean = false,
+    val historyLoadedItems: Int? = null,
+    val historyContentClipped: Boolean = false,
     val stream: String? = null,
     val lastSeq: Long = 0,
     val active: ActiveMessage? = null,
@@ -222,8 +225,13 @@ data class ConversationState(
         "extension_error" -> notice(seq, NoticeTone.Error, "扩展出错", e.str("error").ifBlank { null })
         "session_info_changed" -> copy(sessionName = e.str("name").ifBlank { null })
         "thinking_level_changed" -> copy(thinkingLevel = e.str("level").ifBlank { null })
+        "history_window" -> copy(
+            historyTruncated = historyTruncated || e.bool("older_omitted") == true || e.bool("content_clipped") == true,
+            historyLoadedItems = e.int("loaded_items"),
+            historyContentClipped = e.bool("content_clipped") == true,
+        )
         "session_reset" -> ConversationState(
-            items = items.filter { it is UserTurn && it.delivery != Delivery.Delivered },
+            items = if (e.bool("replace") == true) emptyList() else items.filter { it is UserTurn && it.delivery != Delivery.Delivered },
             model = model,
             modelId = modelId,
             modelProvider = modelProvider,
@@ -231,6 +239,8 @@ data class ConversationState(
             models = models,
             thinkingLevels = thinkingLevels,
             thinkingLevel = thinkingLevel,
+            sessionId = e.str("sessionId").ifBlank { null },
+            historyTruncated = historyTruncated,
             stream = stream,
         )
         "response" -> response(e)
@@ -470,7 +480,8 @@ data class ConversationState(
                 (model?.let(::withModel) ?: this).copy(
                     agentProvider = data.str("agentProvider").ifBlank { agentProvider },
                     thinkingLevel = data.str("thinkingLevel").ifBlank { null } ?: thinkingLevel,
-                    sessionName = data.str("sessionName").ifBlank { null } ?: sessionName,
+                    sessionName = data.str("sessionName").ifBlank { null },
+                    sessionId = data.str("sessionId").ifBlank { null } ?: sessionId,
                     running = if (data.bool("isStreaming") == true) true else running,
                 )
             }

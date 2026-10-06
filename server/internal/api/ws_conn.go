@@ -68,8 +68,9 @@ type wsConn struct {
 
 	// convSubs are this connection's managed-conversation streams
 	// (conversation.go), torn down with the connection.
-	convMu   sync.Mutex
-	convSubs map[string]*conversationSub
+	convMu              sync.Mutex
+	convSubs            map[string]*conversationSub
+	convHistoryRequests int // bounded, asynchronous disk/RPC controls
 
 	notificationViewsMu sync.Mutex
 	notificationViews   map[string]notify.View
@@ -743,12 +744,17 @@ func (c *wsConn) handleFrame(data []byte, recvMS int64) bool {
 			break
 		}
 		c.handleNotificationsSync(t)
-	case protocol.ConversationCreate, protocol.ConversationSubscribe, protocol.ConversationUnsubscribe, protocol.ConversationCommand:
+	case protocol.ConversationCreate, protocol.ConversationSubscribe, protocol.ConversationUnsubscribe, protocol.ConversationCommand,
+		protocol.ConversationListSessions, protocol.ConversationResumeSession:
 		if !c.conversationCap.Load() {
 			c.sendError(protocol.ErrCodeUnsupportedType, "conversation capability not negotiated")
 			break
 		}
 		switch t := t.(type) {
+		case protocol.ConversationListSessions:
+			c.handleConversationListSessions(t)
+		case protocol.ConversationResumeSession:
+			c.handleConversationResumeSession(t)
 		case protocol.ConversationCreate:
 			c.handleConversationCreate(t)
 		case protocol.ConversationSubscribe:

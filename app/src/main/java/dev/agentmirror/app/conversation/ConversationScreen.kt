@@ -255,6 +255,17 @@ private fun ConversationScreen(
     var slashDismissedFor by remember { mutableStateOf<String?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
     var pickerOpen by remember { mutableStateOf(false) }
+    var historyOpen by remember(ref) { mutableStateOf(false) }
+    var historyLoading by remember(ref) { mutableStateOf(false) }
+    var historyRestoring by remember(ref) { mutableStateOf(false) }
+    var historyChoices by remember(ref) { mutableStateOf(emptyList<SessionHistoryChoice>()) }
+    var historyError by remember(ref) { mutableStateOf<String?>(null) }
+    var historyGeneration by remember(ref) { mutableIntStateOf(0) }
+    var historyTarget by remember(ref) { mutableStateOf<SessionHistoryChoice?>(null) }
+    var historyStream by remember(ref) { mutableStateOf<String?>(null) }
+    var historyHead by remember(ref) { mutableStateOf(0L) }
+    var historyConfirm by remember(ref) { mutableStateOf<SessionHistoryChoice?>(null) }
+    var historyTitle by remember(ref) { mutableStateOf<SessionHistoryChoice?>(null) }
     var confirmSwitch by remember { mutableStateOf(false) }
     var switchReason by remember(ref) { mutableStateOf<String?>(null) }
     var pendingModel by remember(ref) { mutableStateOf<ModelChoice?>(null) }
@@ -284,7 +295,7 @@ private fun ConversationScreen(
         onImeHideStarted = { collapseComposer("ime-hide") },
     )
 
-    val connected = phase == LinkPhase.Live
+    val connected = phase == LinkPhase.Live && !historyRestoring
     val slashActive = draft.text.startsWith("/") && !draft.text.contains(' ') && !draft.text.contains('\n') && slashDismissedFor != draft.text
     val activeSheet = when {
         sheet != ComposerSheet.None -> sheet
@@ -386,6 +397,7 @@ private fun ConversationScreen(
     }
 
     fun send() {
+        if (!connected) return
         val text = promptText(draft.text)
         val paths = images.mapNotNull { it.hostPath }
         if (text.isEmpty() && paths.isEmpty()) return
@@ -477,6 +489,68 @@ private fun ConversationScreen(
         }
     }
 
+    // ---- native Pi history (same process, interactive switch_session) --------------------------
+    fun loadHistory() {
+        if (historyRestoring) { hub.retry(ref); return }
+        menuOpen = false
+        pickerOpen = false
+        historyOpen = true
+        historyLoading = true
+        historyError = null
+        val generation = ++historyGeneration
+        hub.controlWithData(ref, command("list_sessions")) { ok, reason, data ->
+            if (generation == historyGeneration && historyOpen) {
+                historyLoading = false
+                if (ok && data?.arr("sessions") != null) historyChoices = sessionHistoryChoices(data)
+                else historyError = reason ?: "主机未返回历史会话列表"
+            }
+        }
+    }
+    fun resumeHistory(choice: SessionHistoryChoice, force: Boolean) {
+        historyConfirm = null
+        historyTarget = choice
+        historyStream = null
+        historyRestoring = true
+        historyError = null
+        collapseComposer("restore-history")
+        val generation = ++historyGeneration
+        hub.controlWithData(ref, buildJsonObject {
+            put("type", "resume_session")
+            put("sessionId", choice.id)
+            put("force", force)
+        }) { ok, reason, data ->
+            if (generation == historyGeneration) {
+                if (ok && data != null && data.str("session_id") == choice.id && data.str("stream").isNotBlank()) {
+                    historyStream = data.str("stream")
+                    historyHead = data.long("head_seq") ?: Long.MAX_VALUE
+                } else {
+                    historyRestoring = false
+                    if (!force && data?.bool("busy") == true) {
+                        historyError = reason
+                        historyConfirm = choice
+                    } else historyError = reason ?: "主机未确认目标会话"
+                }
+            }
+        }
+    }
+    LaunchedEffect(historyRestoring, historyStream, historyHead, state.stream, state.lastSeq, phase) {
+        if (historyRestoring && historyStream != null && state.stream == historyStream &&
+            state.lastSeq >= historyHead && state.sessionId == historyTarget?.id && phase == LinkPhase.Live) {
+            historyTitle = historyTarget
+            historyRestoring = false
+            historyOpen = false
+            historyError = null
+            expanded.clear()
+            listState.scrollToItem(0)
+        }
+    }
+    LaunchedEffect(historyGeneration, historyRestoring) {
+        if (historyRestoring) {
+            delay(45_000)
+            historyError = "历史流尚未完整到达，请重连重试；输入暂未开放"
+        }
+    }
+
     // ---- in-pane switch to the native TUI --------------------------------------------------------
     // Real work in flight, read from what the agent reported (not from what is on screen).
     val inFlight = state.running || state.compacting || state.queued > 0 ||
@@ -494,8 +568,11 @@ private fun ConversationScreen(
     }
 
     // Back peels one layer at a time: picker/menu → panel → composer → leave.
-    BackHandler(enabled = activeSheet != ComposerSheet.None || menuOpen || pickerOpen || editorFocused || confirmSwitch) {
+    BackHandler(enabled = activeSheet != ComposerSheet.None || menuOpen || pickerOpen || historyOpen || editorFocused || confirmSwitch || historyConfirm != null) {
         when {
+            historyConfirm != null -> historyConfirm = null
+            historyOpen && historyRestoring -> onBack()
+            historyOpen -> { historyOpen = false; historyGeneration++ }
             confirmSwitch -> confirmSwitch = false
             pickerOpen -> pickerOpen = false
             menuOpen -> menuOpen = false
@@ -504,7 +581,7 @@ private fun ConversationScreen(
             else -> collapseComposer("back")
         }
     }
-    BackHandler(enabled = activeSheet == ComposerSheet.None && !menuOpen && !pickerOpen && !editorFocused && !confirmSwitch, onBack = onBack)
+    BackHandler(enabled = activeSheet == ComposerSheet.None && !menuOpen && !pickerOpen && !historyOpen && !editorFocused && !confirmSwitch && historyConfirm == null, onBack = onBack)
 
     // ---- layout -----------------------------------------------------------------------------
     val look = LocalConversationLook.current
@@ -601,7 +678,9 @@ private fun ConversationScreen(
             }
             if (state.historyTruncated) {
                 item(key = "truncated") {
-                    NoticeRow(Notice("truncated", NoticeTone.Divider, "更早的消息未保留"), p, Modifier.animateItem(placementSpec = null))
+                    NoticeRow(Notice("truncated", NoticeTone.Divider,
+                        if (state.historyContentClipped) "部分超长内容已截短显示，完整历史保存在主机文件"
+                        else "已加载最新 ${state.items.size} 条历史消息，更早消息已保存在主机文件"), p, Modifier.animateItem(placementSpec = null))
                 }
             }
             if (state.items.isEmpty()) {
@@ -619,7 +698,7 @@ private fun ConversationScreen(
 
         // Frosted header.
         ConversationHeader(
-            name = state.sessionName ?: name,
+            name = state.sessionName ?: historyTitle?.takeIf { it.id == state.sessionId }?.title ?: name,
             status = headerStatus(state, phase),
             statusTone = when {
                 phase == LinkPhase.Ended -> p.danger
@@ -631,8 +710,10 @@ private fun ConversationScreen(
             p = p,
             backdrop = backdrop,
             onBack = onBack,
-            onMore = { pickerOpen = false; menuOpen = !menuOpen },
-            onModel = ::openPicker,
+            onMore = { if (historyRestoring) historyOpen = true else { historyOpen = false; pickerOpen = false; menuOpen = !menuOpen } },
+            onModel = { if (historyRestoring) historyOpen = true else { historyOpen = false; openPicker() } },
+            onHistory = if (state.agentProvider == "pi") ::loadHistory else null,
+            historyEnabled = connected,
             pickerOpen = pickerOpen,
             modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { headerPx.intValue = it.height }.zIndex(2f),
         )
@@ -667,6 +748,30 @@ private fun ConversationScreen(
             onDismiss = { pickerOpen = false },
             onModel = ::chooseModel,
             onLevel = ::chooseLevel,
+        )
+
+        SessionHistoryPicker(
+            open = historyOpen,
+            choices = historyChoices,
+            loading = historyLoading,
+            restoring = historyRestoring,
+            error = historyError,
+            p = p,
+            backdrop = backdrop,
+            topPx = { headerPx.intValue },
+            onDismiss = { historyOpen = false; if (!historyRestoring) historyGeneration++ },
+            onRetry = ::loadHistory,
+            onChoose = { resumeHistory(it, force = false) },
+        )
+        ConfirmDialog(
+            open = historyConfirm != null,
+            title = "恢复历史会话",
+            body = "当前任务正在运行。确认停止并丢弃排队输入，再恢复所选历史会话？",
+            confirm = "停止并恢复",
+            p = p,
+            backdrop = backdrop,
+            onDismiss = { historyConfirm = null },
+            onConfirm = { historyConfirm?.let { resumeHistory(it, force = true) } },
         )
 
         // Header overflow menu.
@@ -768,6 +873,7 @@ private fun ConversationScreen(
             running = state.running,
             connected = connected,
             placeholder = when {
+                historyRestoring -> "恢复历史完成后即可发送"
                 !connected -> "连接后即可发送"
                 state.running -> "补充指令，由主机确认是否接收"
                 else -> "发送消息，输入 / 查看命令"
@@ -881,6 +987,8 @@ private fun ConversationHeader(
     onBack: () -> Unit,
     onMore: () -> Unit,
     onModel: () -> Unit,
+    onHistory: (() -> Unit)?,
+    historyEnabled: Boolean,
     pickerOpen: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -935,6 +1043,11 @@ private fun ConversationHeader(
                     }
                 }
                 GlyphIcon(Glyph.Chevron, p.inkSoft, 16.dp, Modifier.padding(start = 6.dp).graphicsLayer { rotationZ = chevron })
+            }
+            if (onHistory != null) {
+                Text("历史", style = LabelStyle.copy(color = if (historyEnabled) p.accentInk else p.inkSoft),
+                    modifier = Modifier.clip(look.pill()).clickable(enabled = historyEnabled, onClick = onHistory)
+                        .padding(horizontal = 10.dp, vertical = 12.dp).testTag("conversation-history"))
             }
             GlassCircleButton(Glyph.More, p, backdrop, "conversation-more", onClick = onMore)
         }

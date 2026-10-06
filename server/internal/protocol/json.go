@@ -137,6 +137,14 @@ func decodePayload(env Envelope) (Typed, error) {
 		return decodeTyped[NotificationsSync](env)
 	case TypeNotificationsPage:
 		return decodeTyped[NotificationsPage](env)
+	case TypeConversationListSessions:
+		return decodeTyped[ConversationListSessions](env)
+	case TypeConversationSessions:
+		return decodeTyped[ConversationSessions](env)
+	case TypeConversationResumeSession:
+		return decodeTyped[ConversationResumeSession](env)
+	case TypeConversationSessionResumed:
+		return decodeTyped[ConversationSessionResumed](env)
 	case TypeConversationCreate:
 		return decodeTyped[ConversationCreate](env)
 	case TypeConversationCreated:

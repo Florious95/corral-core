@@ -115,7 +115,7 @@ func (m *Manager) Detect(ctx context.Context, p discovery.Pane) string {
 	return ""
 }
 
-func (m *Manager) Open(ctx context.Context, p discovery.Pane) (net.Conn, error) {
+func (m *Manager) sessionFor(ctx context.Context, p discovery.Pane) (*session, error) {
 	ref := refOf(p)
 	m.mu.Lock()
 	for key, old := range m.sessions {
@@ -148,6 +148,14 @@ func (m *Manager) Open(ctx context.Context, p discovery.Pane) (net.Conn, error) 
 	}
 	if s.ctx.Err() != nil {
 		return nil, s.ctx.Err()
+	}
+	return s, nil
+}
+
+func (m *Manager) Open(ctx context.Context, p discovery.Pane) (net.Conn, error) {
+	s, err := m.sessionFor(ctx, p)
+	if err != nil {
+		return nil, err
 	}
 	client, server := net.Pipe()
 	go s.w.serve(s.ctx, server)
@@ -446,6 +454,22 @@ func (s *session) ingest(raw []byte) {
 	if json.Unmarshal(raw, &h) != nil {
 		return
 	}
+	if h.Type == "response" && h.Command == "get_state" && h.Success != nil && *h.Success {
+		s.mu.Lock()
+		provider := s.process.Provider
+		s.mu.Unlock()
+		// Pi does not have Grok ACP's agentProvider field. Stamp the verified
+		// CLI identity so a reused pane cannot retain an old provider in the UI.
+		if provider == "pi" {
+			var response map[string]json.RawMessage
+			var state map[string]json.RawMessage
+			if json.Unmarshal(raw, &response) == nil && json.Unmarshal(response["data"], &state) == nil && state != nil {
+				state["agentProvider"] = json.RawMessage(`"pi"`)
+				response["data"], _ = json.Marshal(state)
+				raw, _ = json.Marshal(response)
+			}
+		}
+	}
 	if h.Type == "response" && len(h.ID) >= len(internalID) && h.ID[:len(internalID)] == internalID {
 		s.w.ingest(raw)
 		return
@@ -467,7 +491,11 @@ func (s *session) ingest(raw []byte) {
 // A missing state field is unknown, not idle. Never stop a native process on
 // an incomplete or projected metadata reply.
 func (s *session) confirmState(timeout time.Duration) error {
-	data, err := s.w.request(map[string]any{"type": "get_state"}, timeout)
+	return s.confirmStateContext(context.Background(), timeout)
+}
+
+func (s *session) confirmStateContext(ctx context.Context, timeout time.Duration) error {
+	data, err := s.w.requestContext(ctx, map[string]any{"type": "get_state"}, timeout)
 	if err != nil {
 		return err
 	}

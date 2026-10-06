@@ -272,10 +272,10 @@ class ConversationHub(
     }
 
     private fun dispatch(l: Link, ref: String, id: String, command: JsonObject, echo: Boolean, onResult: ((Boolean, String?, JsonObject?) -> Unit)?) {
-        val switching = command.str("type") == "switch_mode"
+        val switching = command.str("type") in setOf("switch_mode", "resume_session", "list_sessions")
         val timeout = executor.schedule({
             pendingCommands[id]?.let {
-                finishCommand(it, false, if (switching) "主机未在切换时限内确认，请重连核对当前模式后再重试" else "The host did not confirm in time")
+                finishCommand(it, false, if (switching) "主机未在操作时限内确认，请重连核对当前会话后再重试" else "The host did not confirm in time")
             }
         }, if (switching) SWITCH_TIMEOUT_MS else COMMAND_TIMEOUT_MS, TimeUnit.MILLISECONDS)
         val pending = PendingCommand(ref, id, echo, onResult, timeout)
