@@ -27,8 +27,7 @@ class OverflowSheetsTest {
 
         val grok = resolveActions("grok", connected = true, restoring = false, compacting = false)
         assertEquals(ConversationAction.History, grok.first().action)
-        assertFalse("history is the anchor: shown, disabled, with the reason", grok.first().enabled)
-        assertTrue(grok.first().detail.contains("Grok"))
+        assertTrue("native list/load history is connected", grok.first().enabled)
         assertFalse("no usage row for an agent without stats", grok.any { it.action == ConversationAction.Usage })
     }
 

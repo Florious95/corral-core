@@ -226,6 +226,7 @@ type session struct {
 	tuiFrom      time.Time
 	stopIO       func()
 	hydrating    bool
+	replay       *worker // bounded native replay, never an agent/process owner
 	pending      [][]byte
 	pendingBytes int
 }
@@ -477,6 +478,10 @@ func (s *session) ingest(raw []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.hydrating {
+		if s.replay != nil {
+			s.replay.ingest(raw)
+			return
+		}
 		if s.pendingBytes+len(raw) > maxHistoryBytes {
 			s.cancel()
 			return

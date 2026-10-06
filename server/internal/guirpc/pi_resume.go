@@ -23,8 +23,8 @@ import (
 	"github.com/agentmirror/agentmirror/internal/discovery"
 )
 
-// SessionBrowser is optional: providers without official Pi switch_session
-// must not receive Pi commands. Existing transport implementations stay valid.
+// SessionBrowser selects each verified provider's native catalog/load protocol.
+// Providers without a mapped protocol never receive another agent's commands.
 type SessionBrowser interface {
 	ListSessions(context.Context, discovery.Pane) ([]SessionInfo, error)
 	ResumeSession(context.Context, discovery.Pane, string, bool) (map[string]any, error)
@@ -39,6 +39,9 @@ func (m *Manager) ListSessions(ctx context.Context, p discovery.Pane) ([]Session
 		return nil, err
 	}
 	defer s.endHistory()
+	if s.process.Provider == "grok" {
+		return s.listGrokSessions(ctx)
+	}
 	files, err := s.sessionFiles(ctx)
 	if err != nil {
 		return nil, err
@@ -62,6 +65,9 @@ func (m *Manager) ResumeSession(ctx context.Context, p discovery.Pane, id string
 		return nil, err
 	}
 	defer s.endHistory()
+	if s.process.Provider == "grok" {
+		return s.resumeGrok(ctx, id, force)
+	}
 	return s.resumePi(ctx, id, force)
 }
 
@@ -71,8 +77,8 @@ func (s *session) beginHistory() error {
 	if s.switching {
 		return errors.New("会话正在切换，请稍后重试")
 	}
-	if s.process.Provider != "pi" || s.process.Mode != ModeRPC {
-		return errors.New("历史恢复仅支持原生 Pi RPC 对话")
+	if (s.process.Provider != "pi" && s.process.Provider != "grok") || s.process.Mode != ModeRPC {
+		return errors.New("历史恢复需要已验证的原生对话连接")
 	}
 	s.switching = true
 	s.w.setSwitching(true)

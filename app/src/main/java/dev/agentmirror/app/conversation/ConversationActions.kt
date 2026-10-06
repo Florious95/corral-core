@@ -66,8 +66,8 @@ import com.kyant.backdrop.Backdrop
 /**
  * What this client knows each agent's native bridge can do — one table instead of scattered
  * provider checks. Pi: catalogued history, get_session_stats, typed compact.customInstructions,
- * and compact aborts in-flight work itself. Grok: compact is a bare `/compact` prompt that the
- * bridge refuses while busy; nothing else here is mapped.
+ * and compact aborts in-flight work itself. Grok: native list/load history and the bare
+ * `/compact` command (refused while busy); usage is not yet projected.
  */
 internal data class AgentAbilities(
     val history: Boolean,
@@ -78,6 +78,7 @@ internal data class AgentAbilities(
     companion object {
         fun of(provider: String) = when (provider) {
             "pi" -> AgentAbilities(history = true, usage = true, compactInstructions = true, compactInterruptsWork = true)
+            "grok" -> AgentAbilities(history = true, usage = false, compactInstructions = false, compactInterruptsWork = false)
             else -> AgentAbilities(history = false, usage = false, compactInstructions = false, compactInterruptsWork = false)
         }
     }
