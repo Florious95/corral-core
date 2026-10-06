@@ -103,6 +103,9 @@ internal class TouchInputTransport(
                 if (!inputs.selected(link)) return false
                 val root = runCatching { Json.parseToJsonElement(text).jsonObject }.getOrNull() ?: return false
                 val payload = root["payload"] as? JsonObject ?: return false
+                val ref = (payload["ref"] as? JsonPrimitive)?.content ?: return false
+                val cancelled = inputs.reacquired(ref)
+                if (cancelled > 0) DiagLog.recordCritical("touch-input", "ref_reacquired ref=$ref stale_teardown=$cancelled preserved_input=true")
                 outbound = JsonObject(root + ("payload" to JsonObject(payload + ("client_type" to JsonPrimitive("mobile"))))).toString()
             }
         }

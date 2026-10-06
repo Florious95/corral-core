@@ -30,7 +30,7 @@ class TouchInputDispatcher(private val post: (() -> Unit) -> Unit) {
     private data class Work(
         val ref: String, val motion: Boolean, val send: () -> Boolean,
         val onWrite: ((Long) -> Unit)? = null, val epoch: Link? = null,
-        val onDelivered: ((Long) -> Unit)? = null,
+        val onDelivered: ((Long) -> Unit)? = null, val teardown: Boolean = false,
     )
 
     private var link: Link? = null
@@ -75,6 +75,14 @@ class TouchInputDispatcher(private val post: (() -> Unit) -> Unit) {
             link = source
         }
         return true
+    }
+
+    /** New ownership of this ref invalidates only its queued old leave, never accepted input. */
+    @Synchronized
+    fun reacquired(ref: String): Int {
+        val before = queue.size
+        queue.removeAll { it.ref == ref && it.teardown }
+        return before - queue.size
     }
 
     /** Connection state invalidates the old gesture before a delayed socket onClosed. */
@@ -131,13 +139,7 @@ class TouchInputDispatcher(private val post: (() -> Unit) -> Unit) {
     /** Ordinary input stays immediate when no pointer endpoint is waiting (IME fast path). */
     @Synchronized
     fun barrier(ref: String, onWrite: ((Long) -> Unit)? = null, onDelivered: ((Long) -> Unit)? = null, send: () -> Boolean): Boolean {
-        val work = Work(ref, false, send, onWrite, link, onDelivered)
-        if (queue.isEmpty()) {
-            val sent = write(work)
-            if (!sent) fail("input write failed ref=$ref")
-            return sent
-        }
-        return enqueue(work)
+        return submit(Work(ref, false, send, onWrite, link, onDelivered))
     }
 
     /** DOWN/UP are barriers. A new DOWN resets dedup, including repeated identical gestures. */
@@ -180,7 +182,16 @@ class TouchInputDispatcher(private val post: (() -> Unit) -> Unit) {
     @Synchronized
     fun leave(ref: String, unsubscribe: () -> Boolean): Boolean {
         if (heldRef == ref) fail("pointer screen closed without release ref=$ref")
-        return barrier(ref, send = unsubscribe)
+        return submit(Work(ref, false, unsubscribe, epoch = link, teardown = true))
+    }
+
+    private fun submit(work: Work): Boolean {
+        if (queue.isEmpty()) {
+            val sent = write(work)
+            if (!sent) fail("input write failed ref=${work.ref}")
+            return sent
+        }
+        return enqueue(work)
     }
 
     private fun enqueue(work: Work): Boolean {

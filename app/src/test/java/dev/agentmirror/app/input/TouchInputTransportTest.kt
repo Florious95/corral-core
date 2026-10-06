@@ -178,6 +178,63 @@ class TouchInputTransportTest {
         h.manager.stop()
     }
 
+    @Test fun sameRefReentryCannotLetOldDeferredLeaveRemoveTheNewCoreSubscription() {
+        for (newRows in listOf(44, 45)) {
+            val h = Harness()
+            h.manager.subscribe("pane", 44, 46)
+            h.mouse(1, true); h.mouse(42, true, true); h.mouse(42, false)
+            val down = h.inputs().single().reqId
+            assertTrue(h.gate.leave("pane") { h.manager.unsubscribe("pane") })
+            h.manager.subscribe("pane", newRows, 46)
+            val newSize = h.manager.subscriptionSize("pane")
+            assertNotNull(newSize)
+            h.ack(down)
+            assertEquals(newSize, h.manager.subscriptionSize("pane"))
+            assertEquals(3, h.inputs().size)
+            assertArrayEquals("\u001b[<32;46;42M".toByteArray(), h.inputs()[1].bytes)
+            assertArrayEquals("\u001b[<0;46;42m".toByteArray(), h.inputs()[2].bytes)
+            assertFalse(h.wire.sentText.any { Json.parseToJsonElement(it).jsonObject["type"]?.jsonPrimitive?.content == "unsubscribe" })
+            // The new owner's eventual ordinary leave must still remove its own subscription.
+            assertTrue(h.gate.leave("pane") { h.manager.unsubscribe("pane") })
+            assertNull(h.manager.subscriptionSize("pane"))
+            h.manager.stop()
+        }
+    }
+
+    @Test fun repeatedSameRefReacquisitionIsBoundedAndStillPreservesOneFinalEndpointAndUp() {
+        val h = Harness()
+        h.manager.subscribe("pane", 44, 46)
+        h.mouse(1, true); h.mouse(42, true, true); h.mouse(42, false)
+        val down = h.inputs().single().reqId
+        repeat(100) {
+            assertTrue(h.gate.leave("pane") { h.manager.unsubscribe("pane") })
+            assertTrue(h.manager.subscribe("pane", 44 + it % 2, 46))
+        }
+        val newSize = h.manager.subscriptionSize("pane")
+        h.ack(down)
+        assertEquals(ConnectionState.READY, h.manager.state())
+        assertEquals(newSize, h.manager.subscriptionSize("pane"))
+        assertEquals(3, h.inputs().size)
+        h.manager.stop()
+    }
+
+    @Test fun sameRefReentryCancelsOnlyItsOldTeardownNotAnotherRefsLeave() {
+        val h = Harness()
+        h.manager.subscribe("pane", 44, 46)
+        h.manager.subscribe("other", 30, 80)
+        h.mouse(1, true); h.mouse(42, true, true); h.mouse(42, false)
+        val down = h.inputs().single().reqId
+        h.gate.leave("pane") { h.manager.unsubscribe("pane") }
+        h.gate.leave("other") { h.manager.unsubscribe("other") }
+        h.manager.subscribe("pane", 45, 46)
+        val newSize = h.manager.subscriptionSize("pane")
+        h.ack(down)
+        assertEquals(newSize, h.manager.subscriptionSize("pane"))
+        assertNull(h.manager.subscriptionSize("other"))
+        assertEquals(3, h.inputs().size) // accepted old endpoint and UP are not globally cleared
+        h.manager.stop()
+    }
+
     @Test fun actualAckBeforeCoreRegistersPendingStillDeliversExactSubmissionReceipt() {
         val h = Harness(ackDuringWrite = true)
         var delivered: Long? = null

@@ -38,6 +38,13 @@ turn body drags into remote all-motion reports.
    immediate; this is not a blanket one-RTT-per-character throttle. Its actual
    input IDs are still tracked so a later pointer motion cannot overtake it.
 
+Deferred leave is separately tagged teardown work. A new validated subscribe for
+the same ref precisely removes that ref's queued old teardown **before it can
+call Core.unsubscribe** and erase the new subscription. Accepted endpoints, UP,
+keyboard/wheel barriers and other refs' teardown are not removed; a later leave
+of the new owner still unsubscribes normally. No persistent ref-generation map
+or idle timer is needed: ownership invalidation is bounded by the existing FIFO.
+
 A typed native `switch_mode` request is refused while that ref still has a held
 pointer or unsent input: it must not replace TUI before an accepted old endpoint/UP
 is written. The existing command failure UI exposes this refusal; retry after
