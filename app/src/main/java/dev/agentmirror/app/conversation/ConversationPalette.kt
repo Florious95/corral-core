@@ -61,7 +61,7 @@ data class ConversationPalette(
     val danger: Color,
     val glass: Color,
     val glassStroke: Color,
-    /** Modernism's opaque panel: brushed from [panel] down to [panelEnd] (cool metal diffusion). */
+    /** Modernism's opaque flat panel and its contrast-safe alternate tone. */
     val panel: Color,
     val panelEnd: Color,
     /** Modernism's hairline grid and panel outline; a line, never text. */
@@ -110,7 +110,7 @@ data class ConversationPalette(
                 ensureContrast(shift(bg, -0.034, accentBase, 0.004), bg, 1.11)
             }
             val inkSoft = ensureContrast(ensureContrast(mix(ink, bg, 0.42), bg, TEXT_MIN + 0.1), surface, TEXT_MIN + 0.1)
-            // The sheen moves away from the text: lighter under dark ink, darker under light ink.
+            // Alternate solid surface tone; no gradient or texture is drawn.
             val panelEnd = shift(surface, if (dark) -0.016 else 0.014, accentBase, 0.0)
             fun signal(vararg slots: Int): Int = slots.toList().mapNotNull { scheme.ansi16[it] }.maxByOrNull { chroma(it) } ?: ink
             return ConversationPalette(

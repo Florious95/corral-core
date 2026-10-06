@@ -24,18 +24,9 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.ImageShader
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -60,7 +51,7 @@ import dev.agentmirror.app.ui.theme.ResolvedThemeSuite
  *   Liquid Glass — planar frosted panels sampling the transcript, squircles, one even 0.5dp
  *                  hairline. No bevel, no specular glint, no lens bulge, no inner shadow: depth
  *                  comes from translucency and a soft ambient shadow only.
- *   Modernism    — opaque brushed-titanium panels on a hairline grid, right angles, heavier
+ *   Modernism    — clean opaque flat panels on a hairline grid, right angles, heavier
  *                  titles, no backdrop sampling at all (no glass, no glow, no recorded layer).
  */
 @Immutable
@@ -88,8 +79,8 @@ internal data class ConversationLook(
             ConversationLook(
                 glass = suite.surfaces.isGlass,
                 sharp = suite.geometry.sharpCorners,
-                hairline = suite.geometry.hairline,
-                rule = suite.geometry.headerRule,
+                hairline = 0.5.dp,
+                rule = 0.5.dp,
                 titleWeight = FontWeight.Bold,
             )
         }
@@ -110,7 +101,7 @@ internal fun lookPill(): Shape = LocalConversationLook.current.pill()
 
 /**
  * The one floating-panel material (dock, header capsule, menus, sheets, toasts, round buttons).
- * Glass samples [backdrop]; Modernism is brushed titanium and a hairline, never a sampler, so it
+ * Glass samples [backdrop]; Modernism is one flat colour and a hairline, never a sampler, so it
  * is safe anywhere and costs no blur pass. [radius] null means a capsule.
  */
 internal fun Modifier.panelSurface(look: ConversationLook, backdrop: Backdrop, radius: Dp?, p: ConversationPalette, reading: Boolean = false): Modifier =
@@ -118,15 +109,16 @@ internal fun Modifier.panelSurface(look: ConversationLook, backdrop: Backdrop, r
         frostedGlass(backdrop, if (radius == null) Capsule() else RoundedRectangle(radius), p, reading)
     } else {
         val shape = if (radius == null) look.pill() else look.shape(radius)
-        brushedMetal(p, shape).border(look.hairline, p.rule, shape)
+        flatPanel(p, shape).border(look.hairline, p.rule, shape)
     }
 
 /**
  * Planar frosted glass: vibrancy + blur of what lies beneath, a readable tint, one even 0.5dp
  * hairline and a soft ambient shadow. Deliberately absent: lens refraction (the bulging-jelly
  * edge), angled specular highlights and inner shadows — light is not faked on a flat pane.
- * [reading] surfaces (menus, sheets) carry a denser veil over a wider blur, so a bright card or
- * logo underneath reads as atmosphere, never as a smudge behind the text.
+ * [reading] surfaces (menus, sheets) have an opaque neutral protective surface: saturated
+ * transcript/logo colours must never bleed behind reading text. Glass remains in the geometry,
+ * hairline and shadow, not a coloured blotch from backdrop sampling.
  */
 internal fun Modifier.frostedGlass(backdrop: Backdrop, shape: RoundedRectangularShape, p: ConversationPalette, reading: Boolean = false): Modifier =
     drawBackdrop(
@@ -139,51 +131,13 @@ internal fun Modifier.frostedGlass(backdrop: Backdrop, shape: RoundedRectangular
         highlight = { Highlight(width = 0.5.dp, alpha = 1f, style = HighlightStyle.Plain(color = p.glassStroke)) },
         shadow = { Shadow(radius = 16.dp, color = Color.Black.copy(alpha = if (p.dark) 0.22f else 0.07f)) },
         onDrawSurface = {
-            drawRect(if (reading) p.glass.copy(alpha = if (p.dark) 0.86f else 0.90f).glassReadable() else p.glass.glassReadable())
+            drawRect(if (reading) p.panel.copy(alpha = 1f) else p.glass.glassReadable())
         },
     )
 
-/**
- * Modernism's brushed titanium: the cool [ConversationPalette.panel] → [ConversationPalette.panelEnd]
- * diffusion under a fine horizontal grain. The grain is one small tile built once per process and
- * repeated by a shader, so a panel costs two rect draws: no animation, no per-frame path, no blur.
- */
-internal fun Modifier.brushedMetal(p: ConversationPalette, shape: Shape = RectangleShape): Modifier =
-    clip(shape).drawWithCache {
-        val diffusion = Brush.verticalGradient(listOf(p.panel, p.panelEnd))
-        val grain = ShaderBrush(ImageShader(BrushedGrain, TileMode.Repeated, TileMode.Repeated))
-        onDrawBehind {
-            drawRect(diffusion)
-            drawRect(grain)
-        }
-    }
-
-/** One stroke per lit/shaded streak; ≤3% alpha, so the grain reads as metal, never as stripes. */
-private val BrushedGrain: ImageBitmap by lazy {
-    val width = 512
-    val height = 64
-    val tile = ImageBitmap(width, height)
-    val canvas = Canvas(tile)
-    val paint = Paint()
-    var seed = 0x5EED1L
-    fun next(): Float {
-        seed = (seed * 6364136223846793005L + 1442695040888963407L)
-        return ((seed ushr 33) and 0xFFFFFFL).toFloat() / 0xFFFFFF
-    }
-    for (y in 0 until height) {
-        repeat(2) {
-            if (next() < 0.55f) {
-                val start = next() * width
-                val length = 60f + next() * 380f
-                paint.color = (if (next() < 0.5f) Color.White else Color.Black).copy(alpha = 0.012f + next() * 0.018f)
-                // Streaks wrap across the tile edge, so the repeat has no seam.
-                canvas.drawRect(Rect(start, y.toFloat(), minOf(start + length, width.toFloat()), y + 1f), paint)
-                if (start + length > width) canvas.drawRect(Rect(0f, y.toFloat(), start + length - width, y + 1f), paint)
-            }
-        }
-    }
-    tile
-}
+/** A pure flat surface: no texture, noise, grain, tile, gradient or shader. */
+internal fun Modifier.flatPanel(p: ConversationPalette, shape: Shape = RectangleShape): Modifier =
+    background(p.panel, shape)
 
 /** The look's one hairline: 0.5dp ink veil on glass, the ruled line in Modernism; [tone] for a status outline. */
 internal fun Modifier.hairlineBorder(look: ConversationLook, p: ConversationPalette, shape: Shape, tone: Color? = null): Modifier =

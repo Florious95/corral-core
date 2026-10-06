@@ -960,9 +960,9 @@ private fun ConversationScreen(
                     if (look.glass) {
                         Modifier
                     } else {
-                        // Modernism: a full-bleed brushed sill under a heavy ink rule, down to the edge.
+                        // Modernism: a clean flat sill on a 0.5dp hairline, down to the edge.
                         Modifier
-                            .brushedMetal(p)
+                            .flatPanel(p)
                             .edgeRule(RuleEdge.Top, p.ink, look.rule)
                     },
                 )
@@ -1071,9 +1071,9 @@ private fun ConversationHeader(
                 if (look.glass) {
                     Modifier.background(Brush.verticalGradient(listOf(p.canvas.copy(alpha = 0.92f), p.canvas.copy(alpha = 0.72f), Color.Transparent)))
                 } else {
-                    // Modernism: an opaque brushed lintel standing on a heavy ink rule.
+                    // Modernism: an opaque flat lintel on a 0.5dp hairline.
                     Modifier
-                        .brushedMetal(p)
+                        .flatPanel(p)
                         .edgeRule(RuleEdge.Bottom, p.ink, look.rule)
                 },
             )
@@ -1167,7 +1167,7 @@ private fun ConfirmDialog(
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = if (p.dark) 0.5f else 0.32f))
+                .background(Color.Black.copy(alpha = if (p.dark) 0.64f else 0.48f))
                 .pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) },
             contentAlignment = Alignment.Center,
         ) {
@@ -1177,7 +1177,7 @@ private fun ConfirmDialog(
                     .widthIn(max = 360.dp)
                     .fillMaxWidth()
                     .animateEnterExit(enter = scaleIn(spring(dampingRatio = 0.82f, stiffness = 560f), 0.94f), exit = scaleOut(tween(120), 0.97f))
-                    .panelSurface(look, backdrop, 26.dp, p)
+                    .panelSurface(look, backdrop, 26.dp, p, reading = true)
                     .pointerInput(Unit) { detectTapGestures { } }
                     .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 16.dp)
                     .testTag("conversation-confirm"),

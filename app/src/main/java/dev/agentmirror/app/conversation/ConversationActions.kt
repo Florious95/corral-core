@@ -134,7 +134,7 @@ internal fun HeaderMenu(
     onAction: (ConversationAction) -> Unit,
 ) {
     if (open) {
-        Box(Modifier.fillMaxSize().zIndex(5f).pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) })
+        Box(Modifier.fillMaxSize().zIndex(5f).background(Color.Black.copy(alpha = if (p.dark) 0.64f else 0.48f)).pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) })
     }
     val look = LocalConversationLook.current
     Box(Modifier.fillMaxSize().zIndex(6f), contentAlignment = Alignment.TopEnd) {

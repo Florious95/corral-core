@@ -88,8 +88,8 @@ import dev.agentmirror.app.ui.components.edgeRule
  * scrim, the same header, the same drag-to-dismiss, so each panel only brings its content.
  *
  *   Liquid Glass — a floating planar frosted card, 28dp squircle, a capsule grabber.
- *   Modernism    — a full-bleed brushed-titanium slab under a heavy ink rule, a mono eyebrow,
- *                  a ruled header base and a ruled footer; right angles everywhere.
+ *   Modernism    — a clean flat slab on a 0.5dp hairline, a mono eyebrow,
+ *                  a ruled header base and footer; right angles everywhere.
  *
  * Nothing in it moves while idle: enter/exit are one short slide+fade, and the drag offset is a
  * graphicsLayer translation (no relayout per pointer move).
@@ -128,7 +128,7 @@ internal fun ConversationSheet(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = if (p.dark) 0.5f else 0.3f))
+                    .background(Color.Black.copy(alpha = if (p.dark) 0.64f else 0.48f))
                     .pointerInput(dismissible) { detectTapGestures { if (dismissible) onDismiss() } },
             )
             BoxWithConstraints(
@@ -158,7 +158,7 @@ internal fun ConversationSheet(
                         .graphicsLayer { translationY = drag }
                         .then(
                             if (shape != null) Modifier.frostedGlass(backdrop, shape, p, reading = true)
-                            else Modifier.brushedMetal(p).edgeRule(RuleEdge.Top, p.ink, look.rule),
+                            else Modifier.flatPanel(p).edgeRule(RuleEdge.Top, p.ink, look.rule),
                         )
                         // Taps inside the panel never reach the scrim.
                         .pointerInput(Unit) { detectTapGestures { } }
