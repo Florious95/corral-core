@@ -41,6 +41,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
@@ -420,11 +421,28 @@ class SessionViewModelTest {
         h.vm.presenter.beginFrame()
         assertEquals("history", text(h.vm.presenter.lineCells(0)))
 
-        h.paneMode(false)
-        h.snap("restored")
-        assertFalse(h.vm.inCopyMode)
-        h.vm.presenter.beginFrame()
-        assertEquals("restored", text(h.vm.presenter.lineCells(0)))
+        // Production renders the last complete frame while background capture
+        // runs. Await its frame callbacks, not an immediate synchronous copy.
+        // A callback already queued for live-live may arrive first: render/check
+        // each notification until the restored capture is visible, with a bound.
+        val captures = Semaphore(0)
+        h.vm.presenter.onFrameRequested = { captures.release() }
+        try {
+            h.paneMode(false)
+            h.snap("restored")
+            assertFalse(h.vm.inCopyMode)
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
+            while (true) {
+                h.vm.presenter.beginFrame()
+                if (text(h.vm.presenter.lineCells(0)) == "restored") break
+                val remaining = deadline - System.nanoTime()
+                assertTrue("restored capture must request a frame within 2s",
+                    remaining > 0 && captures.tryAcquire(remaining, TimeUnit.NANOSECONDS))
+            }
+            assertEquals("restored", text(h.vm.presenter.lineCells(0)))
+        } finally {
+            h.vm.presenter.onFrameRequested = null
+        }
     }
 
     @Test
