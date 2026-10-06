@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.dp
  * One consistent line-icon family for the conversation surface: 24-unit grid, round caps and
  * joins, stroke ≈ 1.7/24. Drawn on Canvas — no emoji, no symbol-font fallback, crisp at any size.
  */
-enum class Glyph { Bolt, Clip, Plus, Send, Stop, Back, More, Down, Chevron, Terminal, File, Pencil, Search, Spark, Wand, Check, Cross, Copy, Camera, Photo, Refresh }
+enum class Glyph { Bolt, Clip, Plus, Send, Stop, Back, More, Down, Chevron, Terminal, File, Pencil, Search, Spark, Wand, Check, Cross, Copy, Camera, Photo, Refresh, History, Compress, Gauge, NewChat, Forward }
 
 @Composable
 fun GlyphIcon(glyph: Glyph, tint: Color, size: Dp = 20.dp, modifier: Modifier = Modifier) {
@@ -150,6 +150,31 @@ fun DrawScope.drawGlyph(glyph: Glyph, tint: Color) {
             drawCircle(tint, 1.7f * u, p(8.5f, 9.5f))
             drawPath(path(3.5f to 17.5f, 9f to 12.5f, 13f to 16f, 16f to 13f, 20.5f to 17.5f), tint, style = line)
         }
+        Glyph.History -> {
+            // A clock face wound back: the open arc ends in a rewind tick at ten o'clock.
+            drawArc(tint, startAngle = 215f, sweepAngle = 300f, useCenter = false, topLeft = p(3.5f, 3.5f), size = Size(17f * u, 17f * u), style = line)
+            drawPath(path(2.6f to 5.4f, 5.0f to 7.6f, 7.9f to 6.3f), tint, style = line)
+            drawPath(path(12f to 7.5f, 12f to 12f, 15f to 14f), tint, style = line)
+        }
+        Glyph.Compress -> {
+            // Two chevrons closing on one line: the same history, folded tighter.
+            drawPath(path(8f to 3.5f, 12f to 7.5f, 16f to 3.5f), tint, style = line)
+            drawPath(path(8f to 20.5f, 12f to 16.5f, 16f to 20.5f), tint, style = line)
+            drawLine(tint, p(5f, 12f), p(19f, 12f), line.width, StrokeCap.Round)
+        }
+        Glyph.Gauge -> {
+            drawArc(tint, startAngle = 180f, sweepAngle = 180f, useCenter = false, topLeft = p(3f, 6f), size = Size(18f * u, 18f * u), style = line)
+            drawLine(tint, p(3f, 15f), p(21f, 15f), line.width, StrokeCap.Round)
+            drawLine(tint, p(12f, 15f), p(16f, 9.5f), line.width, StrokeCap.Round)
+            drawCircle(tint, 1.4f * u, p(12f, 15f))
+        }
+        Glyph.NewChat -> {
+            drawPath(path(7f to 17.5f, 6.5f to 21f, 11.5f to 17.5f), tint, style = line)
+            drawRoundRect(tint, topLeft = p(3f, 4f), size = Size(18f * u, 13.5f * u), cornerRadius = CornerRadius(3.5f * u), style = line)
+            drawLine(tint, p(12f, 7.8f), p(12f, 13.7f), line.width, StrokeCap.Round)
+            drawLine(tint, p(9.05f, 10.75f), p(14.95f, 10.75f), line.width, StrokeCap.Round)
+        }
+        Glyph.Forward -> drawPath(path(9f to 4.5f, 16.5f to 12f, 9f to 19.5f), tint, style = Stroke(2f * u, cap = StrokeCap.Round, join = StrokeJoin.Round))
         Glyph.Refresh -> {
             drawArc(tint, startAngle = -60f, sweepAngle = 290f, useCenter = false, topLeft = p(4.5f, 4.5f), size = Size(15f * u, 15f * u), style = line)
             drawPath(path(16.5f to 3.5f, 18.4f to 6f, 15.6f to 7.4f), tint, style = line)

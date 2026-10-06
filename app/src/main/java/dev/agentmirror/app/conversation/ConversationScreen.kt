@@ -672,7 +672,7 @@ private fun ConversationScreen(
                 item(key = "empty") {
                     Box(Modifier.fillMaxWidth().fillParentMaxHeight(0.82f).animateItem(placementSpec = null), contentAlignment = Alignment.Center) {
                         if (connected && !state.running) {
-                            ConversationEmpty(state.model, p, onSuggestion = { s -> draft = TextFieldValue(s, TextRange(s.length)) })
+                            ConversationEmpty(agentName(state.agentProvider), state.model, p, onSuggestion = { s -> draft = TextFieldValue(s, TextRange(s.length)) })
                         } else if (!connected) {
                             ConversationSkeleton(p)
                         }

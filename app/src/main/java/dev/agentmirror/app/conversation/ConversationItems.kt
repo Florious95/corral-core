@@ -70,7 +70,6 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
@@ -414,24 +413,41 @@ fun ToolCallCard(tool: ToolCall, p: ConversationPalette, expanded: Boolean, skew
     }
 }
 
+/**
+ * The status badge: a micro-glyph and a word, tinted only when the state wants attention
+ * (running, failed, interrupted); a finished call stays neutral with a success tick. Motion is
+ * reserved for the live turn — a historical pending call is a still hollow ring.
+ */
 @Composable
 private fun ToolStatus(tool: ToolCall, p: ConversationPalette, skewMs: Long, streaming: Boolean) {
+    val look = LocalConversationLook.current
+    val tone = when (tool.phase) {
+        ToolPhase.Running -> p.accentInk
+        ToolPhase.Failed -> p.danger
+        ToolPhase.Interrupted -> p.warning
+        else -> null
+    }
+    val shape = look.pill()
+    val fill = tone?.copy(alpha = if (p.dark) 0.14f else 0.10f) ?: p.ink.copy(alpha = 0.05f)
     Row(
         Modifier
-            .clip(lookPill())
-            .background(p.ink.copy(alpha = 0.05f))
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .clip(shape)
+            .background(fill)
+            .then(if (look.sharp) Modifier.border(look.hairline, (tone ?: p.inkSoft).copy(alpha = 0.45f), shape) else Modifier)
+            .heightIn(min = 22.dp)
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+            .testTag("conversation-tool-status-${tool.phase.name.lowercase()}"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         when (tool.phase) {
             ToolPhase.Composing, ToolPhase.Pending -> {
                 // Pending can be an unfinished historical call, even during a new live turn.
-                Breathing(streaming) { a -> Box(Modifier.size(6.dp).clip(lookPill()).background(p.inkSoft.copy(alpha = a))) }
+                Breathing(streaming) { a -> Box(Modifier.size(7.dp).clip(shape).border(1.3.dp, p.inkSoft.copy(alpha = a), shape)) }
                 Text(if (tool.phase == ToolPhase.Composing) "生成中" else "排队", style = CaptionStyle.copy(color = p.inkSoft))
             }
             ToolPhase.Running -> {
-                Breathing(streaming) { a -> Box(Modifier.size(6.dp).clip(lookPill()).background(p.accent.copy(alpha = a))) }
+                Breathing(streaming) { a -> Box(Modifier.size(6.dp).clip(shape).background(p.accent.copy(alpha = a))) }
                 var now by remember(tool.key, streaming) { mutableLongStateOf(System.currentTimeMillis()) }
                 if (streaming) {
                     LaunchedEffect(tool.key) {
@@ -449,10 +465,13 @@ private fun ToolStatus(tool: ToolCall, p: ConversationPalette, skewMs: Long, str
                 Text(duration(tool) ?: "完成", style = CaptionStyle.copy(color = p.inkSoft, fontFamily = ConversationMono))
             }
             ToolPhase.Failed -> {
-                GlyphIcon(Glyph.Cross, p.danger, 12.dp)
+                GlyphIcon(Glyph.Cross, p.danger, 11.dp)
                 Text(tool.exitCode?.let { "exit $it" } ?: "失败", style = CaptionStyle.copy(color = p.danger, fontFamily = ConversationMono))
             }
-            ToolPhase.Interrupted -> Text("已中断", style = CaptionStyle.copy(color = p.inkSoft))
+            ToolPhase.Interrupted -> {
+                GlyphIcon(Glyph.Stop, p.warning, 11.dp)
+                Text("已中断", style = CaptionStyle.copy(color = p.warning))
+            }
         }
     }
 }
@@ -547,7 +566,7 @@ fun ConversationSkeleton(p: ConversationPalette, modifier: Modifier = Modifier) 
 }
 
 @Composable
-fun ConversationEmpty(model: String?, p: ConversationPalette, onSuggestion: (String) -> Unit, modifier: Modifier = Modifier) {
+fun ConversationEmpty(agent: String, model: String?, p: ConversationPalette, onSuggestion: (String) -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
@@ -558,7 +577,7 @@ fun ConversationEmpty(model: String?, p: ConversationPalette, onSuggestion: (Str
         ) {
             GlyphIcon(Glyph.Spark, p.onAccent, 28.dp)
         }
-        Text("开始和 Pi 对话", style = TextStyle(fontFamily = ConversationSans, fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = p.ink, letterSpacing = (-0.2).sp), modifier = Modifier.padding(top = 18.dp))
+        Text("开始和 $agent 对话", style = TextStyle(fontFamily = ConversationSans, fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = p.ink, letterSpacing = (-0.2).sp), modifier = Modifier.padding(top = 18.dp))
         Text(
             model?.let { "$it · 原生对话" } ?: "原生对话 · 结构化流式",
             style = CaptionStyle.copy(color = p.inkSoft, fontSize = 13.sp),
@@ -694,3 +713,6 @@ internal fun seconds(ms: Long): String = when {
     ms < 60_000 -> String.format(Locale.US, "%.1fs", ms / 1000.0)
     else -> "${ms / 60_000}m ${(ms / 1000) % 60}s"
 }
+
+/** The CLI's display name from its provider id ("pi" → "Pi", "grok" → "Grok"). */
+internal fun agentName(provider: String): String = provider.replaceFirstChar { it.uppercase() }.ifBlank { "Agent" }
