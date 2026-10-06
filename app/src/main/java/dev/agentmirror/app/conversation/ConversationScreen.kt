@@ -236,9 +236,9 @@ private fun ConversationScreen(
     val images = remember(ref) { mutableStateListOf<PendingImage>() }
     var sheet by remember { mutableStateOf(ComposerSheet.None) }
     var slashDismissedFor by remember { mutableStateOf<String?>(null) }
-    var menuOpen by remember { mutableStateOf(false) }
-    var pickerOpen by remember { mutableStateOf(false) }
-    var historyOpen by remember(ref) { mutableStateOf(false) }
+    // One overlay at a time — menu, model picker or a task sheet — so opening one atomically
+    // replaces another and Back peels exactly one layer.
+    var overlay by remember(ref) { mutableStateOf(Overlay.None) }
     var historyLoading by remember(ref) { mutableStateOf(false) }
     var historyRestoring by remember(ref) { mutableStateOf(false) }
     var historyChoices by remember(ref) { mutableStateOf(emptyList<SessionHistoryChoice>()) }
@@ -254,6 +254,10 @@ private fun ConversationScreen(
     var pendingModel by remember(ref) { mutableStateOf<ModelChoice?>(null) }
     var pendingLevel by remember(ref) { mutableStateOf<String?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
+    var compactRun by remember(ref) { mutableStateOf<CompactRun?>(null) }
+    var compactInstructions by remember(ref) { mutableStateOf("") }
+    var usage by remember(ref) { mutableStateOf(UsageLoad()) }
+    var usageGeneration by remember(ref) { mutableIntStateOf(0) }
     // Geometry is read at layout time only (list padding, overlay offsets): the dock rising or the
     // IME sliding re-measures, it never recomposes the screen.
     val headerPx = remember { mutableIntStateOf(0) }
@@ -279,6 +283,7 @@ private fun ConversationScreen(
     )
 
     val connected = phase == LinkPhase.Live && !historyRestoring
+    val abilities = AgentAbilities.of(state.agentProvider)
     val slashActive = draft.text.startsWith("/") && !draft.text.contains(' ') && !draft.text.contains('\n') && slashDismissedFor != draft.text
     val activeSheet = when {
         sheet != ComposerSheet.None -> sheet
@@ -444,9 +449,8 @@ private fun ConversationScreen(
         fields.forEach { (k, v) -> put(k, v) }
     }
     fun openPicker() {
-        menuOpen = false
-        pickerOpen = !pickerOpen
-        if (pickerOpen) {
+        overlay = if (overlay == Overlay.Picker) Overlay.None else Overlay.Picker
+        if (overlay == Overlay.Picker) {
             hub.control(ref, command("get_available_models"))
             hub.control(ref, command("get_available_thinking_levels"))
         }
@@ -475,14 +479,12 @@ private fun ConversationScreen(
     // ---- native Pi history (same process, interactive switch_session) --------------------------
     fun loadHistory() {
         if (historyRestoring) { hub.retry(ref); return }
-        menuOpen = false
-        pickerOpen = false
-        historyOpen = true
+        overlay = Overlay.History
         historyLoading = true
         historyError = null
         val generation = ++historyGeneration
         hub.controlWithData(ref, command("list_sessions")) { ok, reason, data ->
-            if (generation == historyGeneration && historyOpen) {
+            if (generation == historyGeneration && overlay == Overlay.History) {
                 historyLoading = false
                 if (ok && data?.arr("sessions") != null) historyChoices = sessionHistoryChoices(data)
                 else historyError = reason ?: "主机未返回历史会话列表"
@@ -524,7 +526,7 @@ private fun ConversationScreen(
                 state.lastSeq >= historyHead && state.sessionId == historyTarget?.id && phase == LinkPhase.Live) {
                 historyTitle = historyTarget
                 historyRestoring = false
-                historyOpen = false
+                if (overlay == Overlay.History) overlay = Overlay.None
                 historyError = null
                 expanded.clear()
                 listState.scrollToItem(0)
@@ -552,21 +554,86 @@ private fun ConversationScreen(
         }
     }
 
-    // Back peels one layer at a time: picker/menu → panel → composer → leave.
-    BackHandler(enabled = activeSheet != ComposerSheet.None || menuOpen || pickerOpen || historyOpen || editorFocused || confirmSwitch || historyConfirm != null) {
+    // ---- overflow actions and their sheets ----------------------------------------------------
+    fun openCompact() {
+        collapseComposer("compact-sheet")
+        // A finished run is history: reopening starts a fresh form (the draft text is kept).
+        if (compactRun != null && !state.compacting && compactPhase(compactRun, false, state.compaction) != CompactPhase.Submitting) compactRun = null
+        overlay = Overlay.Compact
+    }
+    fun submitCompact() {
+        val run = CompactRun(id = (compactRun?.id ?: 0) + 1, baseline = state.compaction?.seq ?: 0L)
+        compactRun = run
+        hub.controlWithData(ref, buildJsonObject {
+            put("type", "compact")
+            // Sent verbatim (trim only decides emptiness); never to an agent that would drop it.
+            if (abilities.compactInstructions && compactInstructions.isNotBlank()) put("customInstructions", compactInstructions)
+        }) { ok, reason, _ ->
+            if (compactRun?.id == run.id) compactRun = run.copy(replied = ok, reason = reason)
+            if (ok) compactInstructions = ""
+        }
+    }
+    fun readUsage() {
+        val generation = ++usageGeneration
+        usage = usage.copy(loading = true)
+        hub.controlWithData(ref, command("get_session_stats")) { ok, reason, data ->
+            if (generation != usageGeneration) return@controlWithData
+            usage = when {
+                ok && data != null -> UsageLoad(snapshot = usageSnapshot(data, System.currentTimeMillis()))
+                // A host older than the stats projection refuses the command by name.
+                reason == "command is not available from the phone" -> UsageLoad(unsupported = true)
+                else -> usage.copy(loading = false, error = reason ?: "主机没有确认")
+            }
+        }
+    }
+    fun openUsage() {
+        collapseComposer("usage-sheet")
+        // The host may have been updated since it last refused: ask again.
+        if (usage.unsupported) usage = UsageLoad()
+        overlay = Overlay.Usage
+    }
+    // Read once on open, then again whenever the agent settles (turn end, compaction end) or the
+    // session changes while the sheet is up; never on a timer, never while it is closed.
+    if (overlay == Overlay.Usage) {
+        val settled = connected && !state.running && !state.compacting
+        LaunchedEffect(settled, state.sessionId) {
+            if (connected && !usage.unsupported && (settled || usage.snapshot == null)) readUsage()
+        }
+    }
+    fun runAction(action: ConversationAction) {
+        // Re-resolved at click time: a row painted enabled a moment ago cannot act on stale state.
+        val resolved = resolveActions(state.agentProvider, connected, historyRestoring, state.compacting).firstOrNull { it.action == action }
+        overlay = Overlay.None
+        if (resolved?.enabled != true) return
+        when (action) {
+            ConversationAction.History -> loadHistory()
+            ConversationAction.Compact -> openCompact()
+            ConversationAction.NewSession -> hub.send(ref, "new_session") { ok, r -> if (!ok) toast = "新会话未创建：${r ?: "主机没有确认"}" }
+            ConversationAction.Usage -> openUsage()
+            ConversationAction.Terminal -> if (inFlight) {
+                switchReason = null
+                collapseComposer("confirm")
+                confirmSwitch = true
+            } else {
+                switchToTerminal(force = false)
+            }
+        }
+    }
+
+    // Back peels one layer at a time: dialog → overlay (menu, picker, sheet) → panel → composer → leave.
+    BackHandler(enabled = activeSheet != ComposerSheet.None || overlay != Overlay.None || editorFocused || confirmSwitch || historyConfirm != null) {
         when {
             historyConfirm != null -> historyConfirm = null
-            historyOpen && historyRestoring -> onBack()
-            historyOpen -> { historyOpen = false; historyGeneration++ }
+            overlay == Overlay.History && historyRestoring -> onBack()
+            overlay == Overlay.History -> { overlay = Overlay.None; historyGeneration++ }
             confirmSwitch -> confirmSwitch = false
-            pickerOpen -> pickerOpen = false
-            menuOpen -> menuOpen = false
+            overlay != Overlay.None -> overlay = Overlay.None
             sheet != ComposerSheet.None -> sheet = ComposerSheet.None
             activeSheet == ComposerSheet.Slash -> slashDismissedFor = draft.text
             else -> collapseComposer("back")
         }
     }
-    BackHandler(enabled = activeSheet == ComposerSheet.None && !menuOpen && !pickerOpen && !historyOpen && !editorFocused && !confirmSwitch && historyConfirm == null, onBack = onBack)
+    BackHandler(enabled = activeSheet == ComposerSheet.None && overlay == Overlay.None && !editorFocused && !confirmSwitch && historyConfirm == null, onBack = onBack)
 
     // ---- layout -----------------------------------------------------------------------------
     val look = LocalConversationLook.current
@@ -695,11 +762,9 @@ private fun ConversationScreen(
             p = p,
             backdrop = backdrop,
             onBack = onBack,
-            onMore = { if (historyRestoring) historyOpen = true else { historyOpen = false; pickerOpen = false; menuOpen = !menuOpen } },
-            onModel = { if (historyRestoring) historyOpen = true else { historyOpen = false; openPicker() } },
-            onHistory = if (state.agentProvider == "pi") ::loadHistory else null,
-            historyEnabled = connected,
-            pickerOpen = pickerOpen,
+            onMore = { overlay = if (historyRestoring) Overlay.History else if (overlay == Overlay.Menu) Overlay.None else Overlay.Menu },
+            onModel = { if (historyRestoring) overlay = Overlay.History else openPicker() },
+            pickerOpen = overlay == Overlay.Picker,
             modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { headerPx.intValue = it.height }.zIndex(2f),
         )
 
@@ -723,28 +788,28 @@ private fun ConversationScreen(
         }
 
         ModelPicker(
-            open = pickerOpen,
+            open = overlay == Overlay.Picker,
             state = state,
             pendingModel = pendingModel,
             pendingLevel = pendingLevel,
             p = p,
             backdrop = backdrop,
             topPx = { headerPx.intValue },
-            onDismiss = { pickerOpen = false },
+            onDismiss = { if (overlay == Overlay.Picker) overlay = Overlay.None },
             onModel = ::chooseModel,
             onLevel = ::chooseLevel,
         )
 
         SessionHistoryPicker(
-            open = historyOpen,
+            open = overlay == Overlay.History,
             choices = historyChoices,
             loading = historyLoading,
             restoring = historyRestoring,
+            restoringTitle = historyTarget?.title,
             error = historyError,
             p = p,
             backdrop = backdrop,
-            topPx = { headerPx.intValue },
-            onDismiss = { historyOpen = false; if (!historyRestoring) historyGeneration++ },
+            onDismiss = { if (overlay == Overlay.History) overlay = Overlay.None; if (!historyRestoring) historyGeneration++ },
             onRetry = ::loadHistory,
             onChoose = { resumeHistory(it, force = false) },
         )
@@ -759,26 +824,46 @@ private fun ConversationScreen(
             onConfirm = { historyConfirm?.let { resumeHistory(it, force = true) } },
         )
 
-        // Header overflow menu.
+        // Header overflow menu: the action registry, resolved against the live state.
         HeaderMenu(
-            open = menuOpen,
+            open = overlay == Overlay.Menu,
+            actions = resolveActions(state.agentProvider, connected, historyRestoring, state.compacting),
             p = p,
             backdrop = backdrop,
             topPx = { headerPx.intValue },
-            onDismiss = { menuOpen = false },
-            onTerminal = {
-                menuOpen = false
-                if (inFlight) {
-                    switchReason = null
-                    collapseComposer("confirm")
-                    confirmSwitch = true
-                } else {
-                    switchToTerminal(force = false)
-                }
-            },
-            onCompact = { menuOpen = false; hub.send(ref, "compact") { ok, r -> if (!ok) toast = "压缩未执行：${r ?: "主机没有确认"}" } },
-            onNewSession = { menuOpen = false; hub.send(ref, "new_session") { ok, r -> if (!ok) toast = "新会话未创建：${r ?: "主机没有确认"}" } },
-            enabled = connected,
+            onDismiss = { if (overlay == Overlay.Menu) overlay = Overlay.None },
+            onAction = ::runAction,
+        )
+
+        CompactSheet(
+            open = overlay == Overlay.Compact,
+            phase = compactPhase(compactRun, state.compacting, state.compaction),
+            instructions = compactInstructions,
+            onInstructions = { compactInstructions = it },
+            acceptsInstructions = abilities.compactInstructions,
+            busy = inFlight && !state.compacting,
+            interruptsBusyWork = abilities.compactInterruptsWork,
+            connected = connected,
+            p = p,
+            backdrop = backdrop,
+            onDismiss = { if (overlay == Overlay.Compact) overlay = Overlay.None },
+            onSubmit = ::submitCompact,
+            onReset = { compactRun = null },
+        )
+
+        UsageSheet(
+            open = overlay == Overlay.Usage,
+            load = usage,
+            sessionId = state.sessionId,
+            agent = agentName(state.agentProvider),
+            model = state.model,
+            running = state.running,
+            connected = connected,
+            p = p,
+            backdrop = backdrop,
+            onDismiss = { if (overlay == Overlay.Usage) overlay = Overlay.None },
+            onRefresh = ::readUsage,
+            onCompact = ::openCompact,
         )
 
         ConfirmDialog(
@@ -893,6 +978,9 @@ private fun ConversationScreen(
     }
 }
 
+/** The one floating layer above the transcript; [None] when the conversation has the stage. */
+private enum class Overlay { None, Menu, Picker, History, Compact, Usage }
+
 /** Following tolerance: a hair above the newest row still counts as reading the latest. */
 private val FOLLOW_SLACK = 24.dp
 
@@ -972,8 +1060,6 @@ private fun ConversationHeader(
     onBack: () -> Unit,
     onMore: () -> Unit,
     onModel: () -> Unit,
-    onHistory: (() -> Unit)?,
-    historyEnabled: Boolean,
     pickerOpen: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -1029,11 +1115,6 @@ private fun ConversationHeader(
                 }
                 GlyphIcon(Glyph.Chevron, p.inkSoft, 16.dp, Modifier.padding(start = 6.dp).graphicsLayer { rotationZ = chevron })
             }
-            if (onHistory != null) {
-                Text("历史", style = LabelStyle.copy(color = if (historyEnabled) p.accentInk else p.inkSoft),
-                    modifier = Modifier.clip(look.pill()).clickable(enabled = historyEnabled, onClick = onHistory)
-                        .padding(horizontal = 10.dp, vertical = 12.dp).testTag("conversation-history"))
-            }
             GlassCircleButton(Glyph.More, p, backdrop, "conversation-more", onClick = onMore)
         }
     }
@@ -1066,43 +1147,6 @@ private fun ConnectionCapsule(phase: LinkPhase, p: ConversationPalette, backdrop
                 .padding(horizontal = 12.dp, vertical = 6.dp)
                 .testTag(if (ended) "conversation-open-terminal" else "conversation-reconnect"),
         )
-    }
-}
-
-@Composable
-private fun HeaderMenu(
-    open: Boolean,
-    p: ConversationPalette,
-    backdrop: Backdrop,
-    topPx: () -> Int,
-    onDismiss: () -> Unit,
-    onTerminal: () -> Unit,
-    onCompact: () -> Unit,
-    onNewSession: () -> Unit,
-    enabled: Boolean,
-) {
-    if (open) {
-        Box(Modifier.fillMaxSize().zIndex(5f).pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) })
-    }
-    Box(Modifier.fillMaxSize().zIndex(6f), contentAlignment = Alignment.TopEnd) {
-        AnimatedVisibility(
-            visible = open,
-            enter = fadeIn(tween(120)) + scaleIn(spring(dampingRatio = 0.8f, stiffness = 600f), 0.9f, androidx.compose.ui.graphics.TransformOrigin(1f, 0f)),
-            exit = fadeOut(tween(100)) + scaleOut(tween(120), 0.95f, androidx.compose.ui.graphics.TransformOrigin(1f, 0f)),
-            modifier = Modifier.offset { IntOffset(0, topPx()) }.padding(end = 12.dp),
-        ) {
-            Column(
-                Modifier
-                    .widthIn(min = 210.dp)
-                    .panelSurface(LocalConversationLook.current, backdrop, 20.dp, p)
-                    .padding(6.dp)
-                    .testTag("conversation-menu"),
-            ) {
-                MenuRow(Glyph.Terminal, "切换到终端", "同一面板运行对应 CLI 的原生终端", p, enabled, "conversation-menu-terminal", onTerminal)
-                MenuRow(Glyph.Refresh, "压缩上下文", "/compact", p, enabled, "conversation-menu-compact", onCompact)
-                MenuRow(Glyph.Spark, "开始新会话", "/new", p, enabled, "conversation-menu-new", onNewSession)
-            }
-        }
     }
 }
 
@@ -1164,25 +1208,6 @@ private fun ConfirmDialog(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun MenuRow(glyph: Glyph, title: String, detail: String, p: ConversationPalette, enabled: Boolean, tag: String, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(LocalConversationLook.current.shape(14.dp))
-            .clickable(enabled = enabled, interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 9.dp)
-            .testTag(tag),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        GlyphIcon(glyph, if (enabled) p.accentInk else p.inkSoft, 18.dp)
-        Column(Modifier.padding(start = 12.dp)) {
-            Text(title, style = LabelStyle.copy(color = if (enabled) p.ink else p.inkSoft, fontSize = 14.sp))
-            Text(detail, style = CaptionStyle.copy(color = p.inkSoft))
         }
     }
 }

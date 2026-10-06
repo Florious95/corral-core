@@ -16,6 +16,7 @@
 
 package dev.agentmirror.app.conversation
 
+import kotlin.math.roundToInt
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -107,6 +108,20 @@ data class Notice(
 /** A model the session can switch to (worker-projected get_available_models entry). */
 data class ModelChoice(val id: String, val name: String, val provider: String, val reasoning: Boolean)
 
+/**
+ * How the last compaction ended, as the agent reported it (Pi's compaction_end). [before] and
+ * [after] are Pi's own estimates; either may be absent. [seq] lets a caller tell a fresh outcome
+ * from one that predates its request.
+ */
+data class CompactionOutcome(val seq: Long, val before: Long?, val after: Long?, val error: String?, val aborted: Boolean)
+
+/** "估算减少约 67%" only when both estimates are comparable; never a fabricated saving. */
+internal fun compactionDelta(before: Long?, after: Long?): String? = when {
+    before == null || after == null || before <= 0 -> null
+    after >= before -> "估算未减少"
+    else -> "估算减少约 ${((before - after) * 100.0 / before).roundToInt()}%"
+}
+
 data class RetryStatus(val attempt: Int, val maxAttempts: Int, val delayMs: Long, val reason: String, val since: Long)
 
 /** The message currently streaming; [blocks] maps contentIndex → item key. */
@@ -121,6 +136,7 @@ data class ConversationState(
     val items: List<ConversationItem> = emptyList(),
     val running: Boolean = false,
     val compacting: Boolean = false,
+    val compaction: CompactionOutcome? = null,
     val retry: RetryStatus? = null,
     val queued: Int = 0,
     val model: String? = null,
@@ -454,20 +470,22 @@ data class ConversationState(
     }
 
     private fun compactionEnd(seq: Long, e: JsonObject): ConversationState {
-        val done = copy(compacting = false)
         val result = e.obj("result")
+        val before = result?.long("tokensBefore")
+        val after = result?.long("estimatedTokensAfter")
+        val aborted = result == null && e.bool("aborted") == true
+        val error = if (result == null && !aborted) e.str("errorMessage").ifBlank { "Agent 未说明原因" } else null
+        val done = copy(compacting = false, compaction = CompactionOutcome(seq, before, after, error, aborted))
         return when {
-            result != null -> {
-                val before = result.long("tokensBefore")
-                val after = result.long("estimatedTokensAfter")
-                done.notice(
-                    seq,
-                    NoticeTone.Divider,
-                    "上下文已压缩",
-                    if (before != null && after != null) "${tokens(before)} → ${tokens(after)} tokens" else null,
-                )
-            }
-            e.bool("aborted") == true -> done
+            result != null -> done.notice(
+                seq,
+                NoticeTone.Divider,
+                "上下文已压缩",
+                if (before != null && after != null) {
+                    listOfNotNull("${tokens(before)} → ${tokens(after)} tokens", compactionDelta(before, after)).joinToString(" · ")
+                } else null,
+            )
+            aborted -> done
             else -> done.notice(seq, NoticeTone.Error, "压缩失败", e.str("errorMessage").ifBlank { null })
         }
     }
