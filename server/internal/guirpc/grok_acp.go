@@ -294,12 +294,13 @@ func (g *grokACP) thinkingLocked() (string, []string) {
 
 func (g *grokACP) Write(raw []byte) (int, error) {
 	var c struct {
-		ID      string            `json:"id"`
-		Type    string            `json:"type"`
-		Message string            `json:"message"`
-		Model   string            `json:"modelId"`
-		Level   string            `json:"level"`
-		Images  []json.RawMessage `json:"images"`
+		ID           string            `json:"id"`
+		Type         string            `json:"type"`
+		Message      string            `json:"message"`
+		Model        string            `json:"modelId"`
+		Level        string            `json:"level"`
+		Images       []json.RawMessage `json:"images"`
+		Instructions *string           `json:"customInstructions"`
 	}
 	if json.Unmarshal(raw, &c) != nil {
 		return 0, errors.New("invalid conversation command")
@@ -312,11 +313,11 @@ func (g *grokACP) Write(raw []byte) (int, error) {
 	}
 	g.mu.Lock()
 	sid := g.session
-	level, levels := g.thinkingLocked()
+	_, levels := g.thinkingLocked()
 	var data any
 	switch c.Type {
 	case "get_state":
-		data = map[string]any{"sessionId": sid, "agentProvider": "grok", "model": g.modelLocked(), "thinkingLevel": level, "isStreaming": g.running, "isCompacting": false, "pendingMessageCount": g.queued}
+		data = g.stateLocked()
 	case "get_available_models":
 		models := make([]modelSummary, 0, len(g.models.Available))
 		for _, m := range g.models.Available {
@@ -384,6 +385,10 @@ func (g *grokACP) Write(raw []byte) (int, error) {
 		return len(raw), nil
 	}
 	if c.Type == "compact" {
+		if c.Instructions != nil && strings.TrimSpace(*c.Instructions) != "" {
+			g.mu.Unlock()
+			return 0, errors.New("Grok 原生 /compact 尚未确认自定义指令，未提交或丢弃指令")
+		}
 		c.Message = "/compact"
 	}
 	if c.Type == "prompt" || c.Type == "compact" {
@@ -422,6 +427,25 @@ func (g *grokACP) Write(raw []byte) (int, error) {
 				}
 				_ = json.Unmarshal(result, &r)
 				stop = r.Stop
+			}
+			if c.Type == "compact" {
+				var feedback strings.Builder
+				for _, text := range g.texts {
+					if text != nil {
+						feedback.WriteString(text.String())
+					}
+				}
+				end := map[string]any{"type": "compaction_end", "reason": "manual", "aborted": stop == "cancelled", "willRetry": false}
+				if stop == "cancelled" {
+					// No result: the common reducer must retain the cancelled outcome.
+				} else if err != nil || stop == "error" || stop == "" {
+					end["errorMessage"] = "Grok 原生压缩未完成，请核对会话"
+				} else {
+					// Slash completion can be a native no-op. Report its feedback,
+					// never assert a measured/context-changing compression.
+					end["result"] = map[string]any{"summary": clipSessionText(feedback.String(), 1600), "commandOnly": true}
+				}
+				g.publish(end)
 			}
 			g.finishMessageLocked(stop)
 			g.promptID, g.promptText, g.promptCommand = "", "", ""
@@ -518,6 +542,11 @@ func (g *grokACP) admitLocked() {
 	}
 	g.admitted = true
 	g.running = true
+	if g.promptCommand == "compact" {
+		g.publish(map[string]any{"type": "compaction_start", "reason": "manual"})
+		g.response(g.promptID, g.promptCommand, nil, nil) // admission, not completion
+		return
+	}
 	message := map[string]any{"role": "user", "content": []any{map[string]any{"type": "text", "text": g.promptText}}}
 	g.publish(map[string]any{"type": "message_start", "message": message})
 	g.publish(map[string]any{"type": "message_end", "message": message})

@@ -217,7 +217,10 @@ private fun CompactResult(outcome: CompactionOutcome, p: ConversationPalette) {
         outcome.aborted -> SheetCallout(Glyph.Stop, "压缩已取消，上下文保持原样。", p.warning, p, Modifier.padding(top = 6.dp), tag = "conversation-compact-aborted")
         outcome.error != null -> SheetCallout(Glyph.Cross, "压缩失败：${outcome.error}", p.danger, p, Modifier.padding(top = 6.dp), tag = "conversation-compact-failed")
         else -> Column(Modifier.padding(top = 6.dp).testTag("conversation-compact-done-result")) {
-            SheetCallout(Glyph.Check, "上下文已压缩，聊天记录完整保留。", p.success, p)
+            SheetCallout(Glyph.Check, if (outcome.commandOnly) "原生压缩命令已完成；是否需要压缩以原生反馈为准。" else "上下文已压缩，聊天记录完整保留。", p.success, p)
+            if (outcome.feedback != null) {
+                Text(outcome.feedback, style = BodyStyle.copy(color = p.inkSoft, fontSize = 13.sp, lineHeight = 19.sp), modifier = Modifier.padding(top = 10.dp).testTag("conversation-compact-native-feedback"))
+            }
             val delta = compactionDelta(outcome.before, outcome.after)
             if (outcome.before != null && outcome.after != null) {
                 Column(Modifier.padding(top = 12.dp)) {

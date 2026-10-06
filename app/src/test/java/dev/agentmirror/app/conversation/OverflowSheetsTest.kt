@@ -90,6 +90,19 @@ class OverflowSheetsTest {
         assertNull(aborted.error)
     }
 
+    @Test
+    fun nativeSlashCompletionShowsFeedbackWithoutPromisingCompression() {
+        val state = ConversationState()
+            .apply(1, 1, json("""{"type":"compaction_start"}"""))
+            .apply(2, 2, json("""{"type":"compaction_end","result":{"commandOnly":true,"summary":"No compaction needed"}}"""))
+        assertFalse(state.compacting)
+        assertTrue(state.compaction!!.commandOnly)
+        assertEquals("No compaction needed", state.compaction!!.feedback)
+        assertNull(state.compaction!!.before)
+        assertEquals("原生压缩命令已完成", state.items.filterIsInstance<Notice>().single().title)
+        assertEquals("No compaction needed", state.items.filterIsInstance<Notice>().single().detail)
+    }
+
     // ---- usage ----
 
     @Test

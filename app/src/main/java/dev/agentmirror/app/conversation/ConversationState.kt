@@ -113,7 +113,7 @@ data class ModelChoice(val id: String, val name: String, val provider: String, v
  * [after] are Pi's own estimates; either may be absent. [seq] lets a caller tell a fresh outcome
  * from one that predates its request.
  */
-data class CompactionOutcome(val seq: Long, val before: Long?, val after: Long?, val error: String?, val aborted: Boolean)
+data class CompactionOutcome(val seq: Long, val before: Long?, val after: Long?, val error: String?, val aborted: Boolean, val commandOnly: Boolean = false, val feedback: String? = null)
 
 /** "估算减少约 67%" only when both estimates are comparable; never a fabricated saving. */
 internal fun compactionDelta(before: Long?, after: Long?): String? = when {
@@ -475,13 +475,15 @@ data class ConversationState(
         val after = result?.long("estimatedTokensAfter")
         val aborted = result == null && e.bool("aborted") == true
         val error = if (result == null && !aborted) e.str("errorMessage").ifBlank { "Agent 未说明原因" } else null
-        val done = copy(compacting = false, compaction = CompactionOutcome(seq, before, after, error, aborted))
+        val commandOnly = result?.bool("commandOnly") == true
+        val feedback = result?.str("summary")?.takeIf { commandOnly && it.isNotBlank() }?.take(1600)
+        val done = copy(compacting = false, compaction = CompactionOutcome(seq, before, after, error, aborted, commandOnly, feedback))
         return when {
             result != null -> done.notice(
                 seq,
                 NoticeTone.Divider,
-                "上下文已压缩",
-                if (before != null && after != null) {
+                if (commandOnly) "原生压缩命令已完成" else "上下文已压缩",
+                if (commandOnly) feedback else if (before != null && after != null) {
                     listOfNotNull("${tokens(before)} → ${tokens(after)} tokens", compactionDelta(before, after)).joinToString(" · ")
                 } else null,
             )
