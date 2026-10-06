@@ -20,7 +20,7 @@ class OverflowSheetsTest {
         val pi = resolveActions("pi", connected = true, restoring = false, compacting = false)
         assertEquals(ConversationAction.History, pi.first().action)
         assertEquals(
-            listOf(ConversationAction.History, ConversationAction.Compact, ConversationAction.NewSession, ConversationAction.Fork, ConversationAction.Clone, ConversationAction.Rewind, ConversationAction.Export, ConversationAction.Usage, ConversationAction.Terminal),
+            listOf(ConversationAction.History, ConversationAction.Compact, ConversationAction.NewSession, ConversationAction.Rename, ConversationAction.Fork, ConversationAction.Clone, ConversationAction.Rewind, ConversationAction.Export, ConversationAction.Usage, ConversationAction.Terminal),
             pi.map { it.action },
         )
         assertTrue(pi.filterNot { it.action == ConversationAction.Rewind }.all { it.enabled })

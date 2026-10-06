@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -238,7 +239,7 @@ func (c *wsConn) handleConversationCommand(cmd protocol.ConversationCommand) {
 		c.rejectConversationCommand(cmd, kind, reason)
 		return
 	}
-	if kind == "list_sessions" || kind == "resume_session" || kind == "fork_points" || kind == "rewind_points" || kind == "fork_session" || kind == "clone_session" || kind == "rewind_session" || kind == "new_session" {
+	if kind == "list_sessions" || kind == "resume_session" || kind == "fork_points" || kind == "rewind_points" || kind == "fork_session" || kind == "clone_session" || kind == "rewind_session" || kind == "rename_session" || kind == "new_session" {
 		c.handleConversationHistoryCommand(cmd, kind, forwarded)
 		return
 	}
@@ -314,6 +315,12 @@ func (s *Server) conversationCommand(id string, raw json.RawMessage) (string, []
 			clean["pointId"] = command["pointId"]
 		}
 		command = clean
+	case "rename_session":
+		var name string
+		if json.Unmarshal(command["name"], &name) != nil || strings.TrimSpace(name) == "" || len([]rune(name)) > 160 {
+			return kind, nil, "name must contain 1 to 160 characters"
+		}
+		command = map[string]json.RawMessage{"type": command["type"], "name": command["name"]}
 	case "interaction_reply":
 		var request string
 		if json.Unmarshal(command["requestId"], &request) != nil || len(request) != 32 {

@@ -516,6 +516,10 @@ data class ConversationState(
                     running = if (data.bool("isStreaming") == true) true else running,
                 )
             }
+            "rename_session" -> {
+                val data = e.obj("data") ?: return this
+                if (ok && data.str("session_id") == sessionId) copy(sessionName = data.str("sessionName").ifBlank { null }) else this
+            }
             "set_model" -> if (ok) e.obj("data")?.let(::withModel) ?: this else this
             "get_available_models" -> if (!ok) this else copy(
                 models = e.obj("data")?.arr("models").orEmpty().mapNotNull { m ->

@@ -92,6 +92,7 @@ internal enum class ConversationAction(val glyph: Glyph, val title: String, val 
     History(Glyph.History, "历史会话", null, 0, "conversation-menu-history"),
     Compact(Glyph.Compress, "压缩上下文", "/compact", 1, "conversation-menu-compact"),
     NewSession(Glyph.NewChat, "开始新会话", "/new", 1, "conversation-menu-new"),
+    Rename(Glyph.File, "重命名会话", null, 1, "conversation-menu-rename"),
     Fork(Glyph.NewChat, "从消息分叉", null, 1, "conversation-menu-fork"),
     Clone(Glyph.NewChat, "克隆当前会话", null, 1, "conversation-menu-clone"),
     Rewind(Glyph.History, "回滚轮次", null, 1, "conversation-menu-rewind"),
@@ -125,6 +126,7 @@ internal fun resolveActions(provider: String, connected: Boolean, restoring: Boo
                 else -> ResolvedAction(action, offline ?: if (can.compactInstructions) "可指定保留重点" else "整理模型上下文", offline == null)
             }
             ConversationAction.NewSession -> ResolvedAction(action, offline ?: "当前会话保存在历史中", offline == null)
+            ConversationAction.Rename -> ResolvedAction(action, offline ?: "原生标题同步到历史与页眉", offline == null && provider in setOf("pi", "grok"))
             ConversationAction.Fork -> ResolvedAction(action, offline ?: if (provider == "pi") "选择用户消息，新上下文停在它之前" else "Grok 仅证实完整克隆，不伪造节点分叉", offline == null && provider == "pi")
             ConversationAction.Clone -> if (provider !in setOf("pi", "grok")) null else ResolvedAction(action, offline ?: "复制完整当前上下文，原会话保持不变", offline == null)
             ConversationAction.Rewind -> ResolvedAction(action, offline ?: if (provider == "grok") "原生回滚未取得成功闭包，不伪造截断" else "Pi RPC 没有原生回滚；可使用分叉", false)

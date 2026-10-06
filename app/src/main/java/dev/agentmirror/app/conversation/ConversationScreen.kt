@@ -265,6 +265,7 @@ private fun ConversationScreen(
     var mutationConsent by remember(ref) { mutableStateOf<Pair<String, NativePoint?>?>(null) }
     var mutationForce by remember(ref) { mutableStateOf(false) }
     var mutationDraft by remember(ref) { mutableStateOf<String?>(null) }
+    var renameOpen by remember(ref) { mutableStateOf(false) }
     var editorApplied by remember(ref) { mutableStateOf(0L) }
     LaunchedEffect(state.extensionEditor) {
         state.extensionEditor?.let { (seq, text) -> if (seq > editorApplied) {
@@ -691,6 +692,7 @@ private fun ConversationScreen(
             ConversationAction.History -> loadHistory()
             ConversationAction.Compact -> openCompact()
             ConversationAction.NewSession -> mutate("new_session", null, false)
+            ConversationAction.Rename -> renameOpen = true
             ConversationAction.Fork -> loadPoints(false)
             ConversationAction.Rewind -> loadPoints(true)
             ConversationAction.Clone -> { mutationConsent = "clone_session" to null; mutationForce = false }
@@ -906,6 +908,7 @@ private fun ConversationScreen(
                 "new", "clear" -> { mutationConsent = "new_session" to null; mutationForce = false }
                 "fork" -> { mutationConsent = "clone_session" to null; mutationForce = false }
                 "rewind", "undo" -> { overlay = Overlay.None; toast = "Grok 原生回滚尚未取得成功闭包，未提交或伪造截断" }
+                "rename", "title" -> { overlay = Overlay.None; renameOpen = true }
                 else -> return@NativeTasksSheet false
             }
             true
@@ -914,6 +917,9 @@ private fun ConversationScreen(
             if (mutationForce) "确认停止当前任务" else if (kind == "rewind_session") "确认回滚轮次" else "确认创建分支会话",
             (if (mutationForce) "将停止当前任务与排队输入。\n" else "") + if (kind == "rewind_session") "只回滚对话，不还原文件；原生失败将明确显示。" else "原会话保持不变。现有草稿与附件保留；原生返回文本追加到草稿，不自动发送。",
             p, { mutationConsent = null }) { mutate(kind, point, mutationForce) } }
+        if (renameOpen) RenameSessionDialog(state.sessionName.orEmpty(), p, { renameOpen = false }) { title, callback ->
+            hub.control(ref, buildJsonObject { put("type", "rename_session"); put("name", title) }, callback)
+        }
         SessionHistoryPicker(
             open = overlay == Overlay.History,
             choices = historyChoices,

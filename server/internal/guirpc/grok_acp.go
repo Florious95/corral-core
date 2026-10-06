@@ -619,6 +619,33 @@ func (g *grokACP) ingest(raw []byte) {
 	if params.Session == "" || params.Session != g.session {
 		return
 	}
+	if r.Method == "session/update" || r.Method == "_x.ai/session_notification" {
+		var title struct {
+			Kind    string `json:"sessionUpdate"`
+			Title   string `json:"title"`
+			Summary string `json:"session_summary"`
+		}
+		if json.Unmarshal(params.Update, &title) == nil && (title.Kind == "session_info_update" || title.Kind == "session_summary_generated") {
+			name := title.Title
+			if title.Kind == "session_summary_generated" {
+				name = title.Summary
+			}
+			if name != "" && g.sessionName != name {
+				g.sessionName = clipSessionText(name, 160)
+				event := map[string]any{"type": "session_info_changed", "sessionId": g.session, "name": g.sessionName}
+				var native struct {
+					Meta struct {
+						Manual *bool `json:"x.ai/titleIsManual"`
+					} `json:"_meta"`
+				}
+				if json.Unmarshal(r.Params, &native) == nil && native.Meta.Manual != nil {
+					event["titleIsManual"] = *native.Meta.Manual
+				}
+				g.publish(event)
+			}
+			return
+		}
+	}
 	if r.Method == "_x.ai/queue/changed" {
 		var queue struct {
 			Running string            `json:"runningPromptId"`

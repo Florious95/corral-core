@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/agentmirror/agentmirror/internal/discovery"
@@ -59,13 +60,17 @@ func (s *session) operationContext(parent context.Context, command map[string]js
 	if !current {
 		return nil, errors.New("历史已切换，旧操作未提交")
 	}
-	var kind, token string
+	var kind, name, token string
 	var force bool
 	_ = json.Unmarshal(command["type"], &kind)
+	_ = json.Unmarshal(command["name"], &name)
 	_ = json.Unmarshal(command["pointId"], &token)
 	_ = json.Unmarshal(command["force"], &force)
 	if kind == "fork_points" || kind == "rewind_points" {
 		return s.points(ctx, kind)
+	}
+	if kind == "rename_session" {
+		return s.rename(ctx, name)
 	}
 	if err := s.stopForMutation(ctx, force); err != nil {
 		return map[string]any{"busy": errors.Is(err, errMutationBusy)}, err
@@ -384,4 +389,74 @@ func (s *session) mutateGrok(ctx context.Context, kind, token string) (map[strin
 		return data, err
 	}
 	return nil, errors.New("Grok 未确认按消息节点分叉；仅支持完整克隆")
+}
+
+func (s *session) rename(ctx context.Context, name string) (map[string]any, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > 640 {
+		return nil, errors.New("标题不能为空或超过160个字符")
+	}
+	if s.process.Provider == "grok" {
+		g, _, err := s.verifiedGrok(ctx)
+		if err != nil {
+			return nil, err
+		}
+		g.mu.Lock()
+		sid := g.session
+		g.mu.Unlock()
+		raw, err := g.request(ctx, "_x.ai/session/rename", map[string]any{"sessionId": sid, "title": name})
+		if err != nil {
+			return nil, err
+		}
+		var result struct {
+			Success *bool `json:"success"`
+		}
+		if json.Unmarshal(raw, &result) != nil || result.Success == nil || !*result.Success {
+			return nil, errors.New("Grok 未确认原生标题变更")
+		}
+		catalog, err := s.listGrokSessions(ctx)
+		if err != nil {
+			return nil, err
+		}
+		confirmed := false
+		for _, row := range catalog {
+			if row.ID == sid && row.Name == name {
+				confirmed = true
+				break
+			}
+		}
+		g.mu.Lock()
+		same := g.session == sid
+		if confirmed && same {
+			g.sessionName = name
+		}
+		g.mu.Unlock()
+		if !confirmed || !same {
+			return nil, errors.New("Grok 标题目录或会话身份未确认")
+		}
+		s.w.publishEvent(map[string]any{"type": "session_info_changed", "sessionId": sid, "name": name, "titleIsManual": true}, true)
+		return map[string]any{"session_id": sid, "sessionName": name}, nil
+	}
+	if _, err := s.verifiedPi(ctx); err != nil {
+		return nil, err
+	}
+	s.w.mu.Lock()
+	sid := s.w.sessionID
+	s.w.mu.Unlock()
+	if _, err := s.w.requestContext(ctx, map[string]any{"type": "set_session_name", "name": name}, switchReplyTimeout); err != nil {
+		return nil, err
+	}
+	state, err := s.w.requestContext(ctx, map[string]any{"type": "get_state"}, switchReplyTimeout)
+	if err != nil {
+		return nil, err
+	}
+	var actual struct {
+		ID   string `json:"sessionId"`
+		Name string `json:"sessionName"`
+	}
+	if json.Unmarshal(state, &actual) != nil || actual.ID != sid || actual.Name != name {
+		return nil, errors.New("原生标题或会话身份未确认")
+	}
+	s.w.publishEvent(map[string]any{"type": "session_info_changed", "sessionId": sid, "name": name}, true)
+	return map[string]any{"session_id": sid, "sessionName": name}, nil
 }
