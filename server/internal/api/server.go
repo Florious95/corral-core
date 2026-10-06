@@ -155,6 +155,7 @@ type Server struct {
 	agentLaunchers []agentLauncher
 	// Native Pi conversations are daemon-local bridges, not pane-owned IPC.
 	conversations guirpc.Transport
+	artifactSlots chan struct{} // bounded on-demand native generation/download
 
 	notifications *notify.Store
 }
@@ -205,6 +206,7 @@ func NewServer(opts Options) *Server {
 		listInterval:    opts.ListInterval,
 		uploadDir:       opts.UploadDir,
 		conversations:   opts.ConversationBridge,
+		artifactSlots:   make(chan struct{}, 4),
 		maxUpload:       opts.MaxUploadBytes,
 		maxUploadDir:    defaultMaxUploadDirBytes,
 		maxInput:        opts.MaxInputBytes,
@@ -334,6 +336,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", s.handleWS)
 	mux.HandleFunc("/upload", s.handleUpload)
+	mux.HandleFunc("/artifacts/", s.serveSessionExport)
 	mux.HandleFunc("/pair/whoami", s.serveWhoami)
 	mux.HandleFunc("/pair/identify", s.serveIdentify)
 	return mux

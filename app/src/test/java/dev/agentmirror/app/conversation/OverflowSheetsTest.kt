@@ -20,7 +20,7 @@ class OverflowSheetsTest {
         val pi = resolveActions("pi", connected = true, restoring = false, compacting = false)
         assertEquals(ConversationAction.History, pi.first().action)
         assertEquals(
-            listOf(ConversationAction.History, ConversationAction.Compact, ConversationAction.NewSession, ConversationAction.Usage, ConversationAction.Terminal),
+            listOf(ConversationAction.History, ConversationAction.Compact, ConversationAction.NewSession, ConversationAction.Export, ConversationAction.Usage, ConversationAction.Terminal),
             pi.map { it.action },
         )
         assertTrue(pi.all { it.enabled })
@@ -29,9 +29,10 @@ class OverflowSheetsTest {
         assertEquals(ConversationAction.History, grok.first().action)
         assertTrue("native list/load history is connected", grok.first().enabled)
         assertTrue(grok.any { it.action == ConversationAction.Usage && it.enabled })
+        assertTrue(grok.any { it.action == ConversationAction.Export && it.enabled })
         val unknown = resolveActions("unknown", connected = true, restoring = false, compacting = false)
         assertFalse("unsupported history stays visible with a reason", unknown.first().enabled)
-        assertFalse(unknown.any { it.action == ConversationAction.Usage })
+        assertFalse(unknown.any { it.action == ConversationAction.Usage || it.action == ConversationAction.Export })
         assertFalse(AgentAbilities.of("grok").compactInstructions)
     }
 

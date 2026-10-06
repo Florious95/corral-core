@@ -258,6 +258,7 @@ private fun ConversationScreen(
     var compactInstructions by remember(ref) { mutableStateOf("") }
     var usage by remember(ref) { mutableStateOf(UsageLoad()) }
     var usageGeneration by remember(ref) { mutableIntStateOf(0) }
+    var exporting by remember(ref) { mutableStateOf(false) }
     // Geometry is read at layout time only (list padding, overlay offsets): the dock rising or the
     // IME sliding re-measures, it never recomposes the screen.
     val headerPx = remember { mutableIntStateOf(0) }
@@ -600,6 +601,35 @@ private fun ConversationScreen(
             if (connected && !usage.unsupported && (settled || usage.snapshot == null)) readUsage()
         }
     }
+    fun exportSession() {
+        if (exporting) {
+            overlay = Overlay.Export
+            return
+        }
+        val sid = state.sessionId
+        val base = ServiceWire.uploadBaseUrl
+        val token = ServiceWire.currentConfig()?.token
+        if (sid.isNullOrBlank() || base.isNullOrBlank() || token.isNullOrBlank()) {
+            toast = "会话或配对身份未确认，未导出"
+            return
+        }
+        exporting = true
+        overlay = Overlay.Export
+        toast = "正在生成并下载会话导出…"
+        scope.launch {
+            try {
+                val artifact = withContext(Dispatchers.IO) { downloadSessionExport(context, base, token, ref, sid) }
+                if (overlay == Overlay.Export) overlay = Overlay.None
+                shareSessionExport(context, artifact.first, artifact.second)
+                toast = "导出已下载，系统分享已打开"
+            } catch (_: Exception) {
+                toast = "导出未完成，请确认主机已更新且会话仍在线后重试"
+            } finally {
+                exporting = false
+                if (overlay == Overlay.Export) overlay = Overlay.None
+            }
+        }
+    }
     fun runAction(action: ConversationAction) {
         // Re-resolved at click time: a row painted enabled a moment ago cannot act on stale state.
         val resolved = resolveActions(state.agentProvider, connected, historyRestoring, state.compacting).firstOrNull { it.action == action }
@@ -609,6 +639,7 @@ private fun ConversationScreen(
             ConversationAction.History -> loadHistory()
             ConversationAction.Compact -> openCompact()
             ConversationAction.NewSession -> hub.send(ref, "new_session") { ok, r -> if (!ok) toast = "新会话未创建：${r ?: "主机没有确认"}" }
+            ConversationAction.Export -> exportSession()
             ConversationAction.Usage -> openUsage()
             ConversationAction.Terminal -> if (inFlight) {
                 switchReason = null
@@ -851,6 +882,21 @@ private fun ConversationScreen(
             onReset = { compactRun = null },
         )
 
+        ConversationSheet(
+            open = overlay == Overlay.Export,
+            title = "导出会话",
+            eyebrow = "EXPORT",
+            subtitle = "Pi HTML / Grok Markdown · 下载完成后系统分享",
+            p = p,
+            backdrop = backdrop,
+            tag = "conversation-export-sheet",
+            closeTag = "conversation-export-close",
+            onDismiss = { if (overlay == Overlay.Export) overlay = Overlay.None },
+            footer = { SheetButton("收起", SheetButtonKind.Secondary, p, "conversation-export-hide", Modifier.fillMaxWidth()) { overlay = Overlay.None } },
+        ) {
+            SheetProgress("正在生成并下载原生会话文件…", "文件可能包含会话及工具输出，请仅分享给可信目标。", p, "conversation-export-progress")
+        }
+
         UsageSheet(
             open = overlay == Overlay.Usage,
             load = usage,
@@ -979,7 +1025,7 @@ private fun ConversationScreen(
 }
 
 /** The one floating layer above the transcript; [None] when the conversation has the stage. */
-private enum class Overlay { None, Menu, Picker, History, Compact, Usage }
+private enum class Overlay { None, Menu, Picker, History, Compact, Usage, Export }
 
 /** Following tolerance: a hair above the newest row still counts as reading the latest. */
 private val FOLLOW_SLACK = 24.dp

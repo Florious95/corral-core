@@ -66,19 +66,20 @@ import com.kyant.backdrop.Backdrop
 /**
  * What this client knows each agent's native bridge can do — one table instead of scattered
  * provider checks. Pi: catalogued history, get_session_stats, typed compact.customInstructions,
- * and compact aborts in-flight work itself. Grok: native list/load history and the bare
- * `/compact` command (refused while busy), plus native context/session-info stats.
+ * and compact aborts in-flight work itself. Grok: native list/load history and read-only
+ * context/session-info stats are mapped; compact stays the native bare `/compact` command.
  */
 internal data class AgentAbilities(
     val history: Boolean,
     val usage: Boolean,
     val compactInstructions: Boolean,
     val compactInterruptsWork: Boolean,
+    val export: Boolean = false,
 ) {
     companion object {
         fun of(provider: String) = when (provider) {
-            "pi" -> AgentAbilities(history = true, usage = true, compactInstructions = true, compactInterruptsWork = true)
-            "grok" -> AgentAbilities(history = true, usage = true, compactInstructions = false, compactInterruptsWork = false)
+            "pi" -> AgentAbilities(history = true, usage = true, compactInstructions = true, compactInterruptsWork = true, export = true)
+            "grok" -> AgentAbilities(history = true, usage = true, compactInstructions = false, compactInterruptsWork = false, export = true)
             else -> AgentAbilities(history = false, usage = false, compactInstructions = false, compactInterruptsWork = false)
         }
     }
@@ -89,6 +90,7 @@ internal enum class ConversationAction(val glyph: Glyph, val title: String, val 
     History(Glyph.History, "历史会话", null, 0, "conversation-menu-history"),
     Compact(Glyph.Compress, "压缩上下文", "/compact", 1, "conversation-menu-compact"),
     NewSession(Glyph.NewChat, "开始新会话", "/new", 1, "conversation-menu-new"),
+    Export(Glyph.File, "导出会话", null, 2, "conversation-menu-export"),
     Usage(Glyph.Gauge, "用量与上下文", null, 2, "conversation-menu-usage"),
     Terminal(Glyph.Terminal, "切换到终端", null, 3, "conversation-menu-terminal"),
 }
@@ -117,6 +119,7 @@ internal fun resolveActions(provider: String, connected: Boolean, restoring: Boo
                 else -> ResolvedAction(action, offline ?: if (can.compactInstructions) "可指定保留重点" else "整理模型上下文", offline == null)
             }
             ConversationAction.NewSession -> ResolvedAction(action, offline ?: "当前会话保存在历史中", offline == null)
+            ConversationAction.Export -> if (!can.export) null else ResolvedAction(action, offline ?: "下载并分享原生会话文件", offline == null)
             ConversationAction.Usage -> if (!can.usage) null else ResolvedAction(action, offline ?: "Token、费用与上下文占用", offline == null)
             ConversationAction.Terminal -> ResolvedAction(action, offline ?: "同一面板运行原生终端", offline == null)
         }

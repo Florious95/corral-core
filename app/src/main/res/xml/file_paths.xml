@@ -5,4 +5,5 @@
 -->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <files-path name="diag" path="diag/" />
+    <cache-path name="session_exports" path="session-exports/" />
 </paths>
