@@ -107,7 +107,14 @@ func TestReplayIsCompactedProjectionOfRealPiTurn(t *testing.T) {
 		case kind == "response" || kind == "turn_end" || kind == "agent_end":
 			t.Fatalf("%s is live-only and must not be replayed", kind)
 		case kind == "extension_ui_request":
-			t.Fatalf("status chrome must be dropped: %s", r.Event)
+			var status struct {
+				Method string `json:"method"`
+				Key    string `json:"statusKey"`
+				Text   string `json:"statusText"`
+			}
+			if json.Unmarshal(r.Event, &status) != nil || status.Method != "setStatus" || (status.Key != "codex-fast-mode" && status.Key != "codex-compact") || (status.Key == "codex-fast-mode" && status.Text != "off") {
+				t.Fatalf("unexpected extension chrome: %s", r.Event)
+			}
 		case kind == "message_update" && strings.HasSuffix(sub, "_start"):
 			starts++
 		case kind == "message_update":
@@ -261,6 +268,10 @@ func TestDialogRequestsAreCancelledNeverLeftWaiting(t *testing.T) {
 	stdin := &syncBuffer{}
 	w := newWorker(stdin)
 	w.ingest([]byte(`{"type":"extension_ui_request","id":"d1","method":"confirm","title":"Allow?"}`))
+	deadline := time.Now().Add(time.Second)
+	for stdin.String() == "" && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
 	if !strings.Contains(stdin.String(), `"cancelled":true`) || !strings.Contains(stdin.String(), `"id":"d1"`) {
 		t.Fatalf("dialog not cancelled: %q", stdin.String())
 	}

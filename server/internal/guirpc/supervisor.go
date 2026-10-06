@@ -472,6 +472,13 @@ func (s *session) ingest(raw []byte) {
 			}
 		}
 	}
+	if h.Type == "extension_ui_request" {
+		switch h.Method {
+		case "confirm", "select", "input", "editor", "permission":
+			s.w.ingest(raw)
+			return
+		}
+	}
 	if h.Type == "response" && len(h.ID) >= len(internalID) && h.ID[:len(internalID)] == internalID {
 		s.w.ingest(raw)
 		return

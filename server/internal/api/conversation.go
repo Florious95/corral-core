@@ -298,6 +298,29 @@ func (s *Server) conversationCommand(id string, raw json.RawMessage) (string, []
 		}
 		forceJSON, _ := json.Marshal(force)
 		command = map[string]json.RawMessage{"type": command["type"], "sessionId": command["sessionId"], "force": forceJSON}
+	case "interaction_reply":
+		var request string
+		if json.Unmarshal(command["requestId"], &request) != nil || len(request) != 32 {
+			return kind, nil, "requestId is missing or malformed"
+		}
+		clean := map[string]json.RawMessage{"type": command["type"], "requestId": command["requestId"]}
+		for _, key := range []string{"cancelled", "confirmed", "confirmPermanent"} {
+			if v := command[key]; v != nil {
+				var b bool
+				if json.Unmarshal(v, &b) != nil {
+					return kind, nil, "decision flag must be a boolean"
+				}
+				clean[key] = v
+			}
+		}
+		if v := command["value"]; v != nil {
+			var value string
+			if json.Unmarshal(v, &value) != nil || len(value) > 200000 {
+				return kind, nil, "interaction value is too long"
+			}
+			clean["value"] = v
+		}
+		command = clean
 	case "set_model":
 		// Only a model Pi already lists can be named; Pi itself checks the provider's auth.
 		var provider, modelID string

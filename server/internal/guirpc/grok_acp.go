@@ -65,6 +65,7 @@ type grokACP struct {
 	next                                uint64
 	pending                             map[string]*acpPending
 	session                             string
+	permissions                         map[string]grokPermission
 	cwd                                 string
 	remember                            func(string) error
 	sessionChanging                     bool
@@ -87,7 +88,7 @@ type grokACP struct {
 }
 
 func newGrokACP(ctx context.Context, write func([]byte) error, emit func([]byte), lost func()) *grokACP {
-	return &grokACP{ctx: ctx, write: write, emit: emit, lost: lost, prefix: "corral:" + newStreamID() + ":", pending: make(map[string]*acpPending), toolBlocks: make(map[string]int), toolBytes: make(map[string]int)}
+	return &grokACP{ctx: ctx, write: write, emit: emit, lost: lost, prefix: "corral:" + newStreamID() + ":", pending: make(map[string]*acpPending), permissions: make(map[string]grokPermission), toolBlocks: make(map[string]int), toolBytes: make(map[string]int)}
 }
 
 func (g *grokACP) publish(event map[string]any) {
@@ -306,6 +307,12 @@ func (g *grokACP) Write(raw []byte) (int, error) {
 	if json.Unmarshal(raw, &c) != nil {
 		return 0, errors.New("invalid conversation command")
 	}
+	if c.Type == "extension_ui_response" {
+		if err := g.permissionReply(raw); err != nil {
+			return 0, err
+		}
+		return len(raw), nil
+	}
 	if c.Type == "get_session_stats" {
 		if err := g.readStats(c.ID); err != nil {
 			return 0, err
@@ -466,6 +473,7 @@ func (g *grokACP) Write(raw []byte) (int, error) {
 	}
 	if c.Type == "abort" {
 		g.mu.Unlock()
+		g.cancelPermissions()
 		err := g.wire(map[string]any{"jsonrpc": "2.0", "method": "session/cancel", "params": map[string]any{"sessionId": sid}})
 		g.response(c.ID, c.Type, nil, err)
 		return len(raw), nil
@@ -592,8 +600,7 @@ func (g *grokACP) ingest(raw []byte) {
 	}
 	if len(r.ID) > 0 {
 		if r.Method == "session/request_permission" {
-			_ = g.wire(map[string]any{"jsonrpc": "2.0", "id": r.ID, "result": map[string]any{"outcome": map[string]any{"outcome": "cancelled"}}})
-			g.publish(map[string]any{"type": "extension_ui_request", "method": "notify", "message": "Grok 工具审批未执行：当前 GUI 不支持审批，已明确取消"})
+			g.permission(r.ID, r.Params)
 		} else {
 			_ = g.wire(map[string]any{"jsonrpc": "2.0", "id": r.ID, "error": map[string]any{"code": -32601, "message": "Client capability not supported"}})
 		}

@@ -152,6 +152,9 @@ data class ConversationState(
     val thinkingLevel: String? = null,
     val sessionName: String? = null,
     val sessionId: String? = null,
+ val interactions: List<NativeInteraction> = emptyList(),
+ val extensionEditor: Pair<Long, String>? = null,
+ val extensionTitle: String? = null,
     val historyTruncated: Boolean = false,
     val historyLoadedItems: Int? = null,
     val historyContentClipped: Boolean = false,
@@ -233,14 +236,16 @@ data class ConversationState(
                 },
                 e.str("message").ifBlank { "扩展提示" },
             )
-            "confirm", "select", "input", "editor" -> notice(
-                seq,
-                NoticeTone.Warning,
-                "扩展请求了确认",
-                "「${e.str("title").ifBlank { method }}」需要在终端中作答，这里已安全取消。",
-            )
+            "confirm", "select", "input", "editor", "permission" -> nativeInteraction(e)?.let { request ->
+                if (request.sessionId != sessionId && sessionId != null) this else copy(interactions = (interactions.filterNot { it.id == request.id } + request).takeLast(16))
+            } ?: this
+            "setStatus" -> extensionNotice(e.str("statusKey"), e.str("statusText"))
+            "setWidget" -> extensionNotice(e.str("widgetKey"), e.arr("widgetLines").orEmpty().joinToString("\n") { (it as? JsonPrimitive)?.contentOrNull.orEmpty() })
+            "setTitle" -> copy(extensionTitle = e.str("title").take(640).ifBlank { null })
+            "set_editor_text" -> copy(extensionEditor = seq to e.str("text").take(200000))
             else -> this
         }
+        "interaction_resolved" -> copy(interactions = interactions.filterNot { it.id == e.str("id") }).notice(seq, NoticeTone.Info, e.str("reason"))
         "extension_error" -> notice(seq, NoticeTone.Error, "扩展出错", e.str("error").ifBlank { null })
         "session_info_changed" -> copy(sessionName = e.str("name").ifBlank { null })
         "thinking_level_changed" -> copy(thinkingLevel = e.str("level").ifBlank { null })
@@ -530,6 +535,10 @@ data class ConversationState(
             else -> this
         }
     }
+
+    private fun extensionNotice(key: String, text: String): ConversationState = copy(
+        items = bounded(items.filterNot { it.key == "extension:${key.take(160)}" } + if (text.isBlank()) emptyList() else listOf(Notice("extension:${key.take(160)}", NoticeTone.Info, text.take(1600)))),
+    )
 
     private fun withModel(model: JsonObject): ConversationState = copy(
         model = model.str("name").ifBlank { model.str("id") }.ifBlank { null } ?: this.model,

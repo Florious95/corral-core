@@ -113,7 +113,8 @@ type worker struct {
 	waiters map[string]chan []byte
 	reqSeq  uint64
 	// onSwitch performs a client's switch_mode; set by the supervisor.
-	onSwitch func(target string, force bool) (map[string]any, error)
+	onSwitch     func(target string, force bool) (map[string]any, error)
+	interactions map[string]*interaction
 
 	inputMu   sync.Mutex
 	stdin     io.Writer
@@ -122,16 +123,17 @@ type worker struct {
 
 func newWorker(stdin io.Writer) *worker {
 	return &worker{
-		stream:    newStreamID(),
-		done:      make(chan struct{}),
-		pending:   make(map[string]*pendingUpdate),
-		lastTool:  make(map[string]time.Time),
-		clients:   make(map[*client]struct{}),
-		now:       time.Now,
-		onRunning: func(bool) {},
-		stdin:     stdin,
-		mode:      ModeRPC,
-		waiters:   make(map[string]chan []byte),
+		stream:       newStreamID(),
+		done:         make(chan struct{}),
+		pending:      make(map[string]*pendingUpdate),
+		lastTool:     make(map[string]time.Time),
+		clients:      make(map[*client]struct{}),
+		now:          time.Now,
+		onRunning:    func(bool) {},
+		stdin:        stdin,
+		mode:         ModeRPC,
+		waiters:      make(map[string]chan []byte),
+		interactions: make(map[string]*interaction),
 	}
 }
 
@@ -266,6 +268,7 @@ func (w *worker) shutdown() {
 	w.closeOnce.Do(func() { close(w.done) })
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	w.cancelInteractionsLocked("连接已关闭，已安全取消")
 	for key, p := range w.pending {
 		p.timer.Stop()
 		delete(w.pending, key)
@@ -276,18 +279,34 @@ func (w *worker) shutdown() {
 	}
 }
 
+// Extension dialogs use message:string, while turn records use an object.
+type routingMessage struct {
+	Role string `json:"role"`
+}
+
+func (m *routingMessage) UnmarshalJSON(raw []byte) error {
+	var fields struct {
+		Role string `json:"role"`
+	}
+	if len(raw) > 0 && raw[0] == '{' {
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return err
+		}
+		m.Role = fields.Role
+	}
+	return nil
+}
+
 // header is the routing subset of one agent record.
 type header struct {
-	Type       string `json:"type"`
-	ToolCallID string `json:"toolCallId"`
-	Command    string `json:"command"`
-	Success    *bool  `json:"success"`
-	Method     string `json:"method"`
-	ID         string `json:"id"`
-	Message    *struct {
-		Role string `json:"role"`
-	} `json:"message"`
-	Update *struct {
+	Type       string          `json:"type"`
+	ToolCallID string          `json:"toolCallId"`
+	Command    string          `json:"command"`
+	Success    *bool           `json:"success"`
+	Method     string          `json:"method"`
+	ID         string          `json:"id"`
+	Message    *routingMessage `json:"message"`
+	Update     *struct {
 		Type string `json:"type"`
 	} `json:"assistantMessageEvent"`
 	Data *struct {
@@ -304,6 +323,20 @@ func (w *worker) ingest(raw []byte) {
 		return
 	}
 	if h.Type == "response" && (h.Command == "get_state" || h.Command == "get_session_stats") {
+		if !strings.HasPrefix(h.ID, internalID) {
+			var response struct {
+				Data struct {
+					ID string `json:"sessionId"`
+				} `json:"data"`
+			}
+			_ = json.Unmarshal(raw, &response)
+			w.mu.Lock()
+			stale := w.sessionID != "" && response.Data.ID != "" && response.Data.ID != w.sessionID
+			w.mu.Unlock()
+			if stale {
+				return
+			}
+		}
 		w.noteSession(raw)
 	}
 	if h.Type == "response" && strings.HasPrefix(h.ID, internalID) {
@@ -417,14 +450,12 @@ func (w *worker) ingest(raw []byte) {
 		w.mu.Unlock()
 	case "extension_ui_request":
 		switch h.Method {
-		case "confirm", "select", "input", "editor":
-			// No headless approval UI exists yet: cancel explicitly, never
-			// leave the agent waiting forever or approve on the user's behalf.
-			response, _ := json.Marshal(map[string]any{"type": "extension_ui_response", "id": h.ID, "cancelled": true})
-			_ = w.send(response)
-		case "notify":
+		case "confirm", "select", "input", "editor", "permission":
+			w.requestInteraction(raw)
+			return
+		case "notify", "setStatus", "setWidget", "setTitle", "set_editor_text":
 		default:
-			return // status/widget/title chrome has no GUI surface
+			return
 		}
 		w.mu.Lock()
 		w.publish(raw, entry{kind: h.Type}, true)
@@ -554,6 +585,7 @@ func (w *worker) filterHistory(drop func(entry) bool) {
 }
 
 func (w *worker) resetHistory() {
+	w.cancelInteractionsLocked("会话已重置，已安全取消")
 	for key, p := range w.pending {
 		p.timer.Stop()
 		delete(w.pending, key)
@@ -634,6 +666,9 @@ func (w *worker) detach(c *client) {
 	if _, ok := w.clients[c]; ok {
 		delete(w.clients, c)
 		close(c.ch)
+	}
+	if len(w.clients) == 0 {
+		w.cancelInteractionsLocked("已离开会话，已安全取消")
 	}
 }
 
@@ -719,6 +754,11 @@ func (w *worker) commandInStream(raw []byte, stream string) {
 		Force bool   `json:"force"`
 	}
 	_ = json.Unmarshal(raw, &c)
+	if c.Type == "interaction_reply" {
+		err := w.replyInteraction(raw)
+		w.respond(c.ID, c.Type, nil, err)
+		return
+	}
 	if c.Type == "switch_mode" {
 		go func() {
 			data, err := map[string]any(nil), errNoAgent

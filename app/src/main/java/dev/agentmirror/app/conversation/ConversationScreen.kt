@@ -259,6 +259,15 @@ private fun ConversationScreen(
     var usage by remember(ref) { mutableStateOf(UsageLoad()) }
     var usageGeneration by remember(ref) { mutableIntStateOf(0) }
     var exporting by remember(ref) { mutableStateOf(false) }
+    var editorApplied by remember(ref) { mutableStateOf(0L) }
+    LaunchedEffect(state.extensionEditor) {
+        state.extensionEditor?.let { (seq, text) -> if (seq > editorApplied) {
+            editorApplied = seq
+            // Do not silently discard an existing user draft or its attachments.
+            val merged = if (draft.text.isBlank()) text else draft.text + "\n" + text
+            draft = TextFieldValue(merged, TextRange(merged.length))
+        } }
+    }
     // Geometry is read at layout time only (list padding, overlay offsets): the dock rising or the
     // IME sliding re-measures, it never recomposes the screen.
     val headerPx = remember { mutableIntStateOf(0) }
@@ -747,6 +756,11 @@ private fun ConversationScreen(
             if (working != null) {
                 item(key = "working") { WorkingIndicator(working, p, Modifier.animateItem(placementSpec = null)) }
             }
+            state.interactions.asReversed().forEach { request ->
+                item(key = "interaction:${request.id}") {
+                    NativeInteractionCard(request, p, phase == LinkPhase.Live) { decision, callback -> hub.control(ref, decision, callback) }
+                }
+            }
             items(rows, key = { it.key }, contentType = { it::class }) { item ->
                 // No placement spring: a row moved by its neighbour growing (streaming, disclosure,
                 // dock rise) must track it in the same frame, never lag and overlap it.
@@ -759,6 +773,7 @@ private fun ConversationScreen(
                     is Notice -> NoticeRow(item, p, mod)
                 }
             }
+            state.extensionTitle?.let { title -> item(key = "extension-title") { NoticeRow(Notice("extension-title", NoticeTone.Info, "扩展标题", title), p) } }
             if (state.historyTruncated) {
                 item(key = "truncated") {
                     NoticeRow(Notice("truncated", NoticeTone.Divider,
