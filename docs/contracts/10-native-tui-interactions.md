@@ -2,6 +2,8 @@
 
 Base: `07d4b744b41e26f0a225348a80c26876285afdfb`. This package does not replace native agents, change production 9900, merge main, or claim hosted-model/task completion from a wire acknowledgement.
 
+Pairing still requires the full host/nonce/destination/port/token HMAC proof. Android's 10.0.2.2 host relay may bind the proof to that literal alias only when the real accepted socket and peer are both loopback and request Host/destination/accepted port match exactly. Foreign peers, other public aliases and mismatched authorities remain rejected; no proxy signs a substitute MAC or skips client verification.
+
 ## Pure-black GUI and usage
 
 All nativeGUI palette slots use opaque `#000000`, including glass, panels, code, buttons and bubbles. Terminal themes are unchanged. Body/button text is white, secondary/code text is `#B6BDC8`; provider/status colors are foreground only. Pressing a destructive button changes its outline, not its black background (C1: Rose Pine Dawn danger retains AA). Every new native interaction/form uses the same black surfaces and sheet controls.

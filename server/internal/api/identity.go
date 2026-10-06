@@ -204,12 +204,12 @@ func (s *Server) boundAddress(r *http.Request, dest net.IP) (net.IP, int, bool) 
 				}
 				return ip, port, true
 			}
-			// A wildcard listener accepts connections addressed through a NAT
-			// alias that is not one of the host's enumerated interfaces (for
-			// example Android emulator 10.0.2.2). Bind the proof to the
-			// request Host, but only when its literal IPv4 and port match the
-			// listener and the requested destination exactly.
-			if ip.IsUnspecified() {
+			// A real Android 10.0.2.2 relay is accepted on host loopback,
+			// not the wildcard listener IP. Permit only that known alias with
+			// both actual peers loopback; never sign arbitrary Host aliases.
+			// The request Host, destination and accepted port must still match.
+			loopbackEmulator := ip.IsLoopback() && dest.Equal(net.IPv4(10, 0, 2, 2)) && net.ParseIP(remoteIP(r)).IsLoopback()
+			if ip.IsUnspecified() || loopbackEmulator {
 				if hostIP, hostPort, hostOK := requestHostIPv4(r, port); hostOK && hostPort == port && hostIP.Equal(dest) {
 					return hostIP, port, true
 				}
