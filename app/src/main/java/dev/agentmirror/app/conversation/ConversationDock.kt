@@ -277,14 +277,13 @@ private fun DockChip(glyph: Glyph, label: String, p: ConversationPalette, active
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.94f else 1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium), label = "chip-press")
-    val fill by animateColorAsState(if (active) p.accent.copy(alpha = 0.16f) else p.ink.copy(alpha = 0.05f), tween(160), label = "chip-fill")
     val look = LocalConversationLook.current
     Row(
         Modifier
             .height(32.dp)
             .scale(scale)
             .clip(look.pill())
-            .background(fill)
+            .background(p.canvas)
             .then(if (look.sharp) Modifier.border(look.hairline, if (active) p.accent else p.rule, look.pill()) else Modifier)
             .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
             .padding(start = 10.dp, end = 12.dp)
@@ -343,13 +342,12 @@ private fun DockIconButton(glyph: Glyph, p: ConversationPalette, active: Boolean
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.88f else 1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium), label = "dock-press")
-    val fill by animateColorAsState(if (active) p.accent.copy(alpha = 0.16f) else Color.Transparent, tween(160), label = "dock-active")
     Box(
         Modifier
             .size(40.dp)
             .scale(scale)
             .clip(LocalConversationLook.current.pill())
-            .background(fill)
+            .background(p.canvas)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .testTag(tag),
         contentAlignment = Alignment.Center,
@@ -383,11 +381,12 @@ private fun ImageChip(image: PendingImage, onRemove: (Long) -> Unit, p: Conversa
                 .align(Alignment.TopEnd)
                 .size(20.dp)
                 .clip(look.pill())
-                .background(p.ink)
-                .clickable { onRemove(image.id) },
+                .background(p.canvas)
+                .border(look.hairline, p.rule, look.pill())
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onRemove(image.id) },
             contentAlignment = Alignment.Center,
         ) {
-            GlyphIcon(Glyph.Cross, p.canvas, 10.dp)
+            GlyphIcon(Glyph.Cross, p.ink, 10.dp)
         }
     }
 }
@@ -423,14 +422,15 @@ private fun ComposerSheetPanel(entries: List<SheetEntry>, onEntry: (SheetEntry) 
                 Modifier
                     .fillMaxWidth()
                     .clip(look.shape(16.dp))
-                    .background(if (pressed) p.accent.copy(alpha = 0.12f) else Color.Transparent)
+                    .background(p.canvas)
+                    .border(look.hairline, if (pressed) p.ink.copy(alpha = 0.56f) else p.rule, look.shape(16.dp))
                     .clickable(interactionSource = interaction, indication = null) { onEntry(entry) }
                     .padding(horizontal = 8.dp, vertical = 8.dp)
                     .testTag("conversation-sheet-${entry.key}"),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    Modifier.size(32.dp).clip(look.shape(10.dp)).background(p.ink.copy(alpha = 0.06f)),
+                    Modifier.size(32.dp).clip(look.shape(10.dp)).background(p.canvas),
                     contentAlignment = Alignment.Center,
                 ) { GlyphIcon(entry.glyph, p.accentInk, 16.dp) }
                 Column(Modifier.weight(1f).padding(start = 11.dp)) {

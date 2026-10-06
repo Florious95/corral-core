@@ -40,6 +40,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -1274,11 +1275,12 @@ private fun ConnectionCapsule(phase: LinkPhase, p: ConversationPalette, backdrop
         )
         Text(
             if (ended) "打开终端" else "立即重试",
-            style = CaptionStyle.copy(color = p.onAccent, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold),
+            style = CaptionStyle.copy(color = p.ink, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold),
             modifier = Modifier
                 .clip(look.pill())
-                .background(p.accent)
-                .clickable(onClick = if (ended) onOpenTerminal else onRetry)
+                .background(p.canvas)
+                .border(look.hairline, p.rule, look.pill())
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = if (ended) onOpenTerminal else onRetry)
                 .padding(horizontal = 12.dp, vertical = 6.dp)
                 .testTag(if (ended) "conversation-open-terminal" else "conversation-reconnect"),
         )
@@ -1325,8 +1327,9 @@ private fun ConfirmDialog(
                         style = LabelStyle.copy(color = p.ink, fontSize = 14.sp),
                         modifier = Modifier
                             .clip(look.pill())
-                            .background(p.ink.copy(alpha = 0.07f))
-                            .clickable(onClick = onDismiss)
+                            .background(p.canvas)
+                            .border(look.hairline, p.rule, look.pill())
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
                             .padding(horizontal = 18.dp, vertical = 10.dp)
                             .testTag("conversation-confirm-cancel"),
                     )
@@ -1336,8 +1339,9 @@ private fun ConfirmDialog(
                         style = LabelStyle.copy(color = p.danger, fontSize = 14.sp),
                         modifier = Modifier
                             .clip(look.pill())
-                            .background(p.surface)
-                            .clickable(onClick = onConfirm)
+                            .background(p.canvas)
+                            .border(look.hairline, p.rule, look.pill())
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onConfirm)
                             .padding(horizontal = 18.dp, vertical = 10.dp)
                             .testTag("conversation-confirm-ok"),
                     )

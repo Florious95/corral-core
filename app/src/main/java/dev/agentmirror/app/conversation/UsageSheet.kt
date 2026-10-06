@@ -367,7 +367,7 @@ private fun MetricCell(metric: Metric, p: ConversationPalette, modifier: Modifie
     Column(
         modifier
             .fillMaxHeight()
-            .then(if (look.glass) Modifier.clip(look.shape(14.dp)).background(p.ink.copy(alpha = if (p.dark) 0.05f else 0.04f)) else Modifier)
+            .clip(look.shape(14.dp)).background(p.canvas)
             .padding(horizontal = 12.dp, vertical = 10.dp)
             .testTag("conversation-usage-metric-${metric.label}"),
     ) {
@@ -392,7 +392,7 @@ private fun ContextBar(percent: Double?, p: ConversationPalette, modifier: Modif
             .fillMaxWidth()
             .height(6.dp)
             .clip(shape)
-            .background(p.ink.copy(alpha = if (p.dark) 0.12f else 0.09f))
+            .background(p.canvas)
             .then(
                 if (look.glass) Modifier else Modifier.drawWithContent {
                     drawContent()
