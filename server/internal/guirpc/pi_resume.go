@@ -155,8 +155,8 @@ func (s *session) sessionFiles(ctx context.Context) ([]piSessionFile, error) {
 	if err != nil {
 		return nil, errors.New("无法读取当前目录的 Pi 历史会话：" + sessionStoreError(err))
 	}
-	// An explicit --session may sit outside --session-dir. Include that exact
-	// reported current file, not its entire unrelated parent directory.
+	// Pi's explicit session-file option may select a file outside its configured
+	// store. Include that reported file, not its unrelated parent directory.
 	if file != "" && filepath.IsAbs(file) && filepath.Dir(file) != dir {
 		current, readErr := readPiSessionInfo(ctx, file, s.pane.CWD, id)
 		if readErr != nil && !os.IsNotExist(readErr) {
