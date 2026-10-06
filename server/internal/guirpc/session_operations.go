@@ -21,6 +21,9 @@ import (
 	"github.com/agentmirror/agentmirror/internal/discovery"
 )
 
+// NativeMutationTimeout leaves time for the bounded human decision and replay commit.
+const NativeMutationTimeout = interactionTTL + 25*time.Second
+
 var errMutationBusy = errors.New("当前任务正在运行；确认停止后才能继续")
 
 type sessionPoint struct {
@@ -46,7 +49,7 @@ func (s *session) operation(command map[string]json.RawMessage) (map[string]any,
 	return s.operationContext(s.ctx, command)
 }
 func (s *session) operationContext(parent context.Context, command map[string]json.RawMessage) (map[string]any, error) {
-	ctx, cancel := context.WithTimeout(parent, 40*time.Second)
+	ctx, cancel := context.WithTimeout(parent, NativeMutationTimeout)
 	defer cancel()
 	if err := s.beginHistory(); err != nil {
 		return nil, err
@@ -275,7 +278,7 @@ func (s *session) mutatePi(ctx context.Context, kind, token string) (map[string]
 		s.hydrating = false
 		s.mu.Unlock()
 	}()
-	raw, err := s.w.requestContext(ctx, native, 25*time.Second)
+	raw, err := s.w.requestContext(ctx, native, interactionTTL+5*time.Second)
 	if err != nil {
 		s.cancel()
 		return nil, errors.New("Pi 未确认原生会话操作；桥接已关闭，进程未终止")

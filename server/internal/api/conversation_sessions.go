@@ -24,6 +24,10 @@ import (
 )
 
 func (c *wsConn) historyRequest(run func(context.Context), reject func(string)) {
+	c.historyRequestWithin(40*time.Second, run, reject)
+}
+
+func (c *wsConn) historyRequestWithin(timeout time.Duration, run func(context.Context), reject func(string)) {
 	c.convMu.Lock()
 	if c.convHistoryRequests >= 2 {
 		c.convMu.Unlock()
@@ -34,7 +38,7 @@ func (c *wsConn) historyRequest(run func(context.Context), reject func(string)) 
 	c.convMu.Unlock()
 	go func() {
 		defer func() { c.convMu.Lock(); c.convHistoryRequests--; c.convMu.Unlock() }()
-		ctx, cancel := context.WithTimeout(c.ctx, 40*time.Second)
+		ctx, cancel := context.WithTimeout(c.ctx, timeout)
 		defer cancel()
 		run(ctx)
 	}()
@@ -126,7 +130,7 @@ func (c *wsConn) handleConversationResumeSession(req protocol.ConversationResume
 		}
 		c.send(&result)
 	}
-	c.historyRequest(func(ctx context.Context) {
+	c.historyRequestWithin(guirpc.NativeMutationTimeout, func(ctx context.Context) {
 		pane, err := c.s.historyPane(ctx, req.Ref, "")
 		if err != nil {
 			reply(nil, err)
@@ -164,7 +168,12 @@ func (c *wsConn) handleConversationHistoryCommand(cmd protocol.ConversationComma
 	sub.writeMu.Lock()
 	stream := sub.stream
 	sub.writeMu.Unlock()
-	c.historyRequest(func(ctx context.Context) {
+	timeout := 40 * time.Second
+	switch kind {
+	case "resume_session", "fork_session", "clone_session", "new_session":
+		timeout = guirpc.NativeMutationTimeout
+	}
+	c.historyRequestWithin(timeout, func(ctx context.Context) {
 		pane, err := c.s.historyPane(ctx, cmd.Ref, "")
 		if err != nil {
 			reply(nil, err)

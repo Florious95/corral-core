@@ -251,7 +251,7 @@ func (s *session) resumePi(ctx context.Context, id string, force bool) (map[stri
 		s.pendingBytes = 0
 		s.hydrating = false
 	}()
-	reply, err := s.w.requestContext(ctx, map[string]any{"type": "switch_session", "sessionPath": target.path}, 15*time.Second)
+	reply, err := s.w.requestContext(ctx, map[string]any{"type": "switch_session", "sessionPath": target.path}, interactionTTL+5*time.Second)
 	if err != nil {
 		s.cancel()
 		return nil, errors.New("Pi 未确认会话切换，桥接已关闭；主机进程未终止")

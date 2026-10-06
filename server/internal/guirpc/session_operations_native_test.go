@@ -79,6 +79,7 @@ func TestNativePiForkCloneRenameNewAndInteractiveVeto(t *testing.T) {
 		_ = json.Unmarshal(raw, &c)
 		return c
 	}
+	delayedClone := false
 	mutate := func(kind string, fields map[string]any, accept bool) (map[string]any, error) {
 		t.Helper()
 		type reply struct {
@@ -101,6 +102,10 @@ func TestNativePiForkCloneRenameNewAndInteractiveVeto(t *testing.T) {
 		}
 		if token == "" {
 			t.Fatal("real before-fork dialog never arrived")
+		}
+		if kind == "clone_session" && accept && !delayedClone {
+			delayedClone = true
+			time.Sleep(30 * time.Second)
 		}
 		raw, _ := json.Marshal(map[string]any{"requestId": token, "confirmed": accept})
 		if err := s.w.replyInteraction(raw); err != nil {
