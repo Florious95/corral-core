@@ -16,6 +16,8 @@
 
 package dev.agentmirror.app.service
 
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.runtime.mutableStateOf
 import dev.agentmirror.app.conn.AuthAckFrame
 import dev.agentmirror.app.conn.BinaryFrame
@@ -30,6 +32,8 @@ import dev.agentmirror.app.conn.TransportListener
 import dev.agentmirror.app.conn.WebSocketTransport
 import dev.agentmirror.app.conversation.ConversationCenter
 import dev.agentmirror.app.notify.NotificationCenter
+import dev.agentmirror.app.input.TouchInputDispatcher
+import dev.agentmirror.app.input.TouchInputTransport
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.tsnet.TsnetWire
 
@@ -304,11 +308,15 @@ object ServiceWire {
         synchronized(this) {
             val m = manager
             if (m != null) return m
+            val main = runCatching { Handler(Looper.getMainLooper()) }.getOrNull()
+            val inputs = TouchInputDispatcher { task -> if (main != null) main.post { task() } else task() }
             val created = ConnectionManager(
                 config = cfg,
                 // notifications_v1 / conversation_v1：同一条持久 WebSocket 上声明能力、截获各自的帧
                 // （Core 不认识新 type）。原生对话不另开连接，继承本连接的选路、心跳与重连。
-                transportFactory = NotificationCenter.wrap(ConversationCenter.wrap(transportFactory)),
+                transportFactory = NotificationCenter.wrap(ConversationCenter.wrap(
+                    TransportFactory { url -> TouchInputTransport(transportFactory.create(url), inputs) },
+                )),
                 dialCoordinator = hostCoordinator(cfg),
                 beforeGeneration = { dev.agentmirror.app.tsnet.TsnetWire.applyPendingKey() },
                 onReadyTarget = { target ->
@@ -323,6 +331,7 @@ object ServiceWire {
             created.setListener(
                 object : ConnectionManager.Listener {
                     override fun onStateChanged(state: ConnectionState) {
+                        if (state != ConnectionState.READY) inputs.suspend()
                         connListener.onStateChanged(state)
                         serviceListener?.onStateChanged(state)
                         fanOut { it.onStateChanged(state) }
@@ -356,6 +365,8 @@ object ServiceWire {
                     }
 
                     override fun onInputResult(reqId: Long, ok: Boolean, reason: String?) {
+                        // Timeout is a visible failure, never an ACK substitute or an auto-open.
+                        if (!ok) inputs.failed(reqId, reason)
                         connListener.onInputResult(reqId, ok, reason)
                         serviceListener?.onInputResult(reqId, ok, reason)
                         fanOut { it.onInputResult(reqId, ok, reason) }
@@ -368,6 +379,7 @@ object ServiceWire {
                     }
                 },
             )
+            touchInputs = inputs
             manager = created
             return created
         }
@@ -416,11 +428,17 @@ object ServiceWire {
      *  配置变更时 stop）。 */
     @Volatile
     private var manager: ConnectionManager? = null
+    private var touchInputs: TouchInputDispatcher? = null
+
+    /** Independent pairing/test managers do not share the persistent socket's input gate. */
+    internal fun touchInputsFor(candidate: ConnectionManager): TouchInputDispatcher? =
+        if (candidate === manager) touchInputs else null
 
     /** 停止并释放连接管理器（服务 onDestroy / 配置变更时调用；幂等）。 */
     fun releaseManager() {
         val m = manager
         manager = null
+        touchInputs = null
         // 清掉列表基线：新管理器重连后以新 listing 为准（旧基线随旧连接作废）。
         lastAuthAck = null
         lastListing = null

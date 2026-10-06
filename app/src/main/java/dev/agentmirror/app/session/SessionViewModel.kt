@@ -31,6 +31,7 @@ import dev.agentmirror.app.conn.PaneModeChangedFrame
 import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.perf.PerfTrace
+import dev.agentmirror.app.input.TouchInputDispatcher
 import dev.agentmirror.app.termview.TerminalKeyEncoder
 import dev.agentmirror.app.termview.TermViewPresenter
 import dev.agentmirror.terminal.MouseSgr
@@ -100,6 +101,7 @@ class SessionViewModel(
      * 不等 View 首次布局。布局测得同值即零 resize；不同则按实测补订一次。
      */
     warmSubscribe: Boolean = false,
+    private val touchInputs: TouchInputDispatcher? = null,
 ) : ConnectionManager.Listener {
 
     /** 终端内核：live pane 的完整 snapshot/delta 状态。 */
@@ -127,6 +129,7 @@ class SessionViewModel(
 
     /** 发送回执状态机（必达：ok 静默收起 / fail+超时明确报错）。 */
     var inputStatus by mutableStateOf<InputStatus>(InputStatus.Idle)
+    private var confirmedInputReqId: Long? = null
 
     /** 附件上传状态机（成功路径注入 / 失败明确报错）。 */
 
@@ -247,6 +250,10 @@ class SessionViewModel(
     override fun onStateChanged(state: ConnectionState) {
         DiagLog.recordCritical("session", "connection_state ref=$ref state=$state")
         connectionState = state
+        if (touchInputs != null && state != ConnectionState.READY && inputStatus is InputStatus.Sending) {
+            inputStatus = InputStatus.Failed("连接断开，未确认的输入没有重放")
+            confirmedInputReqId = null
+        }
         connectionBanner = when (state) {
             ConnectionState.CONNECTING -> "连接中…"
             ConnectionState.AUTHENTICATING -> "认证中…"
@@ -471,8 +478,10 @@ class SessionViewModel(
     }
 
     override fun onInputResult(reqId: Long, ok: Boolean, reason: String?) {
-        // 发送态阻塞并发发送（UI 置灰），且 conn 层对每次投递只回执一次 ⇒ 在途回执即本页的。
+        // Pointer/other-page ACKs must never acknowledge a queued Enter or shortcut.
         if (inputStatus !is InputStatus.Sending) return
+        if (touchInputs != null && reqId != confirmedInputReqId) return
+        confirmedInputReqId = null
         if (ok) {
             // 003 发送必达：回执可见。直通模型下草稿在 CLI，本地无草稿可清；
             // 提交已发出，附件清单清空（避免跟着下一条重复发送）。
@@ -571,8 +580,8 @@ class SessionViewModel(
                 text.trimEnd('\r', '\n') + "\r"
             }
         }
-        if (manager.sendInput(ref, textToSend, attachmentPath)) {
-            inputStatus = InputStatus.Sending
+        inputStatus = InputStatus.Sending
+        if (sendInputBarrier(confirmed = true) { manager.sendInput(ref, textToSend, attachmentPath) }) {
             // Enter 提交后 CLI 行空；本地框跟着清。不同步会把下一轮当成「删掉上一条」。
             syncedText = ""
             return true
@@ -610,8 +619,11 @@ class SessionViewModel(
         if (syncedText.isNotEmpty()) applyDiffSync("")
         val attachmentPath = pendingAttachmentPaths.lastOrNull().orEmpty()
         val reference = textFileReference(path)
-        val submitted = manager.sendInput(ref, if (attachmentPath.isEmpty()) "$reference\r" else reference, attachmentPath)
-        inputStatus = if (submitted) InputStatus.Sending else InputStatus.Failed("发送失败：草稿已保留")
+        inputStatus = InputStatus.Sending
+        val submitted = sendInputBarrier(confirmed = true) {
+            manager.sendInput(ref, if (attachmentPath.isEmpty()) "$reference\r" else reference, attachmentPath)
+        }
+        if (!submitted) inputStatus = InputStatus.Failed("发送失败：草稿已保留")
         return submitted
     }
 
@@ -633,9 +645,8 @@ class SessionViewModel(
             inputStatus = InputStatus.Failed("连接未就绪，无法发送")
             return
         }
-        if (manager.sendInputKeys(ref, key)) {
-            inputStatus = InputStatus.Sending
-        } else {
+        inputStatus = InputStatus.Sending
+        if (!sendInputBarrier(confirmed = true) { manager.sendInputKeys(ref, key) }) {
             inputStatus = InputStatus.Failed("发送失败：连接不可用")
         }
     }
@@ -695,13 +706,13 @@ class SessionViewModel(
      */
     private fun sendPassthrough(content: String) {
         if (connectionState != ConnectionState.READY) return
-        manager.sendKeystroke(ref, content)
+        sendInputBarrier { manager.sendKeystroke(ref, content) }
     }
 
     /** 直通删除键（059）：虚拟键盘删除键经 keys 通道发 backspace 命名键到 CLI。 */
     private fun sendBackspace() {
         if (connectionState != ConnectionState.READY) return
-        manager.sendBackspace(ref)
+        sendInputBarrier { manager.sendBackspace(ref) }
     }
 
     /** 已同步到 CLI 行尾的文本（084）；组合期不推进。 */
@@ -734,7 +745,7 @@ class SessionViewModel(
         uploadStatus = when (outcome) {
             is UploadOutcome.Success -> {
                 pendingAttachmentPaths = pendingAttachmentPaths + outcome.path
-                manager.sendAttachPreview(ref, outcome.path)
+                sendInputBarrier { manager.sendAttachPreview(ref, outcome.path) }
                 UploadStatus.Success(outcome.path)
             }
             is UploadOutcome.Failure -> UploadStatus.Failed(outcome.reason)
@@ -763,7 +774,7 @@ class SessionViewModel(
      *
      * 不走 sendDraft 发送闸，避免一次点击把键盘路径卡在 Sending。
      *
-     * @return true 当且仅当发出了带 bytes 的 input 帧
+     * @return true when accepted (sent or latest-slot queued); overwritten motions never reach Core
      */
     fun onTermMouse(
         column: Int,
@@ -776,9 +787,11 @@ class SessionViewModel(
     ): Boolean {
         // 触点在主线程：不走 @Synchronized 的 emulator.encodeMouse——WS 线程 feed/历史头插
         // 持内核锁期间点按会被挂住。模式位是单写者的 Int，无锁读取；判据与核层
-        // canEncode 相同（1000/1002 跟踪 + 1006 SGR 编码），字节由同一个 MouseSgr 编出。
+        // 1000 click / 1002 drag / 1003 all-motion, all with the same native SGR encoder.
+        if (disposed || connectionState != ConnectionState.READY || awaitingReconnectSnapshot) return false
         val tracking = emulator.mouseTrackingMode
-        if ((tracking != 1000 && tracking != 1002) || emulator.mouseEncodingMode != 1006) return false
+        if ((tracking != 1000 && tracking != 1002 && tracking != 1003) || emulator.mouseEncodingMode != 1006) return false
+        if (motion && tracking == 1000) return false
         val bytes = MouseSgr.encode(
             button = 0,
             column = column,
@@ -790,13 +803,32 @@ class SessionViewModel(
             ctrl = ctrl,
         )
         if (bytes.isEmpty()) return false
-        return manager.sendRawBytes(ref, bytes)
+        val inputs = touchInputs ?: return manager.sendRawBytes(ref, bytes)
+        val cell = TouchInputDispatcher.Cell(column, row, shift, meta, ctrl)
+        if (!press && !motion && tracking != 1000) {
+            // All callers, not only the View, must seal UP's physical final cell.
+            // Dispatcher dedup makes this a no-op when the last MOVE already supplied it.
+            val finalBytes = MouseSgr.encode(
+                button = 0, column = column, row = row, press = true, motion = true,
+                shift = shift, meta = meta, ctrl = ctrl,
+            )
+            inputs.mouse(ref, cell, press = true, motion = true) { manager.sendRawBytes(ref, finalBytes) }
+        }
+        return inputs.mouse(ref, cell, press, motion) { manager.sendRawBytes(ref, bytes) }
+    }
+
+    private fun sendInputBarrier(confirmed: Boolean = false, send: () -> Boolean): Boolean {
+        if (disposed) return false
+        val inputs = touchInputs ?: return send()
+        val receipt: ((Long) -> Unit)? = if (confirmed) ({ id -> confirmedInputReqId = id }) else null
+        val delivered: ((Long) -> Unit)? = if (confirmed) ({ id -> onInputResult(id, true, null) }) else null
+        return inputs.barrier(ref, onWrite = receipt, onDelivered = delivered, send = send)
     }
 
     /** Encode one physical key as standard VT bytes and send it unchanged. */
     fun onTermKey(event: android.view.KeyEvent): Boolean {
         val bytes = TerminalKeyEncoder.encode(event) ?: return false
-        manager.sendRawBytes(ref, bytes)
+        sendInputBarrier { manager.sendRawBytes(ref, bytes) }
         // Consume an encoded key even while reconnecting; otherwise Android may
         // apply it to a parent/editor instead of the terminal.
         return true
@@ -838,7 +870,7 @@ class SessionViewModel(
         // 协议约定：delta<0=向上看历史（scroll-up）。
         // 手势约定：deltaLines>0=presenter 向更早历史滚（正值=看旧内容），
         // 因此 delta=-toSend 使两端符号语义对齐。
-        if (manager.sendScrollWheel(ref, -toSend)) {
+        if (sendInputBarrier { manager.sendScrollWheel(ref, -toSend) }) {
             lastScrollRequestAtMs = nowMs
         }
     }
@@ -856,7 +888,7 @@ class SessionViewModel(
         if (disposed || connectionState != ConnectionState.READY || awaitingReconnectSnapshot) return
         val nowMs = System.currentTimeMillis()
         lastScrollSentMs = nowMs
-        if (manager.sendScrollWheel(ref, -toSend)) {
+        if (sendInputBarrier { manager.sendScrollWheel(ref, -toSend) }) {
             lastScrollRequestAtMs = nowMs
         }
     }
@@ -876,7 +908,9 @@ class SessionViewModel(
         }
         closeOverlay()
         manager.removeBinaryListener(ref, this)
-        manager.unsubscribe(ref)
+        val inputs = touchInputs
+        if (inputs != null) inputs.leave(ref) { manager.unsubscribe(ref) }
+        else manager.unsubscribe(ref)
     }
 
     /** 首次有效几何是唯一首订入口；本地尺寸必须先于可能同步抵达的 snapshot。 */

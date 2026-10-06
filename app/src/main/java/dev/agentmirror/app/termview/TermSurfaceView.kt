@@ -613,6 +613,11 @@ class TermSurfaceView @JvmOverloads constructor(
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                // UP can have a new physical cell without a preceding MOVE. Seal that final
+                // endpoint before release; the dispatcher waits for ACK, then writes both FIFO.
+                if (mouseCap.crossedCell()) {
+                    sink(mouseCap.col, mouseCap.row, true, true, shift, meta, ctrl)
+                }
                 sink(mouseCap.col, mouseCap.row, false, false, shift, meta, ctrl)
                 true
             }

@@ -8,6 +8,7 @@ node_modules/
 .team/current/profiles/*.env
 
 # 构建产物
+.gradle/
 app/.gradle/
 app/app/build/
 app/build/

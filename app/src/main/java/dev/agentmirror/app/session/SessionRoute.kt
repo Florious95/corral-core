@@ -376,6 +376,7 @@ internal fun createSessionViewModel(ref: String, context: Context? = null): Sess
         inputSyncEnabled = inputSync,
         retainPaneSizeEnabled = retainPaneSize,
         warmSubscribe = cacheHit,
+        touchInputs = ServiceWire.touchInputsFor(manager),
     )
 }
 
