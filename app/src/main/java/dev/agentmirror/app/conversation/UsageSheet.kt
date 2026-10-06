@@ -240,7 +240,7 @@ private fun UsageBody(s: UsageSnapshot, load: UsageLoad, running: Boolean, p: Co
     }
 
     // ---- session totals ----
-    SheetLabel("会话累计", p, Modifier.padding(top = 22.dp, bottom = 8.dp))
+    SheetLabel("会话累计", p, Modifier.padding(top = 18.dp, bottom = 8.dp))
     val hit = s.cacheHitPercent
     MetricGrid(
         listOf(
@@ -249,20 +249,24 @@ private fun UsageBody(s: UsageSnapshot, load: UsageLoad, running: Boolean, p: Co
             Metric("缓存读取", s.cacheRead, hit?.let { "命中 ${percentText(it)}" } ?: "尚无输入"),
             Metric("缓存写入", s.cacheWrite, null),
             Metric("总计", s.total, null),
-            Metric("消息", s.totalMessages, listOfNotNull(s.userMessages?.let { "用户 $it" }, s.assistantMessages?.let { "助手 $it" }).joinToString(" · ").ifEmpty { null }),
+            Metric(
+                "消息",
+                s.totalMessages,
+                listOfNotNull(s.userMessages?.let { "用户 $it" }, s.assistantMessages?.let { "助手 $it" }, s.toolResults?.let { "工具 $it" }).joinToString(" · ").ifEmpty { null },
+            ),
         ),
         p,
     )
-    if (s.toolCalls != null || s.toolResults != null) {
+    if (s.toolCalls != null) {
         Text(
-            "工具调用 ${s.toolCalls ?: "—"} 次 · 返回结果 ${s.toolResults ?: "—"} 个",
+            "模型发起工具调用 ${s.toolCalls} 次",
             style = CaptionStyle.copy(color = p.inkSoft, fontSize = 12.sp),
             modifier = Modifier.padding(top = 8.dp),
         )
     }
 
     // ---- cost ----
-    SheetLabel("费用", p, Modifier.padding(top = 22.dp, bottom = 2.dp))
+    SheetLabel("费用", p, Modifier.padding(top = 18.dp, bottom = 2.dp))
     SheetFact("会话估算", usdText(s.cost) ?: "—", p, tag = "conversation-usage-cost")
     Text(
         "按 Provider 报价记录的累计估算，含工具与摘要调用；不是账户账单。",
@@ -278,7 +282,7 @@ private fun UsageBody(s: UsageSnapshot, load: UsageLoad, running: Boolean, p: Co
             "刷新失败：${load.error}".takeIf { load.error != null },
         ).joinToString("\n"),
         style = CaptionStyle.copy(color = if (load.error != null) p.danger else p.inkSoft, fontSize = 12.sp, lineHeight = 17.sp),
-        modifier = Modifier.padding(top = 16.dp).testTag("conversation-usage-stamp"),
+        modifier = Modifier.padding(top = 12.dp).testTag("conversation-usage-stamp"),
     )
 }
 

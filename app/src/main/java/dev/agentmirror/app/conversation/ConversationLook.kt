@@ -113,9 +113,9 @@ internal fun lookPill(): Shape = LocalConversationLook.current.pill()
  * Glass samples [backdrop]; Modernism is brushed titanium and a hairline, never a sampler, so it
  * is safe anywhere and costs no blur pass. [radius] null means a capsule.
  */
-internal fun Modifier.panelSurface(look: ConversationLook, backdrop: Backdrop, radius: Dp?, p: ConversationPalette): Modifier =
+internal fun Modifier.panelSurface(look: ConversationLook, backdrop: Backdrop, radius: Dp?, p: ConversationPalette, reading: Boolean = false): Modifier =
     if (look.glass && !look.sharp) {
-        frostedGlass(backdrop, if (radius == null) Capsule() else RoundedRectangle(radius), p)
+        frostedGlass(backdrop, if (radius == null) Capsule() else RoundedRectangle(radius), p, reading)
     } else {
         val shape = if (radius == null) look.pill() else look.shape(radius)
         brushedMetal(p, shape).border(look.hairline, p.rule, shape)
@@ -125,18 +125,22 @@ internal fun Modifier.panelSurface(look: ConversationLook, backdrop: Backdrop, r
  * Planar frosted glass: vibrancy + blur of what lies beneath, a readable tint, one even 0.5dp
  * hairline and a soft ambient shadow. Deliberately absent: lens refraction (the bulging-jelly
  * edge), angled specular highlights and inner shadows — light is not faked on a flat pane.
+ * [reading] surfaces (menus, sheets) carry a denser veil over a wider blur, so a bright card or
+ * logo underneath reads as atmosphere, never as a smudge behind the text.
  */
-internal fun Modifier.frostedGlass(backdrop: Backdrop, shape: RoundedRectangularShape, p: ConversationPalette): Modifier =
+internal fun Modifier.frostedGlass(backdrop: Backdrop, shape: RoundedRectangularShape, p: ConversationPalette, reading: Boolean = false): Modifier =
     drawBackdrop(
         backdrop = backdrop,
         shape = { shape },
         effects = {
             vibrancy()
-            blur(20.dp.toPx())
+            blur((if (reading) 32.dp else 20.dp).toPx())
         },
         highlight = { Highlight(width = 0.5.dp, alpha = 1f, style = HighlightStyle.Plain(color = p.glassStroke)) },
         shadow = { Shadow(radius = 16.dp, color = Color.Black.copy(alpha = if (p.dark) 0.22f else 0.07f)) },
-        onDrawSurface = { drawRect(p.glass.glassReadable()) },
+        onDrawSurface = {
+            drawRect(if (reading) p.glass.copy(alpha = if (p.dark) 0.86f else 0.90f).glassReadable() else p.glass.glassReadable())
+        },
     )
 
 /**

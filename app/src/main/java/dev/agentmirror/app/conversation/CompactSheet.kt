@@ -33,8 +33,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -135,12 +140,13 @@ internal fun CompactSheet(
         if (editable) {
             SheetLabel("保留重点（可选）", p, Modifier.padding(top = 4.dp, bottom = 8.dp))
             val shape = look.shape(14.dp)
+            var focused by remember { mutableStateOf(false) }
             Box(
                 Modifier
                     .fillMaxWidth()
                     .clip(shape)
                     .background(p.code)
-                    .hairlineBorder(look, p, shape, tone = p.danger.takeIf { tooLong })
+                    .hairlineBorder(look, p, shape, tone = if (tooLong) p.danger else p.accent.takeIf { focused })
                     .padding(horizontal = 12.dp, vertical = 10.dp),
             ) {
                 BasicTextField(
@@ -151,7 +157,7 @@ internal fun CompactSheet(
                     cursorBrush = SolidColor(p.accent),
                     minLines = 3,
                     maxLines = 6,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 63.dp).testTag("conversation-compact-instructions"),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 63.dp).onFocusChanged { focused = it.isFocused }.testTag("conversation-compact-instructions"),
                     decorationBox = { field ->
                         if (instructions.isEmpty()) {
                             Text(

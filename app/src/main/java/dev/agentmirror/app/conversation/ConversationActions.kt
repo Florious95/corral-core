@@ -113,7 +113,7 @@ internal fun resolveActions(provider: String, connected: Boolean, restoring: Boo
                 else ResolvedAction(action, offline ?: "浏览并恢复此目录的会话", offline == null)
             ConversationAction.Compact -> when {
                 compacting -> ResolvedAction(action, "正在压缩…", true)
-                else -> ResolvedAction(action, offline ?: if (can.compactInstructions) "整理模型上下文，可指定保留重点" else "整理模型上下文", offline == null)
+                else -> ResolvedAction(action, offline ?: if (can.compactInstructions) "可指定保留重点" else "整理模型上下文", offline == null)
             }
             ConversationAction.NewSession -> ResolvedAction(action, offline ?: "当前会话保存在历史中", offline == null)
             ConversationAction.Usage -> if (!can.usage) null else ResolvedAction(action, offline ?: "Token、费用与上下文占用", offline == null)
@@ -147,7 +147,7 @@ internal fun HeaderMenu(
             Column(
                 Modifier
                     .widthIn(min = 248.dp, max = 284.dp)
-                    .panelSurface(look, backdrop, 22.dp, p)
+                    .panelSurface(look, backdrop, 22.dp, p, reading = true)
                     .padding(vertical = if (look.glass) 6.dp else 0.dp)
                     .testTag("conversation-menu"),
             ) {

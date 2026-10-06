@@ -128,7 +128,7 @@ internal fun ConversationSheet(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = if (p.dark) 0.36f else 0.18f))
+                    .background(Color.Black.copy(alpha = if (p.dark) 0.5f else 0.3f))
                     .pointerInput(dismissible) { detectTapGestures { if (dismissible) onDismiss() } },
             )
             BoxWithConstraints(
@@ -141,7 +141,7 @@ internal fun ConversationSheet(
                     .padding(if (look.glass) 12.dp else 0.dp),
                 contentAlignment = Alignment.BottomCenter,
             ) {
-                val maxPanel = maxHeight * if (look.glass) 0.9f else 0.88f
+                val maxPanel = maxHeight * if (look.glass) 0.9f else 0.94f
                 val dismissPx = with(LocalDensity.current) { DISMISS_DRAG.toPx() }
                 var drag by remember { mutableFloatStateOf(0f) }
                 val dragState = rememberDraggableState { delta -> drag = (drag + delta).coerceAtLeast(0f) }
@@ -157,7 +157,7 @@ internal fun ConversationSheet(
                         )
                         .graphicsLayer { translationY = drag }
                         .then(
-                            if (shape != null) Modifier.frostedGlass(backdrop, shape, p)
+                            if (shape != null) Modifier.frostedGlass(backdrop, shape, p, reading = true)
                             else Modifier.brushedMetal(p).edgeRule(RuleEdge.Top, p.ink, look.rule),
                         )
                         // Taps inside the panel never reach the scrim.
@@ -192,7 +192,7 @@ internal fun ConversationSheet(
                             )
                         }
                         Row(
-                            Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = if (look.glass) 10.dp else 16.dp, bottom = 12.dp),
+                            Modifier.fillMaxWidth().padding(start = 20.dp, end = if (look.glass) 12.dp else 20.dp, top = if (look.glass) 10.dp else 16.dp, bottom = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {
@@ -213,11 +213,14 @@ internal fun ConversationSheet(
                         }
                         if (!look.glass) Box(Modifier.fillMaxWidth().height(look.hairline).background(p.rule))
                     }
+                    // The top inset stays outside the scroll: scrolled content clips at a margin,
+                    // never against the header rule.
                     Column(
                         Modifier
                             .weight(1f, fill = false)
+                            .padding(top = if (look.glass) 2.dp else 14.dp)
                             .then(if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
-                            .padding(start = 20.dp, end = 20.dp, top = if (look.glass) 2.dp else 14.dp, bottom = 14.dp),
+                            .padding(start = 20.dp, end = 20.dp, bottom = 14.dp),
                         content = content,
                     )
                     if (footer != null) {

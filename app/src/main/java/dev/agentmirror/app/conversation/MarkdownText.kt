@@ -17,7 +17,6 @@
 package dev.agentmirror.app.conversation
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -307,7 +306,7 @@ fun CodeBlock(language: String, code: String, p: ConversationPalette, modifier: 
             .fillMaxWidth()
             .clip(shape)
             .background(p.code)
-            .border(0.5.dp, p.surfaceStroke, shape),
+            .hairlineBorder(LocalConversationLook.current, p, shape),
     ) {
         Row(
             Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp, top = 4.dp),
