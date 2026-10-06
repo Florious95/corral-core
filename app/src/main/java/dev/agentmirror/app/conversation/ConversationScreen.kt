@@ -807,7 +807,7 @@ private fun ConversationScreen(
             }
             state.interactions.asReversed().forEach { request ->
                 item(key = "interaction:${request.id}") {
-                    NativeInteractionCard(request, p, phase == LinkPhase.Live) { decision, callback -> hub.control(ref, decision, callback) }
+                    NativeInteractionCard(request, p, phase == LinkPhase.Live, state.serverSkewMs) { decision, callback -> hub.control(ref, decision, callback) }
                 }
             }
             items(rows, key = { it.key }, contentType = { it::class }) { item ->

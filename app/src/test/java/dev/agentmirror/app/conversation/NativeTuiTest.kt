@@ -31,6 +31,11 @@ class NativeTuiTest {
         val other = state.apply(3, 3, json("""{"type":"extension_ui_request","id":"$token","method":"confirm","sessionId":"other","expiresAt":9999999999999}"""))
         assertTrue(other.interactions.isEmpty())
     }
+    @Test fun decisionExpiryUsesHostClockNotPhoneWallClock() {
+        assertEquals(10000L, nativeInteractionRemainingMs(130000L, 100000L, 20000L))
+        assertEquals(30000L, nativeInteractionRemainingMs(130000L, 200000L, -100000L))
+        assertEquals(0L, nativeInteractionRemainingMs(130000L, 200000L, 0L))
+    }
     @Test fun permissionOptionsKeepNativeOpaqueIdsAndOrder() {
         val token = "0123456789abcdef0123456789abcdef"
         val request = nativeInteraction(json("""{"id":"$token","method":"permission","expiresAt":100,"options":[{"optionId":"always-native","name":"Full native scope","kind":"allow_always"},{"optionId":"deny-id","name":"Reject","kind":"reject_once"}]}"""))!!

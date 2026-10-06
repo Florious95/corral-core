@@ -1,7 +1,10 @@
 package dev.agentmirror.app.conversation
 
-// @contract native tokens and options remain opaque; choosing never claims tool completion.
-// @inv no default approval, bounded inputs, permanent permissions need a second decision.
+// @contract
+// @pre current-session native request tokens and metadata arrive on the authenticated stream
+// @post explicit choices use original options; command ACK never claims task/tool completion
+// @err stale/expired requests and native failures are visible without automatic approval
+// @inv bounded inputs; permanent permissions need a second native-scope decision
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -33,6 +36,9 @@ internal fun nativeInteraction(e: JsonObject): NativeInteraction? {
     return NativeInteraction(id, e.str("method"), e.str("title").take(640), e.str("message").take(16000), e.str("prefill").take(200000), e.str("placeholder").take(640), e.str("sessionId").ifBlank { null }, e.long("expiresAt") ?: return null, options)
 }
 
+internal fun nativeInteractionRemainingMs(expiresAt: Long, localNow: Long, serverSkewMs: Long): Long =
+    (expiresAt - localNow - serverSkewMs).coerceAtLeast(0)
+
 @Composable
 internal fun NativeTextField(value: String, label: String, p: ConversationPalette, tag: String, multiline: Boolean = false, onValue: (String) -> Unit) {
     Text(label, style = MonoSmall.copy(color = p.inkSoft), modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
@@ -41,13 +47,13 @@ internal fun NativeTextField(value: String, label: String, p: ConversationPalett
 }
 
 @Composable
-internal fun NativeInteractionCard(request: NativeInteraction, p: ConversationPalette, connected: Boolean, onReply: (JsonObject, (Boolean, String?) -> Unit) -> Unit) {
+internal fun NativeInteractionCard(request: NativeInteraction, p: ConversationPalette, connected: Boolean, serverSkewMs: Long, onReply: (JsonObject, (Boolean, String?) -> Unit) -> Unit) {
     var value by remember(request.id) { mutableStateOf(request.prefill) }
     var pending by remember(request.id) { mutableStateOf(false) }
     var error by remember(request.id) { mutableStateOf<String?>(null) }
     var permanent by remember(request.id) { mutableStateOf<NativeOption?>(null) }
-    var expired by remember(request.id) { mutableStateOf(System.currentTimeMillis() >= request.expiresAt) }
-    LaunchedEffect(request.id) { kotlinx.coroutines.delay((request.expiresAt - System.currentTimeMillis()).coerceAtLeast(0)); expired = true }
+    var expired by remember(request.id, serverSkewMs) { mutableStateOf(nativeInteractionRemainingMs(request.expiresAt, System.currentTimeMillis(), serverSkewMs) == 0L) }
+    LaunchedEffect(request.id, serverSkewMs) { kotlinx.coroutines.delay(nativeInteractionRemainingMs(request.expiresAt, System.currentTimeMillis(), serverSkewMs)); expired = true }
     fun send(cancel: Boolean = false, confirmed: Boolean? = null, selection: String? = null, always: Boolean = false) {
         if (pending || !connected || expired) return
         pending = true
