@@ -23,12 +23,13 @@ type interaction struct {
 
 func (w *worker) requestInteraction(raw []byte) {
 	var e map[string]json.RawMessage
-	var id, method string
+	var id, method, nativeSID string
 	if json.Unmarshal(raw, &e) != nil {
 		return
 	}
 	_ = json.Unmarshal(e["id"], &id)
 	_ = json.Unmarshal(e["method"], &method)
+	_ = json.Unmarshal(e["sessionId"], &nativeSID)
 	if id == "" {
 		return
 	}
@@ -63,7 +64,7 @@ func (w *worker) requestInteraction(raw []byte) {
 	}
 	token := newStreamID() + newStreamID()
 	w.mu.Lock()
-	if len(w.interactions) >= 16 || len(w.clients) == 0 {
+	if len(w.interactions) >= 16 || len(w.clients) == 0 || (method == "permission" && (nativeSID == "" || nativeSID != w.sessionID)) {
 		w.mu.Unlock()
 		w.cancelNativeInteraction(id)
 		return

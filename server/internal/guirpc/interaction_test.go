@@ -104,6 +104,49 @@ func TestDialogInvalidStaleExpiryAndOwnerLoss(t *testing.T) {
 	}
 }
 
+func TestGrokPermissionRejectsChangingAndUnconfirmedSession(t *testing.T) {
+	for _, tc := range []struct {
+		name, nativeSID, workerSID, requestSID string
+		changing                               bool
+	}{
+		{"native-changing", "sid", "sid", "sid", true},
+		{"worker-still-old", "new", "old", "new", false},
+		{"native-request-stale", "new", "new", "old", false},
+		{"native-not-loaded", "", "", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			native := &syncBuffer{}
+			w := newWorker(nil)
+			defer w.shutdown()
+			_, _, client := w.attach(Hello{}, true)
+			defer w.detach(client)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			g := newGrokACP(ctx, func(b []byte) error { _, err := native.Write(b); return err }, w.ingest, func() {})
+			w.setInput(g)
+			g.session, g.sessionChanging = tc.nativeSID, tc.changing
+			w.sessionID = tc.workerSID
+			g.ingest([]byte(`{"jsonrpc":"2.0","id":0,"method":"session/request_permission","params":{"sessionId":"` + tc.requestSID + `","toolCall":{"toolCallId":"tool"},"options":[{"optionId":"once","name":"Allow once","kind":"allow_once"}]}}`))
+			deadline := time.Now().Add(time.Second)
+			for native.String() == "" && time.Now().Before(deadline) {
+				time.Sleep(time.Millisecond)
+			}
+			if !strings.Contains(native.String(), `"outcome":"cancelled"`) || !strings.Contains(native.String(), `"id":0`) {
+				t.Fatalf("unconfirmed callback not cancelled: %s", native.String())
+			}
+			g.mu.Lock()
+			pending := len(g.permissions)
+			g.mu.Unlock()
+			w.mu.Lock()
+			cards := len(w.interactions)
+			w.mu.Unlock()
+			if pending != 0 || cards != 0 {
+				t.Fatalf("wrong-session callback leaked: native=%d cards=%d", pending, cards)
+			}
+		})
+	}
+}
+
 func TestGrokPermissionNumericZeroNativeOptionAndPermanentConsent(t *testing.T) {
 	native := &syncBuffer{}
 	w := newWorker(nil)

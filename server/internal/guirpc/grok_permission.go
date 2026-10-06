@@ -40,7 +40,7 @@ func (g *grokACP) permission(id, raw json.RawMessage) {
 		return
 	}
 	g.mu.Lock()
-	if p.SID != g.session || len(g.permissions) >= 16 {
+	if p.SID == "" || p.SID != g.session || g.sessionChanging || len(g.permissions) >= 16 {
 		g.mu.Unlock()
 		cancel()
 		return
@@ -66,7 +66,7 @@ func (g *grokACP) permission(id, raw json.RawMessage) {
 	}
 	g.permissions[token] = callback
 	g.mu.Unlock()
-	g.publish(map[string]any{"type": "extension_ui_request", "id": token, "method": "permission", "title": p.Tool.Title, "message": string(p.Tool.Input), "toolCallId": p.Tool.ID, "options": options})
+	g.publish(map[string]any{"type": "extension_ui_request", "id": token, "method": "permission", "sessionId": p.SID, "title": p.Tool.Title, "message": string(p.Tool.Input), "toolCallId": p.Tool.ID, "options": options})
 }
 
 func (g *grokACP) permissionReply(raw []byte) error {

@@ -58,8 +58,8 @@ ACP request_permission maps original JSON-RPC ID (including **numeric 0**), sess
 
 - At most 16 pending human decisions per worker/native connection.
 - GUI `requestId` is a random 32-hex token, distinct from outer command id and native callback id.
-- Token is session+bridge stream bound; wrong-session, stale, duplicate and unadvertised decisions fail visibly without native writes.
-- Host policy deadline is 2 minutes, reduced by Pi's optional native timeout in milliseconds. Unanswered expiry or last subscriber leaving produces native cancelled and an `interaction_resolved` event. Waiting humans do not block stdio or poll on a timer.
+- Token is session+bridge stream bound; original ACP sessionId must equal the confirmed worker ID, and load/initialization-time permission requests cancel rather than acquire the retired session's owner. Wrong-session, stale, duplicate and unadvertised decisions fail visibly without native writes.
+- Host policy deadline is 2 minutes, reduced by Pi's optional native timeout in milliseconds. Mutations/resume that may ask an extension question allow that human window plus bounded native cancellation/replay grace (145s host / 160s client); a 25s RPC timer must not strand a still-valid human request. Unanswered expiry or last subscriber leaving produces native cancelled and an `interaction_resolved` event. Client expiry uses the existing host-clock skew, not the phone wall clock. Waiting humans do not block stdio or poll on a timer.
 - Before-fork replies bypass their **own** mutation's user-input gate but still need the original token/session/stream; ordinary prompts remain blocked.
 - Submitted decision means only “decision submitted”, never “tool executed”.
 - Native status/widget/title/editor-text is rendered too. Extension title is separate from trusted session title. Editor text is appended without silently discarding user drafts/attachments. Chrome/item/input payloads remain bounded.
@@ -68,7 +68,7 @@ Future iOS implementation should consume these portable events and reproduce the
 
 ## Grok task drawer
 
-Native metadata-advertised commands populate the drawer. Model/thinking, usage/context/session-info, history/resume, compact, export, new/clear, fork and rewind/undo route to existing dedicated GUI surfaces instead of blindly invoking a TUI popup.
+Native metadata-advertised commands populate the drawer. Live available_commands_update refreshes GUI metadata; reconnect reads it once again (no polling). Model/thinking, usage/context/session-info, history/resume, compact, export, new/clear, fork and rewind/undo route to existing dedicated GUI surfaces instead of blindly invoking a TUI popup.
 
 Dedicated task forms preserve exact documented syntax:
 
