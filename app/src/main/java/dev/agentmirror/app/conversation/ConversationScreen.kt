@@ -193,9 +193,9 @@ fun ConversationRoute(
     }
     AppTheme {
         val dark = LocalAppPalette.current.isDark
-        // Keyed on the scheme instance: switching terminal family within one slot repaints too.
+        // Appearance is explicit: a dark terminal family must not turn App Light into black.
         val scheme = TermPalette.of(dark)
-        val palette = remember(scheme) { ConversationPalette.of(scheme) }
+        val palette = remember(scheme, dark) { ConversationPalette.of(scheme, dark) }
         val look = ConversationLook.of(LocalThemeSuite.current)
         SystemBarInk(palette.dark)
         androidx.compose.runtime.CompositionLocalProvider(LocalConversationLook provides look) {
@@ -1155,8 +1155,8 @@ fun ConversationWarmup() {
         if (SharedPreferencesDisplayModeStore(context).load() != DisplayMode.GUI) return@LaunchedEffect
         withContext(Dispatchers.Default) {
             TermPalette.bind(SharedPreferencesTermThemeStore(context))
-            ConversationPalette.of(TermPalette.of(true))
-            ConversationPalette.of(TermPalette.of(false))
+            ConversationPalette.of(TermPalette.of(true), dark = true)
+            ConversationPalette.of(TermPalette.of(false), dark = false)
             parseMarkdown("# warm\n- **a** `b` [c](https://d)\n```\ne\n```")
         }
         runCatching { fonts.preload(ConversationSans) }

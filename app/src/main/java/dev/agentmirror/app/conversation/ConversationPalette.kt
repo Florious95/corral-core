@@ -30,9 +30,13 @@ import kotlin.math.abs
 import kotlin.math.hypot
 
 /*
- * Native GUI uses one true-black reading surface, independent of terminal theme/appearance.
+ * Native GUI follows App appearance: true black in Dark, clean white/cool grey in Light.
  * Terminal colours remain unchanged in TUI. Only semantic foreground signals use the terminal
- * palette, contrast-repaired against #000000; surfaces never inherit its warm/accent tint.
+ * palette, contrast-repaired for the current reading surfaces; no warm/accent surface tint.
+ * @contract
+ * @pre dark is AppTheme's resolved appearance, not inferred from the terminal scheme
+ * @post Dark surfaces remain #000000; Light surfaces are opaque white/cool grey
+ * @inv theme changes never reuse a palette cached for the opposite appearance
  */
 
 @Immutable
@@ -70,54 +74,56 @@ data class ConversationPalette(
         const val TEXT_MIN = 4.5
         const val BODY_TARGET = 7.0
 
-        private val memo = java.util.IdentityHashMap<TermPalette.Scheme, ConversationPalette>()
+        private val memo = java.util.IdentityHashMap<TermPalette.Scheme, MutableMap<Boolean, ConversationPalette>>()
 
-        /** Memoised per scheme instance (TermPalette keeps one per theme selection and slot). */
-        fun of(scheme: TermPalette.Scheme): ConversationPalette {
-            synchronized(memo) { memo[scheme]?.let { return it } }
-            val palette = from(scheme)
+        /** Memoised by scheme identity AND resolved App appearance, independent of TUI colour. */
+        fun of(scheme: TermPalette.Scheme, dark: Boolean): ConversationPalette {
+            synchronized(memo) { memo[scheme]?.get(dark)?.let { return it } }
+            val palette = from(scheme, dark)
             synchronized(memo) {
-                if (memo.size >= 4) memo.clear()
-                memo[scheme] = palette
+                if (memo.size >= 4 && !memo.containsKey(scheme)) memo.clear()
+                memo.getOrPut(scheme) { HashMap(2) }[dark] = palette
             }
             return palette
         }
 
-        /** All native GUI slots are pure black; separation comes from geometry and hairlines. */
-        fun from(scheme: TermPalette.Scheme): ConversationPalette {
-            val black = 0xFF000000.toInt()
-            val white = Color.White
-            val soft = c(0xFFB6BDC8.toInt())
+        /** Opaque neutral surfaces follow AppTheme, never a terminal family's own background. */
+        fun from(scheme: TermPalette.Scheme, dark: Boolean): ConversationPalette {
+            val paper = if (dark) Color.Black else Color.White
+            val inset = if (dark) Color.Black else c(0xFFF1F3F6.toInt())
+            val ink = if (dark) Color.White else c(0xFF111318.toInt())
+            val soft = c(if (dark) 0xFFB6BDC8.toInt() else 0xFF525A66.toInt())
+            val signalBg = if (dark) 0xFF000000.toInt() else 0xFFF1F3F6.toInt()
             fun signal(vararg slots: Int): Color {
                 val fg = slots.toList().mapNotNull { scheme.ansi16[it] }.maxByOrNull { chroma(it) } ?: 0xFFFFFFFF.toInt()
-                return c(ensureContrast(fg, black, TEXT_MIN + 0.1))
+                return c(ensureContrast(fg, signalBg, TEXT_MIN + 0.1))
             }
             return ConversationPalette(
-                dark = true,
-                canvas = Color.Black,
+                dark = dark,
+                canvas = paper,
                 glow = Color.Transparent,
-                ink = white,
+                ink = ink,
                 inkSoft = soft,
-                inkFaint = white.copy(alpha = 0.24f),
-                accent = white,
-                accentInk = white,
-                onAccent = Color.Black,
-                userBubble = Color.Black,
-                userInk = white,
-                surface = Color.Black,
-                surfaceStroke = white.copy(alpha = 0.16f),
-                code = Color.Black,
-                codeInk = white,
+                inkFaint = ink.copy(alpha = 0.24f),
+                accent = ink,
+                accentInk = ink,
+                onAccent = if (dark) Color.Black else Color.White,
+                userBubble = inset,
+                userInk = ink,
+                surface = paper,
+                surfaceStroke = ink.copy(alpha = 0.16f),
+                code = inset,
+                codeInk = ink,
                 codeSoft = soft,
                 success = signal(10, 2),
                 warning = signal(11, 3),
                 danger = signal(9, 1),
-                // Opaque protection also blocks warm colours sampled from logos/transcript.
-                glass = Color.Black,
-                glassStroke = white.copy(alpha = 0.16f),
-                panel = Color.Black,
-                panelEnd = Color.Black,
-                rule = white.copy(alpha = 0.24f),
+                // Opaque protection blocks saturated colours sampled from logos/transcript.
+                glass = paper,
+                glassStroke = ink.copy(alpha = 0.16f),
+                panel = paper,
+                panelEnd = inset,
+                rule = ink.copy(alpha = 0.24f),
             )
         }
 

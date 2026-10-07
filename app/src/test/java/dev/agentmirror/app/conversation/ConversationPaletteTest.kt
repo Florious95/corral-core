@@ -38,7 +38,7 @@ class ConversationPaletteTest {
         for (family in TermSchemeCatalog.families) {
             TermPalette.bindSelectionForTest(family.id, family.id)
             for (dark in listOf(false, true)) {
-                val p = ConversationPalette.from(TermPalette.of(dark))
+                val p = ConversationPalette.from(TermPalette.of(dark), dark)
                 val glassOverCanvas = p.glass.compositeOver(p.canvas)
                 val pairs = listOf(
                     Triple("ink/canvas", p.ink, p.canvas) to ConversationPalette.BODY_TARGET,
@@ -74,11 +74,11 @@ class ConversationPaletteTest {
     }
 
     @Test
-    fun everyNativeSurfaceIsOpaqueTrueBlackRegardlessOfTerminalTheme() {
+    fun everyDarkNativeSurfaceIsOpaqueTrueBlackRegardlessOfTerminalTheme() {
         for (family in TermSchemeCatalog.families) {
             TermPalette.bindSelectionForTest(family.id, family.id)
             for (dark in listOf(false, true)) {
-                val p = ConversationPalette.from(TermPalette.of(dark))
+                val p = ConversationPalette.from(TermPalette.of(dark), dark = true)
                 for ((name, color) in listOf("canvas" to p.canvas, "bubble" to p.userBubble,
                     "surface" to p.surface, "code" to p.code, "panel" to p.panel,
                     "panelEnd" to p.panelEnd, "glass" to p.glass)) {
