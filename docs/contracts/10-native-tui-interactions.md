@@ -50,7 +50,7 @@ Pi persistent histories retain pre-compaction original content on the official a
 
 ### Native capability boundaries
 
-Pi 1.0.0 RPC has no rewind/navigate_tree mutation. Its menu explains this and offers before-user fork without pretending to roll back the old session. Grok full-clone is confirmed; message-node fork is not confirmed and is visibly unavailable. Controlled Grok rewind probes returned success:false even for valid nodes; GUI exposes the exact provider outcome and never does external JSONL surgery. Grok custom compact instructions remain visibly unavailable because ACK did not prove consumption. Rewind stays visibly disabled pending a real success closure; its daemon adapter preserves native success/false outcomes for independent testing, not a GUI success claim. Grok typed rename is confirmed natively, including same-session manual title pushes; raw /rename as ACP prompt is specifically prohibited.
+Pi 1.0.0 RPC has no rewind/navigate_tree mutation, so rewind is completely absent from its menu; its supported before-user fork remains. Grok full-clone is confirmed, but message-node fork and unproven rewind are completely hidden, including task-drawer /rewind and /undo aliases. Unsupported capability rows must never be displayed disabled or as click-to-explain placeholders. Only supported capabilities temporarily blocked by connection/restoration may be disabled. The daemon preserves native success/false outcomes for independent testing, not a GUI support claim; no external JSONL surgery is performed. Grok custom compact instructions remain unavailable because ACK did not prove consumption. Grok typed rename is confirmed natively, including same-session manual title pushes; raw /rename as ACP prompt is specifically prohibited.
 
 ## Flow-inline dialogs and permissions
 
@@ -70,7 +70,7 @@ Future iOS implementation should consume these portable events and reproduce the
 
 ## Grok task drawer
 
-Native metadata-advertised commands populate the drawer. Live available_commands_update refreshes GUI metadata; reconnect reads it once again (no polling). Model/thinking, usage/context/session-info, history/resume, compact, export, new/clear, fork and rewind/undo route to existing dedicated GUI surfaces instead of blindly invoking a TUI popup.
+Native metadata-advertised commands populate the drawer. Live available_commands_update refreshes GUI metadata; reconnect reads it once again (no polling). Model/thinking, usage/context/session-info, history/resume, compact, export, new/clear and complete clone route to existing supported dedicated GUI surfaces instead of blindly invoking a TUI popup. Unproven rewind/undo are filtered out entirely, and no unadvertised default task form is rendered.
 
 Dedicated task forms preserve exact documented syntax:
 

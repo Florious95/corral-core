@@ -169,9 +169,13 @@ internal fun nativeTaskCommand(type: String, action: String, text: String, budge
     }
 }
 
+/** Advertisement alone does not establish an unproven rewind success capability. */
+internal fun nativeTaskNames(commands: List<SlashCommand>): List<String> = commands.take(128).map { it.name.removePrefix("/") }.filterNot { it in setOf("rewind", "undo") }.distinct()
+
 @Composable
 internal fun NativeTasksSheet(open: Boolean, commands: List<SlashCommand>, p: ConversationPalette, backdrop: Backdrop, onDismiss: () -> Unit, onMapped: (String) -> Boolean, onSubmit: (String, (Boolean, String?) -> Unit) -> Unit) {
-    var type by remember { mutableStateOf("deep-research") }
+    val names = nativeTaskNames(commands)
+    var type by remember { mutableStateOf(names.firstOrNull { it == "deep-research" } ?: names.firstOrNull { it in setOf("workflow", "goal") }.orEmpty()) }
     var action by remember(type) { mutableStateOf(if (type == "workflow") "runs" else if (type == "goal") "status" else "start") }
     var text by remember(type, action) { mutableStateOf("") }
     var budget by remember(type, action) { mutableStateOf("") }
@@ -179,11 +183,11 @@ internal fun NativeTasksSheet(open: Boolean, commands: List<SlashCommand>, p: Co
     var consent by remember { mutableStateOf<String?>(null) }
     var result by remember { mutableStateOf<String?>(null) }
     var pending by remember { mutableStateOf(false) }
-    val advertised = commands.map { it.name.removePrefix("/") }.toSet()
+    val advertised = names.toSet()
     ConversationSheet(open, "Grok 原生任务", "NATIVE TASKS", "后台 ACK / end_turn 仅表示原生命令已接收；最终报告与任务状态才是完成证据。", p, backdrop, "grok-tasks-sheet", "grok-tasks-close", onDismiss) {
-        val choices = listOf("deep-research", "workflow", "goal") + commands.take(128).map { it.name.removePrefix("/") }.filterNot { it in setOf("deep-research", "workflow", "goal") }.distinct()
+        val choices = listOf("deep-research", "workflow", "goal") + names.filterNot { it in setOf("deep-research", "workflow", "goal") }
         choices.forEach { name -> if (name in advertised) SheetButton("/$name${if (type == name) " · 已选择" else ""}", SheetButtonKind.Secondary, p, "grok-task-type-$name", enabled = !pending) { if (!onMapped(name)) { type = name; result = null } } }
-        if (type !in advertised) Text("原生 metadata 未广告 /$type，本入口不可提交。", style = MonoSmall.copy(color = p.inkSoft))
+        if (type !in advertised) return@ConversationSheet
         val actions = when (type) { "workflow" -> listOf("runs", "catalog", "start", "pause", "resume", "stop", "save"); "goal" -> listOf("status", "start", "pause", "resume", "clear"); else -> emptyList() }
         actions.forEach { option -> SheetButton("$option${if (action == option) " · 已选择" else ""}", SheetButtonKind.Secondary, p, "grok-task-action-$option", enabled = !pending) { action = option; result = null } }
         if (type !in setOf("workflow", "goal") || action in setOf("start", "pause", "resume", "stop", "save") && type == "workflow" || action == "start") NativeTextField(text, when(type) { "deep-research" -> "研究问题"; "workflow" -> "工作流名称 / 当前会话 display-name"; "goal" -> "目标"; else -> "原生参数（不推测未知语法）" }, p, "grok-task-text", type == "deep-research") { text = it }

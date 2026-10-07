@@ -908,7 +908,6 @@ private fun ConversationScreen(
                 "export" -> exportSession()
                 "new", "clear" -> { mutationConsent = "new_session" to null; mutationForce = false }
                 "fork" -> { mutationConsent = "clone_session" to null; mutationForce = false }
-                "rewind", "undo" -> { overlay = Overlay.None; toast = "Grok 原生回滚尚未取得成功闭包，未提交或伪造截断" }
                 "rename", "title" -> { overlay = Overlay.None; renameOpen = true }
                 else -> return@NativeTasksSheet false
             }

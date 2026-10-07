@@ -20,11 +20,11 @@ class OverflowSheetsTest {
         val pi = resolveActions("pi", connected = true, restoring = false, compacting = false)
         assertEquals(ConversationAction.History, pi.first().action)
         assertEquals(
-            listOf(ConversationAction.History, ConversationAction.Compact, ConversationAction.NewSession, ConversationAction.Rename, ConversationAction.Fork, ConversationAction.Clone, ConversationAction.Rewind, ConversationAction.Export, ConversationAction.Usage, ConversationAction.Terminal),
+            listOf(ConversationAction.History, ConversationAction.Compact, ConversationAction.NewSession, ConversationAction.Rename, ConversationAction.Fork, ConversationAction.Clone, ConversationAction.Export, ConversationAction.Usage, ConversationAction.Terminal),
             pi.map { it.action },
         )
-        assertTrue(pi.filterNot { it.action == ConversationAction.Rewind }.all { it.enabled })
-        assertFalse("Pi RPC does not implement native rewind", pi.single { it.action == ConversationAction.Rewind }.enabled)
+        assertTrue(pi.all { it.enabled })
+        assertFalse("Unsupported native rewind must not appear", pi.any { it.action == ConversationAction.Rewind })
 
         val grok = resolveActions("grok", connected = true, restoring = false, compacting = false)
         assertEquals(ConversationAction.History, grok.first().action)
@@ -33,10 +33,15 @@ class OverflowSheetsTest {
         assertTrue(grok.any { it.action == ConversationAction.Export && it.enabled })
         assertTrue(grok.any { it.action == ConversationAction.Clone && it.enabled })
         assertTrue(grok.any { it.action == ConversationAction.Tasks && it.enabled })
-        assertFalse("unproven message-point fork is never faked", grok.single { it.action == ConversationAction.Fork }.enabled)
+        assertEquals(
+            listOf(ConversationAction.History, ConversationAction.Compact, ConversationAction.NewSession, ConversationAction.Rename, ConversationAction.Clone, ConversationAction.Tasks, ConversationAction.Export, ConversationAction.Usage, ConversationAction.Terminal),
+            grok.map { it.action },
+        )
+        assertTrue("Every connected Grok menu row has a real native capability", grok.all { it.enabled })
+        assertFalse("Pi-only message-point fork is completely hidden", grok.any { it.action == ConversationAction.Fork })
+        assertFalse("Unproven Grok rewind is completely hidden", grok.any { it.action == ConversationAction.Rewind })
         val unknown = resolveActions("unknown", connected = true, restoring = false, compacting = false)
-        assertFalse("unsupported history stays visible with a reason", unknown.first().enabled)
-        assertFalse(unknown.any { it.action == ConversationAction.Usage || it.action == ConversationAction.Export })
+        assertEquals("Unknown providers invent no native capabilities", listOf(ConversationAction.Terminal), unknown.map { it.action })
         assertFalse(AgentAbilities.of("grok").compactInstructions)
     }
 
@@ -47,6 +52,20 @@ class OverflowSheetsTest {
         assertTrue(offline.all { it.detail == "连接后可用" })
         val restoring = resolveActions("pi", connected = false, restoring = true, compacting = false)
         assertTrue(restoring.all { it.detail == "恢复历史完成后可用" })
+        for (provider in listOf("pi", "grok", "unknown")) {
+            val unsupported = if (provider == "pi") setOf(ConversationAction.Rewind, ConversationAction.Tasks) else if (provider == "grok") setOf(ConversationAction.Rewind, ConversationAction.Fork) else ConversationAction.entries.toSet() - ConversationAction.Terminal
+            for (connected in listOf(false, true)) for (restoring in listOf(false, true)) for (compacting in listOf(false, true)) {
+                val resolved = resolveActions(provider, connected, restoring, compacting)
+                assertTrue("unsupported actions cannot reappear in temporary states", resolved.none { it.action in unsupported })
+            }
+        }
+    }
+
+    @Test
+    fun unsupportedRewindCannotReappearThroughAdvertisedTaskDrawer() {
+        val commands = listOf("/rewind", "undo", "usage", "workflow", "deep-research", "workflow").map { SlashCommand(it, "", "native") }
+        assertEquals(listOf("usage", "workflow", "deep-research"), nativeTaskNames(commands))
+        assertTrue(nativeTaskNames(emptyList()).isEmpty())
     }
 
     // ---- compaction ----

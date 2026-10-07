@@ -18,8 +18,8 @@ package dev.agentmirror.app.conversation
 
 // @contract
 // @pre the agent provider and link state are the only inputs; the menu sends nothing by itself
-// @post history is always row 0; an action this agent cannot do is hidden, one it cannot do *now*
-//       is shown disabled with the reason
+// @post unsupported native capabilities are absent, never disabled/not-supported rows;
+//       supported actions blocked temporarily by link state retain the reason
 // @inv a click re-resolves against the latest state before acting (no stale enabled row acts)
 
 import androidx.compose.animation.AnimatedVisibility
@@ -106,11 +106,12 @@ internal data class ResolvedAction(val action: ConversationAction, val detail: S
 
 /**
  * Resolves the registry against the live state. Hidden = this agent cannot do it at all;
- * disabled = it can, just not now (the detail says why). History is never hidden: it is the
- * menu's anchor, so an agent without a catalogue says so instead of showing an empty list.
+ * disabled = it can, just not now (the detail says why). History is first only when
+ * supported. Unknown/unverified providers expose no invented native operations.
  */
 internal fun resolveActions(provider: String, connected: Boolean, restoring: Boolean, compacting: Boolean): List<ResolvedAction> {
     val can = AgentAbilities.of(provider)
+    val nativeSessions = provider in setOf("pi", "grok")
     val offline = when {
         restoring -> "恢复历史完成后可用"
         !connected -> "连接后可用"
@@ -119,17 +120,18 @@ internal fun resolveActions(provider: String, connected: Boolean, restoring: Boo
     return ConversationAction.entries.mapNotNull { action ->
         when (action) {
             ConversationAction.History ->
-                if (!can.history) ResolvedAction(action, "${agentName(provider)} 暂不支持浏览历史会话", false)
+                if (!can.history) null
                 else ResolvedAction(action, offline ?: "浏览并恢复此目录的会话", offline == null)
             ConversationAction.Compact -> when {
+                !nativeSessions -> null
                 compacting -> ResolvedAction(action, "正在压缩…", true)
                 else -> ResolvedAction(action, offline ?: if (can.compactInstructions) "可指定保留重点" else "整理模型上下文", offline == null)
             }
-            ConversationAction.NewSession -> ResolvedAction(action, offline ?: "当前会话保存在历史中", offline == null)
-            ConversationAction.Rename -> ResolvedAction(action, offline ?: "原生标题同步到历史与页眉", offline == null && provider in setOf("pi", "grok"))
-            ConversationAction.Fork -> ResolvedAction(action, offline ?: if (provider == "pi") "选择用户消息，新上下文停在它之前" else "Grok 仅证实完整克隆，不伪造节点分叉", offline == null && provider == "pi")
+            ConversationAction.NewSession -> if (!nativeSessions) null else ResolvedAction(action, offline ?: "当前会话保存在历史中", offline == null)
+            ConversationAction.Rename -> if (!nativeSessions) null else ResolvedAction(action, offline ?: "原生标题同步到历史与页眉", offline == null)
+            ConversationAction.Fork -> if (provider != "pi") null else ResolvedAction(action, offline ?: "选择用户消息，新上下文停在它之前", offline == null)
             ConversationAction.Clone -> if (provider !in setOf("pi", "grok")) null else ResolvedAction(action, offline ?: "复制完整当前上下文，原会话保持不变", offline == null)
-            ConversationAction.Rewind -> ResolvedAction(action, offline ?: if (provider == "grok") "原生回滚未取得成功闭包，不伪造截断" else "Pi RPC 没有原生回滚；可使用分叉", false)
+            ConversationAction.Rewind -> null
             ConversationAction.Tasks -> if (provider != "grok") null else ResolvedAction(action, offline ?: "研究、工作流、目标及已广告原生命令", offline == null)
             ConversationAction.Export -> if (!can.export) null else ResolvedAction(action, offline ?: "下载并分享原生会话文件", offline == null)
             ConversationAction.Usage -> if (!can.usage) null else ResolvedAction(action, offline ?: "Token、费用与上下文占用", offline == null)
