@@ -32,7 +32,13 @@ func grokQuotaProjection(raw json.RawMessage) (map[string]any, error) {
 	var result struct {
 		Config *struct {
 			CreditUsagePercent *float64 `json:"creditUsagePercent"`
-			CurrentPeriod      *struct {
+			MonthlyLimit       *struct {
+				Val *int64 `json:"val"`
+			} `json:"monthlyLimit"`
+			Used *struct {
+				Val *int64 `json:"val"`
+			} `json:"used"`
+			CurrentPeriod *struct {
 				Type  string `json:"type"`
 				Start string `json:"start"`
 				End   string `json:"end"`
@@ -69,7 +75,11 @@ func grokQuotaProjection(raw json.RawMessage) (map[string]any, error) {
 		if c.CreditUsagePercent != nil && *c.CreditUsagePercent >= 0 && *c.CreditUsagePercent <= 100 {
 			weekly["usedPercent"] = *c.CreditUsagePercent
 			weekly["basis"] = "creditUsagePercent"
-		} else if c.CreditUsagePercent == nil && (c.OnDemandUsed == nil || c.OnDemandUsed.Val == nil || *c.OnDemandUsed.Val == 0) {
+		} else if c.CreditUsagePercent == nil && c.MonthlyLimit != nil && c.MonthlyLimit.Val != nil && *c.MonthlyLimit.Val > 0 && c.Used != nil && c.Used.Val != nil && *c.Used.Val >= 0 {
+			// Native CreditBalance adapter: used / monthlyLimit * 100, capped at 100.
+			weekly["usedPercent"] = min(100.0, float64(*c.Used.Val)/float64(*c.MonthlyLimit.Val)*100)
+			weekly["basis"] = "used.val/monthlyLimit.val"
+		} else if c.CreditUsagePercent == nil && (c.Used == nil || c.Used.Val == nil || *c.Used.Val >= 0) && (c.OnDemandUsed == nil || c.OnDemandUsed.Val == nil || *c.OnDemandUsed.Val == 0) {
 			// Authorized display policy, not a claim that missing native data is zero.
 			weekly["usedPercent"] = float64(0)
 			weekly["basis"] = "authorized_tui_default"
