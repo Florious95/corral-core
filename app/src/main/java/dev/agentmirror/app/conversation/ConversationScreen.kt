@@ -257,7 +257,8 @@ private fun ConversationScreen(
     var toast by remember { mutableStateOf<String?>(null) }
     var compactRun by remember(ref) { mutableStateOf<CompactRun?>(null) }
     var compactInstructions by remember(ref) { mutableStateOf("") }
-    var usage by remember(ref) { mutableStateOf(UsageLoad()) }
+    // An owner change clears the panel immediately, even if the next native task is busy.
+    var usage by remember(ref, state.sessionId, state.stream, state.agentProvider) { mutableStateOf(UsageLoad()) }
     var usageGeneration by remember(ref) { mutableIntStateOf(0) }
     var exporting by remember(ref) { mutableStateOf(false) }
     var points by remember(ref) { mutableStateOf(emptyList<NativePoint>()) }
@@ -603,7 +604,14 @@ private fun ConversationScreen(
         val expectedProvider = state.agentProvider
         usage = usage.beginRead()
         hub.controlWithData(ref, command("get_session_stats")) { ok, reason, data ->
-            if (generation != usageGeneration || state.stream != expectedStream || state.sessionId != expectedSession || state.agentProvider != expectedProvider) return@controlWithData
+            if (generation != usageGeneration) return@controlWithData
+            // state is an immutable Composable argument; only the live flow can fence late replies.
+            val live = hub.session(ref).state.value
+            if (live.stream != expectedStream || live.sessionId != expectedSession || live.agentProvider != expectedProvider) {
+                ++usageGeneration
+                usage = UsageLoad()
+                return@controlWithData
+            }
             usage = when {
                 ok && data != null -> UsageLoad(snapshot = usageSnapshot(data, System.currentTimeMillis()))
                 // A host older than the stats projection refuses the command by name.
@@ -622,7 +630,7 @@ private fun ConversationScreen(
     // session changes while the sheet is up; never on a timer, never while it is closed.
     if (overlay == Overlay.Usage) {
         val settled = connected && !state.running && !state.compacting
-        LaunchedEffect(settled, state.sessionId) {
+        LaunchedEffect(settled, connected, state.sessionId, state.stream, state.agentProvider) {
             if (connected && !usage.unsupported && (settled || usage.snapshot == null)) readUsage()
         }
     }
