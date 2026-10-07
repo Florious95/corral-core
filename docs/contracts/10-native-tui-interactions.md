@@ -4,6 +4,14 @@ Base: `07d4b744b41e26f0a225348a80c26876285afdfb`. This package does not replace 
 
 Pairing still requires the full host/nonce/destination/port/token HMAC proof. Android's 10.0.2.2 host relay may bind the proof to that literal alias only when the real accepted socket and peer are both loopback and request Host/destination/accepted port match exactly. Foreign peers, other public aliases and mismatched authorities remain rejected; no proxy signs a substitute MAC or skips client verification.
 
+## Native account usage (separate from session ledger)
+
+Grok account reads use the existing verified ACP actor's `_x.ai/billing {}`, never another default-credential process, login prompt or model call. A bounded optional read timeout does not disconnect the agent. Failure classes use fixed sanitized messages; original native frames/error data, identity, OAuth, balances and unknown fields are never projected.
+
+Portable `grokQuota` schema supports independent `fiveHour` / `weekly` windows (`usedPercent`, optional `resetsAt`) only after the native window fields and semantics are established. The currently observed actor supplies **no proven quota window**: no 0% meter, no assumed personal-plan mapping, no credit/monthly/token-cost fallback. Its proven `currentPeriod:{type,start,end}` is rendered as billing period and period end, **not** quota reset. `onDemand.usedPercent` is explicitly the `onDemandUsed.val / onDemandCap.val` spending-cap ratio, **not** weekly or 5h quota; unknown currency units are not labeled USD. `windowsStatus:unreported` means successful native read without target quota fields. Missing/negative/zero-cap pairs do not fabricate a ratio; native zero usage remains distinct.
+
+Account results are tied to the native worker/current session and client stream/provider/read epoch. Refresh clears prior account readings even if it fails, while legitimate session counters remain. No cross-actor cache or fork-inherited account values. Quota meters appear only with valid finite nonnegative percentages; absent target windows show `原生未返回目标配额`, never an empty bar implying 0%. Session token/turn/model/cost and context remain independent.
+
 ## Pure-black GUI and usage
 
 All nativeGUI palette slots use opaque `#000000`, including glass, panels, code, buttons and bubbles. Terminal themes are unchanged. Body/button text is white, secondary/code text is `#B6BDC8`; provider/status colors are foreground only. Pressing a destructive button changes its outline, not its black background (C1: Rose Pine Dawn danger retains AA). Every new native interaction/form uses the same black surfaces and sheet controls.

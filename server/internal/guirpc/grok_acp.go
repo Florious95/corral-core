@@ -138,7 +138,11 @@ func (g *grokACP) call(method string, params any, timeout time.Duration, callbac
 		delete(g.pending, id)
 		g.mu.Unlock()
 		callback(nil, errACPTimeout)
-		g.lost()
+		// Optional account metadata is read-only: an unavailable billing
+		// endpoint must not disconnect a healthy native agent/session.
+		if method != "_x.ai/billing" {
+			g.lost()
+		}
 	})
 	g.mu.Unlock()
 	if err := g.wire(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params}); err != nil {

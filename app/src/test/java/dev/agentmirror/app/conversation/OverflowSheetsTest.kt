@@ -154,6 +154,34 @@ class OverflowSheetsTest {
     }
 
     @Test
+    fun accountQuotaPercentagesAreNativeAndNeverDerivedFromSessionLedger() {
+        val s = usageSnapshot(json("""{"sessionId":"grok-sid","agentProvider":"grok","cost":123,"tokens":{"total":999999},"grokQuota":{"fiveHour":{"usedPercent":23.5,"resetsAt":"2026-10-07T00:00:00Z"},"weekly":{"usedPercent":71.25}}}"""), 11)
+        assertEquals(23.5, quotaPercent(s.grokQuota, "fiveHour")!!, 0.0)
+        assertEquals(71.25, quotaPercent(s.grokQuota, "weekly")!!, 0.0)
+        val absent = usageSnapshot(json("""{"agentProvider":"grok","cost":123,"tokens":{"total":999999}}"""), 12)
+        assertNull(quotaPercent(absent.grokQuota, "fiveHour"))
+        assertNull(quotaPercent(absent.grokQuota, "weekly"))
+        for (invalid in listOf("null", "-1", "\"23\"", "\"NaN\"")) assertNull(quotaPercent(json("""{"fiveHour":{"usedPercent":$invalid}}"""), "fiveHour"))
+        assertEquals(0.0, quotaPercent(json("""{"fiveHour":{"usedPercent":0}}"""), "fiveHour")!!, 0.0)
+        val pi = usageSnapshot(json("""{"agentProvider":"pi","grokQuota":{"weekly":{"usedPercent":75}},"quotaError":"wrong provider"}"""), 13)
+        assertNull("Grok account readings cannot bleed into Pi", pi.grokQuota)
+        assertNull(pi.quotaError)
+    }
+
+    @Test
+    fun billPeriodAndSpendingAreNotQuotaOrResetAndRefreshClearsOldAccount() {
+        val s = usageSnapshot(json("""{"sessionId":"grok-sid","agentProvider":"grok","tokens":{"total":42},"grokQuota":{"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","end":"2026-10-11T16:40:34Z"},"onDemand":{"usedPercent":25},"windowsStatus":"unreported"}}"""), 14)
+        assertEquals(25.0, quotaPercent(s.grokQuota, "onDemand")!!, 0.0)
+        assertNull(quotaPercent(s.grokQuota, "fiveHour"))
+        assertNull(quotaPercent(s.grokQuota, "weekly"))
+        val refreshing = UsageLoad(snapshot = s).beginRead()
+        assertTrue(refreshing.loading)
+        assertNull("Old account metadata cannot survive pending/failed new read", refreshing.snapshot!!.grokQuota)
+        assertEquals("Legitimate session counters stay available", 42L, refreshing.snapshot!!.total)
+        assertNull(refreshing.snapshot!!.quotaError)
+    }
+
+    @Test
     fun grokContextSnapshotDoesNotInventCumulativeUsage() {
         val s = usageSnapshot(json("""{"sessionId":"grok-sid","source":"native_slash","modelName":"grok-4.6","turnCount":0,
             "contextUsage":{"tokens":1359,"contextWindow":500000,"percent":0.2718}}"""), 10)

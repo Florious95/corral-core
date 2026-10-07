@@ -598,9 +598,12 @@ private fun ConversationScreen(
     }
     fun readUsage() {
         val generation = ++usageGeneration
-        usage = usage.copy(loading = true)
+        val expectedStream = state.stream
+        val expectedSession = state.sessionId
+        val expectedProvider = state.agentProvider
+        usage = usage.beginRead()
         hub.controlWithData(ref, command("get_session_stats")) { ok, reason, data ->
-            if (generation != usageGeneration) return@controlWithData
+            if (generation != usageGeneration || state.stream != expectedStream || state.sessionId != expectedSession || state.agentProvider != expectedProvider) return@controlWithData
             usage = when {
                 ok && data != null -> UsageLoad(snapshot = usageSnapshot(data, System.currentTimeMillis()))
                 // A host older than the stats projection refuses the command by name.

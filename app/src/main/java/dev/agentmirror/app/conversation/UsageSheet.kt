@@ -17,8 +17,8 @@
 package dev.agentmirror.app.conversation
 
 // @contract
-// @pre data is Pi's get_session_stats (P22) for this ref, projected without the host path
-// @post absent ≠ zero: a missing field renders "—", never 0; percent only from same-snapshot used/limit
+// @pre native stats for this ref; Grok account quotas are separately sourced, never session ledger estimates
+// @post absent ≠ zero; quota percentages are native account readings, context percent uses same-snapshot used/limit
 // @err unsupported host, failure and stale (other session) stay visible; no fixed-rate polling
 // @inv reads happen on open, on refresh, and when the agent settles while the sheet is open
 
@@ -90,6 +90,8 @@ internal data class UsageSnapshot(
     val usageError: String? = null,
     val reasoning: Long? = null,
     val modelCalls: Long? = null,
+    val grokQuota: JsonObject? = null,
+    val quotaError: String? = null,
 ) {
     /** Everything the model read: uncached input + cache reads + cache writes. */
     val promptTokens: Long? get() = if (nativeSlash) input else if (input != null && cacheRead != null && cacheWrite != null) input + cacheRead + cacheWrite else null
@@ -128,8 +130,14 @@ internal fun usageSnapshot(data: JsonObject, sampledAt: Long): UsageSnapshot {
         usageError = data.str("usageError").takeIf { it.isNotBlank() },
         reasoning = tokens?.long("reasoning"),
         modelCalls = data.long("modelCalls"),
+        grokQuota = data.obj("grokQuota").takeIf { data.str("agentProvider") == "grok" },
+        quotaError = data.str("quotaError").takeIf { it.isNotBlank() && data.str("agentProvider") == "grok" },
     )
 }
+
+/** Only a native account percentage; missing/invalid never becomes zero or session cost math. */
+internal fun quotaPercent(data: JsonObject?, window: String): Double? = (data?.obj(window)?.get("usedPercent") as? JsonPrimitive)
+    ?.takeIf { !it.isString && it !is JsonNull }?.content?.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }
 
 /** What the usage sheet holds between reads. */
 internal data class UsageLoad(
@@ -139,6 +147,9 @@ internal data class UsageLoad(
     /** The host predates the stats command: an honest gap, not an error. */
     val unsupported: Boolean = false,
 )
+
+/** Account readings are never reused while a new actor/epoch read is pending or fails. */
+internal fun UsageLoad.beginRead(): UsageLoad = copy(loading = true, snapshot = snapshot?.copy(grokQuota = null, quotaError = null))
 
 internal fun groupedCount(n: Long): String = String.format(Locale.US, "%,d", n)
 
@@ -219,6 +230,41 @@ internal fun UsageSheet(
 private fun UsageBody(s: UsageSnapshot, load: UsageLoad, running: Boolean, p: ConversationPalette) {
     val look = LocalConversationLook.current
     val numeric = TextStyle(fontFamily = ConversationSans, fontFeatureSettings = "tnum", color = p.ink)
+
+    // Billing periods/on-demand spending are never rolling quota/reset windows.
+    if (s.nativeSlash) {
+        SheetLabel("账号配额与周期 · 当前原生 Grok 登录账号", p, Modifier.padding(top = 4.dp, bottom = 8.dp))
+        s.grokQuota?.obj("currentPeriod")?.let { period ->
+            val type = when (period.str("type")) {
+                "USAGE_PERIOD_TYPE_WEEKLY" -> "每周"
+                "USAGE_PERIOD_TYPE_MONTHLY" -> "每月"
+                else -> "原生周期"
+            }
+            SheetFact("计费周期", type, p, tag = "grok-billing-period")
+            period.str("end").takeIf { it.isNotBlank() }?.let { end ->
+                SheetFact("当前账单周期结束时间", end.replace("T", " ").removeSuffix("Z") + " UTC", p, tag = "grok-billing-period-end")
+            }
+        }
+        quotaPercent(s.grokQuota, "onDemand")?.let { percent ->
+            SheetFact("按需消费进度 / 封顶比", percentText(percent), p, tag = "grok-on-demand-percent")
+            ContextBar(percent, p, Modifier.padding(top = 6.dp, bottom = 12.dp).testTag("grok-on-demand-progress"))
+            Text("按需消费封顶比，不是 5 小时或每周配额。", style = CaptionStyle.copy(color = p.inkSoft))
+        }
+        val windows = listOf("fiveHour" to "5 小时滚动配额", "weekly" to "每周配额")
+        windows.forEach { (window, label) ->
+            quotaPercent(s.grokQuota, window)?.let { percent ->
+                SheetFact(label, percentText(percent), p, tag = "grok-quota-$window-percent")
+                ContextBar(percent, p, Modifier.padding(top = 6.dp, bottom = 12.dp).testTag("grok-quota-$window-progress"))
+                s.grokQuota?.obj(window)?.str("resetsAt")?.takeIf { it.isNotBlank() }?.let { reset ->
+                    Text("配额重置于 $reset", style = CaptionStyle.copy(color = p.inkSoft), modifier = Modifier.testTag("grok-quota-$window-reset"))
+                }
+            }
+        }
+        if (s.grokQuota != null && windows.all { quotaPercent(s.grokQuota, it.first) == null }) {
+            Text("原生未返回目标配额（5 小时 / 每周）；不代表 0%。", style = CaptionStyle.copy(color = p.inkSoft), modifier = Modifier.testTag("grok-quota-unreported"))
+        }
+        s.quotaError?.let { SheetCallout(Glyph.Gauge, it, p.warning, p, tag = "grok-quota-error") }
+    }
 
     // ---- current context: the hero reading ----
     SheetLabel("当前上下文", p, Modifier.padding(top = 4.dp))

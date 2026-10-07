@@ -10,6 +10,7 @@ package guirpc
 // @inv no polling, model call, transcript injection or text-screen scraping
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"math"
@@ -26,6 +27,8 @@ type grokStatsRead struct {
 	overflow    bool
 	usage       *grokUsage
 	usageError  error
+	quota       map[string]any
+	quotaError  error
 }
 
 func (g *grokACP) readStats(id string) error {
@@ -40,6 +43,16 @@ func (g *grokACP) readStats(id string) error {
 	go func() {
 		if g.usage != nil {
 			read.usage, read.usageError = g.usage(g.ctx, read.session)
+		}
+		// Same native ACP actor/auth context as the current session. This is
+		// an account read, not a prompt, new session or reconstructed billing.
+		bounded, cancel := context.WithTimeout(g.ctx, 5*time.Second)
+		raw, err := g.request(bounded, "_x.ai/billing", map[string]any{})
+		cancel()
+		if err == nil {
+			read.quota, read.quotaError = grokQuotaProjection(raw)
+		} else {
+			read.quotaError = grokQuotaReadError(err)
 		}
 		g.mu.Lock()
 		current := g.stats == read && g.session == read.session
@@ -91,6 +104,11 @@ func (g *grokACP) statsQuery(read *grokStatsRead, command string, last bool) {
 			metrics["modelName"] = model.ID
 		}
 		metrics["source"] = "native_slash"
+		if read.quotaError != nil {
+			metrics["quotaError"] = read.quotaError.Error()
+		} else {
+			metrics["grokQuota"] = read.quota
+		}
 		if g.usage != nil {
 			if read.usageError == nil {
 				projectGrokUsage(metrics, read.usage)
