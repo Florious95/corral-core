@@ -23,6 +23,7 @@ package dev.agentmirror.app.conversation
 // @inv reads happen on open, on refresh, and when the agent settles while the sheet is open
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,6 +61,9 @@ import java.math.BigDecimal
 import java.math.MathContext
 import java.math.RoundingMode
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
 
@@ -165,9 +169,15 @@ internal fun usdText(raw: String?): String? {
 }
 
 internal fun percentText(percent: Double): String = when {
+    percent == 0.0 -> "0%"
     percent > 0 && percent < 0.1 -> "< 0.1%"
     else -> String.format(Locale.US, "%.1f%%", percent)
 }
+
+/** Formats a native instant, without promoting a period end/TUI clock into a quota reset. */
+internal fun quotaTimeText(raw: String, zone: ZoneId = ZoneId.systemDefault()): String? = runCatching {
+    Instant.parse(raw).atZone(zone).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm XXX", Locale.US))
+}.getOrNull()
 
 @Composable
 internal fun UsageSheet(
@@ -240,9 +250,9 @@ private fun UsageBody(s: UsageSnapshot, load: UsageLoad, running: Boolean, p: Co
                 "USAGE_PERIOD_TYPE_MONTHLY" -> "每月"
                 else -> "原生周期"
             }
-            SheetFact("计费周期", type, p, tag = "grok-billing-period")
-            period.str("end").takeIf { it.isNotBlank() }?.let { end ->
-                SheetFact("当前账单周期结束时间", end.replace("T", " ").removeSuffix("Z") + " UTC", p, tag = "grok-billing-period-end")
+            SheetFact(if (type == "每周") "每周账期" else "计费周期", type, p, tag = "grok-billing-period")
+            period.str("end").let { quotaTimeText(it) }?.let { end ->
+                SheetFact("账期结束时间（非额度重置）", end, p, tag = "grok-billing-period-end")
             }
         }
         quotaPercent(s.grokQuota, "onDemand")?.let { percent ->
@@ -250,18 +260,18 @@ private fun UsageBody(s: UsageSnapshot, load: UsageLoad, running: Boolean, p: Co
             ContextBar(percent, p, Modifier.padding(top = 6.dp, bottom = 12.dp).testTag("grok-on-demand-progress"))
             Text("按需消费封顶比，不是 5 小时或每周配额。", style = CaptionStyle.copy(color = p.inkSoft))
         }
-        val windows = listOf("fiveHour" to "5 小时滚动配额", "weekly" to "每周配额")
+        val windows = listOf("fiveHour" to "5 小时滚动额度", "weekly" to "每周额度")
         windows.forEach { (window, label) ->
             quotaPercent(s.grokQuota, window)?.let { percent ->
-                SheetFact(label, percentText(percent), p, tag = "grok-quota-$window-percent")
+                SheetFact(label, "${percentText(percent)}（已用）", p, tag = "grok-quota-$window-percent")
                 ContextBar(percent, p, Modifier.padding(top = 6.dp, bottom = 12.dp).testTag("grok-quota-$window-progress"))
-                s.grokQuota?.obj(window)?.str("resetsAt")?.takeIf { it.isNotBlank() }?.let { reset ->
-                    Text("配额重置于 $reset", style = CaptionStyle.copy(color = p.inkSoft), modifier = Modifier.testTag("grok-quota-$window-reset"))
+                s.grokQuota?.obj(window)?.str("resetsAt")?.let { quotaTimeText(it) }?.let { reset ->
+                    Text("重置时间：$reset", style = CaptionStyle.copy(color = p.inkSoft), modifier = Modifier.testTag("grok-quota-$window-reset"))
                 }
             }
         }
         if (s.grokQuota != null && windows.all { quotaPercent(s.grokQuota, it.first) == null }) {
-            Text("原生未返回目标配额（5 小时 / 每周）；不代表 0%。", style = CaptionStyle.copy(color = p.inkSoft), modifier = Modifier.testTag("grok-quota-unreported"))
+            Text("账号额度暂未取得，可手动刷新；缺值不代表 0%。", style = CaptionStyle.copy(color = p.inkSoft), modifier = Modifier.testTag("grok-quota-unreported"))
         }
         s.quotaError?.let { SheetCallout(Glyph.Gauge, it, p.warning, p, tag = "grok-quota-error") }
     }
@@ -439,6 +449,8 @@ private fun ContextBar(percent: Double?, p: ConversationPalette, modifier: Modif
             .height(6.dp)
             .clip(shape)
             .background(p.canvas)
+            // A genuine 0% has no fill, but the complete track remains visible in both themes.
+            .border(0.5.dp, p.ink.copy(alpha = 0.5f), shape)
             .then(
                 if (look.glass) Modifier else Modifier.drawWithContent {
                     drawContent()
