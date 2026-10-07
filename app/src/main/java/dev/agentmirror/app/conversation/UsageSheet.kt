@@ -18,7 +18,7 @@ package dev.agentmirror.app.conversation
 
 // @contract
 // @pre native stats for this ref; Grok account quotas are separately sourced, never session ledger estimates
-// @post absent ≠ zero; quota percentages are native account readings, context percent uses same-snapshot used/limit
+// @post absent ≠ measured zero; authorized quota defaults/reset bases stay visible; context uses same-snapshot used/limit
 // @err unsupported host, failure and stale (other session) stay visible; no fixed-rate polling
 // @inv reads happen on open, on refresh, and when the agent settles while the sheet is open
 
@@ -265,8 +265,15 @@ private fun UsageBody(s: UsageSnapshot, load: UsageLoad, running: Boolean, p: Co
             quotaPercent(s.grokQuota, window)?.let { percent ->
                 SheetFact(label, "${percentText(percent)}（已用）", p, tag = "grok-quota-$window-percent")
                 ContextBar(percent, p, Modifier.padding(top = 6.dp, bottom = 12.dp).testTag("grok-quota-$window-progress"))
-                s.grokQuota?.obj(window)?.str("resetsAt")?.let { quotaTimeText(it) }?.let { reset ->
+                val detail = s.grokQuota?.obj(window)
+                detail?.str("resetsAt")?.let { quotaTimeText(it) }?.let { reset ->
                     Text("重置时间：$reset", style = CaptionStyle.copy(color = p.inkSoft), modifier = Modifier.testTag("grok-quota-$window-reset"))
+                }
+                if (detail?.str("basis") == "authorized_tui_default") {
+                    Text("未提供百分比时按原生样式显示 0%。", style = CaptionStyle.copy(color = p.inkSoft), modifier = Modifier.testTag("grok-quota-$window-default"))
+                }
+                if (detail?.str("resetBasis") == "currentPeriod.end") {
+                    Text("重置时间按每周账期结束显示。", style = CaptionStyle.copy(color = p.inkSoft), modifier = Modifier.testTag("grok-quota-$window-reset-basis"))
                 }
             }
         }

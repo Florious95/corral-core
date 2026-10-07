@@ -17,6 +17,25 @@ class ConversationQuotaDisplayTest {
     }
 
     @Test
+    fun unreportedStatusDoesNotHideAValidWeeklyZeroInTheActualSnapshotParser() {
+        val stats = Json.parseToJsonElement("""{"agentProvider":"grok","sessionId":"current","grokQuota":{"source":"native_acp_billing","windowsStatus":"unreported","weekly":{"usedPercent":0,"resetsAt":"2026-10-11T16:40:34Z"}}}""").jsonObject
+        val snapshot = usageSnapshot(stats, 1)
+        assertEquals(0.0, quotaPercent(snapshot.grokQuota, "weekly")!!, 0.0)
+        assertEquals("0%", percentText(quotaPercent(snapshot.grokQuota, "weekly")!!))
+    }
+
+    @Test
+    fun reportedAuthorizedDefaultRetainsItsBasisInTheActualSnapshotParser() {
+        val stats = Json.parseToJsonElement("""{"agentProvider":"grok","sessionId":"current","grokQuota":{"windowsStatus":"reported","weekly":{"usedPercent":0,"basis":"authorized_tui_default","usedPercentDefaulted":true,"resetsAt":"2026-10-11T16:40:34Z","resetBasis":"currentPeriod.end"}}}""").jsonObject
+        val snapshot = usageSnapshot(stats, 1)
+        assertEquals(0.0, quotaPercent(snapshot.grokQuota, "weekly")!!, 0.0)
+        val weekly = snapshot.grokQuota!!["weekly"]!!.jsonObject
+        assertEquals("\"authorized_tui_default\"", weekly["basis"].toString())
+        assertEquals("true", weekly["usedPercentDefaulted"].toString())
+        assertEquals("\"currentPeriod.end\"", weekly["resetBasis"].toString())
+    }
+
+    @Test
     fun billingMetadataAndClockOnlyObservationCannotInventQuotaOrResetDate() {
         val quota = Json.parseToJsonElement("""{"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","end":"2026-10-11T16:40:34Z"},"onDemand":{"usedPercent":0}}""").jsonObject
         assertNull(quotaPercent(quota, "weekly"))

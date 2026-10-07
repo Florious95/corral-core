@@ -10,7 +10,7 @@ import (
 )
 
 func TestGrokQuotaPeriodAndSpendingNeverBecomeQuotaWindows(t *testing.T) {
-	q, err := grokQuotaProjection(json.RawMessage(`{"config":{"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","start":"2026-10-04T16:40:34Z","end":"2026-10-11T16:40:34Z"},"creditUsagePercent":23.5,"onDemandUsed":{"val":50},"onDemandCap":{"val":100},"includedUsed":{"val":11},"totalUsed":{"val":61},"monthlyLimit":{"val":999},"prepaidBalance":{"val":54321},"email":"private-sentinel"},"auth":"private-sentinel"}`))
+	q, err := grokQuotaProjection(json.RawMessage(`{"config":{"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","start":"2026-10-04T16:40:34Z","end":"2026-10-11T16:40:34Z"},"onDemandUsed":{"val":50},"onDemandCap":{"val":100},"includedUsed":{"val":11},"totalUsed":{"val":61},"monthlyLimit":{"val":999},"prepaidBalance":{"val":54321},"email":"private-sentinel"},"auth":"private-sentinel"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,8 +129,15 @@ func TestGrokStatsBillingReadStaysInNativeActorAndPreservesSessionUsage(t *testi
 			if failure && (data["quotaError"] == nil || strings.Contains(string(data["quotaError"]), "private-account-sentinel")) {
 				t.Fatal("account error leaked original text or was hidden")
 			}
-			if !failure && (data["grokQuota"] == nil || strings.Contains(string(data["grokQuota"]), "usedPercent")) {
-				t.Fatal("period did not project or fabricated percent")
+			if !failure {
+				var q map[string]any
+				if err := json.Unmarshal(data["grokQuota"], &q); err != nil {
+					t.Fatal("native account projection missing")
+				}
+				weekly, ok := q["weekly"].(map[string]any)
+				if !ok || weekly["usedPercent"] != 0.0 || weekly["usedPercentDefaulted"] != true || weekly["basis"] != "authorized_tui_default" || weekly["resetBasis"] != "currentPeriod.end" || weekly["resetsAt"] != "2026-10-11T16:40:34Z" || q["windowsStatus"] != "reported" {
+					t.Fatal("authorized default/reset lost or misrepresented as measured quota")
+				}
 			}
 		})
 	}

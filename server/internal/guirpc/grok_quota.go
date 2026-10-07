@@ -3,8 +3,8 @@ package guirpc
 // Account metadata is read through the existing verified native ACP actor.
 // @contract
 // @pre result is the native read-only _x.ai/billing response for this worker
-// @post period and on-demand cap ratio are separate from quota/reset windows
-// @err missing/malformed config stays unknown, never zero or invented quota
+// @post weekly percentage/default and period-end reset retain their distinct authorized bases
+// @err malformed config/percentage stays unknown; nonzero on-demand spending bars a default
 // @inv no auth/cookie/email/raw response/balance projection, polling or model calls
 
 import (
@@ -31,7 +31,8 @@ func grokQuotaReadError(err error) error {
 func grokQuotaProjection(raw json.RawMessage) (map[string]any, error) {
 	var result struct {
 		Config *struct {
-			CurrentPeriod *struct {
+			CreditUsagePercent *float64 `json:"creditUsagePercent"`
+			CurrentPeriod      *struct {
 				Type  string `json:"type"`
 				Start string `json:"start"`
 				End   string `json:"end"`
@@ -63,10 +64,30 @@ func grokQuotaProjection(raw json.RawMessage) (map[string]any, error) {
 		}
 	}
 	c := result.Config
+	if c.CurrentPeriod != nil && c.CurrentPeriod.Type == "USAGE_PERIOD_TYPE_WEEKLY" {
+		weekly := map[string]any{}
+		if c.CreditUsagePercent != nil && *c.CreditUsagePercent >= 0 && *c.CreditUsagePercent <= 100 {
+			weekly["usedPercent"] = *c.CreditUsagePercent
+			weekly["basis"] = "creditUsagePercent"
+		} else if c.CreditUsagePercent == nil && (c.OnDemandUsed == nil || c.OnDemandUsed.Val == nil || *c.OnDemandUsed.Val == 0) {
+			// Authorized display policy, not a claim that missing native data is zero.
+			weekly["usedPercent"] = float64(0)
+			weekly["basis"] = "authorized_tui_default"
+			weekly["usedPercentDefaulted"] = true
+		}
+		if len(weekly) > 0 {
+			if at, err := time.Parse(time.RFC3339Nano, c.CurrentPeriod.End); err == nil {
+				weekly["resetsAt"] = at.UTC().Format(time.RFC3339)
+				weekly["resetBasis"] = "currentPeriod.end"
+			}
+			quota["weekly"] = weekly
+			quota["windowsStatus"] = "reported"
+		}
+	}
 	if c.OnDemandUsed != nil && c.OnDemandUsed.Val != nil && *c.OnDemandUsed.Val >= 0 && c.OnDemandCap != nil && c.OnDemandCap.Val != nil && *c.OnDemandCap.Val > 0 {
 		quota["onDemand"] = map[string]any{"usedPercent": float64(*c.OnDemandUsed.Val) * 100 / float64(*c.OnDemandCap.Val), "basis": "onDemandUsed.val/onDemandCap.val"}
 	}
-	// No confirmed native fiveHour/weekly window fields exist for the observed
-	// actor. Neither billing period nor onDemand cap ratio populates them.
+	// No five-hour window is inferred. The authorized weekly default/reset policy
+	// is identified separately from a measured native account percentage.
 	return quota, nil
 }
