@@ -80,6 +80,18 @@ func (s *Server) presenceSnapshotLocked(ref string) ([]*wsConn, protocol.Presenc
 	}
 }
 
+// mobileOwnsPane protects the shared PTY even before a desktop has received presence.
+func (s *Server) mobileOwnsPane(ref string) bool {
+	s.presenceMu.Lock()
+	defer s.presenceMu.Unlock()
+	for sub := range s.presenceSubs[ref] {
+		if sub.clientType == protocol.ClientTypeMobile {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) sendPresence(recipients []*wsConn, update protocol.PresenceUpdate) {
 	for _, conn := range recipients {
 		conn.send(&update)

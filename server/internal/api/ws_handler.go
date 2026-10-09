@@ -189,6 +189,16 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	// receives SIGWINCH, so redraw bytes produced by the initial phone geometry
 	// are drained locally instead of becoming a wide, pre-reflow first frame.
 	currentCols, currentRows, sizeErr := br.Size(c.ctx)
+	if s.ClientType == protocol.ClientTypeDesktop && c.s.mobileOwnsPane(s.Ref) {
+		if sizeErr != nil || currentCols < 1 || currentRows < 1 || currentCols > 65535 || currentRows > 65535 {
+			teardownSubscription(sub)
+			c.sendError(protocol.ErrCodeInternal, "cannot read mobile-owned pane geometry")
+			return
+		}
+		// Presence reaches the desktop after its initial snapshot. Never let
+		// that handshake (or a reconnect) resize an already mobile-owned PTY.
+		s.Cols, s.Rows = uint16(currentCols), uint16(currentRows)
+	}
 	needsResize := sizeErr != nil || currentCols != int(s.Cols) || currentRows != int(s.Rows)
 	initialEpoch, started := sub.gate.begin()
 	if !started {
@@ -604,6 +614,10 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 	}
 	sub := c.subscriptionFor(r.Ref)
 	if sub == nil {
+		return
+	}
+	// A desktop write may have been queued before mobile presence arrived.
+	if sub.clientType == protocol.ClientTypeDesktop && c.s.mobileOwnsPane(r.Ref) {
 		return
 	}
 	if sub.gate == nil {
