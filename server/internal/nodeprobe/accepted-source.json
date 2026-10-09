@@ -1,19 +1,19 @@
 {
   "binary": {
     "path": "/Users/alauda/.local/bin/nodeprobe",
-    "sha256": "57073fd42d7bdcfbd339687c09531d01aaaa02e02271257a5dd2a9ce72ffb2a3",
-    "size": 861088
+    "sha256": "4c2cd0cd420c9e78e82980cbab5d03957d73a8e4745e596de84860d48066f934",
+    "size": 860640
   },
   "corpora": [
     {
-      "base_blob": "690e651f445793a36ed1cb6e6f6143e6ce5c989e",
+      "base_blob": "1d514d0eb20b316230f56424c58e4c8ad80eef2a",
       "path": "tools/nodeprobe/fixtures/titles.tsv",
-      "sha256": "cff45d25492fdfe9689330c630c80bad20a1f27243e5aae1d93bc57de0a22b58"
+      "sha256": "962b7abf5e0fe3abdc1b8673e8a4109b1ce336fded97c21b815ff7e3b8d86429"
     },
     {
-      "base_blob": "c1166ceabc6ae4e3075fb741c89759da6fcc7844",
+      "base_blob": "6717760ab74f8238845b1138b722ad38c56bc800",
       "path": "tools/nodeprobe/fixtures/providers.tsv",
-      "sha256": "c9e02d01821df7d7afe2292fefb211cefea7e3abecde8b35bd9ffa2a0721ee7e"
+      "sha256": "737a527de80c9dd6a82fe7dfdcfef7f4a0efb63d1080bbec21a5e4e095e9a9d0"
     }
   ],
   "pi_extension": {
@@ -22,8 +22,8 @@
     "size": 6844
   },
   "platform": "darwin/arm64",
-  "source_commit": "dbe81822928449825ab77c0cca9285735e5baf5a",
-  "source_tree": "6d2d98d47a1a322e17cf38a01dde84c57a513f20",
+  "source_commit": "f9e896bf1c884a53c555b661160d4b3f1093315f",
+  "source_tree": "24c62183a29df79d90fab7a997019ddc179372b3",
   "sources": {
     "Cargo.toml": "7fef1cb5ac3173215d94b3c450fde0a928cd5af2ac304b4cc7111f5beb9bc08f",
     "Cargo.lock": "297185c9c0683bdaeadaf4d57a0688c6b91bcfe43a2495a86a9181a479749696",
@@ -31,12 +31,12 @@
     "docs/api-architecture.md": "a4a01c9bb18e00926305f50c635973b401bd9e1b6f8d76e11adf691f4528af07",
     "docs/consumer-migration-map.md": "40fc2cbfa14fee2af6f7044af33a95643e0015f4cd88d4e32f2cce2f3d849849",
     "pi/nodeprobe-pi-activity.js": "51ffcad3f68ac22330d98ba0240b81f41b210939709a91637c917e1555494c27",
-    "src/classify.rs": "a9d4ffcf83b7de79e695ff90b2cdccc8ad362a81035d3a8596922a0ef0676bf7",
+    "src/classify.rs": "efd95cacaa9cd33ec807a4a387df02e85a0661fc1781f12123366cd3bec16070",
     "src/lib.rs": "2c5339202bb05b0cfe1afb233b65024824fd2fab7b09aac2572188dbf99bde44",
     "src/main.rs": "767698d753987ecc06858f178819f377f0fecf17487de1fcc4ae89805bd953a9",
     "src/pi_activity.rs": "b61bfaa5fa6a81e0022c5fd662acf0054b75b2e97a120e11a357451ff4e735f7",
     "src/proctree.rs": "1cf4ef7701d5bd5576f19c4f34e31011e9417fa41aebbe2d0d8bf3ba6bdf5a78",
-    "src/providers.rs": "acba7b54c4d962c34a50bb906b8d5dd03d05473d86669a9fc48af2c5f186c34f",
+    "src/providers.rs": "a00dc974ea95aeeb872ff67eaabf4af89799a4d5746b83e166d7b5f54b329113",
     "src/web.rs": "27a518f9a9e9ab2c1714f1ad5811f96499b2fea34302fcade22926faec98b192",
     "tests/fake_tmux.rs": "c01c8aecd22d11418eada55f17a81bd6031ec1a24a422cf85d27e1fdfe3ac0e3",
     "tests/pi-deterministic.js": "cab70f837f19b6fc6a5791f8a8993aa234a8a3d0812111a0e2a1772a797965b1",

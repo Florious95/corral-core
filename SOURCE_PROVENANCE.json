@@ -151,9 +151,9 @@
     "server/internal/discovery/socket_inventory_regression_test.go": "3a9384a5c2936a40e9466c72302a96ff8eae954451240b779ec8510c5ab4a440",
     "server/internal/discovery/workspace_index.go": "13646922f01c31692882d052ba1480206eb25ccfd689d692018ce49655d5aeab",
     "server/internal/discovery/workspace_index_test.go": "7b3c64083db3922c059a3e5cd379c404bc60a990538dbc3a96fae0aac374cf1b",
-    "server/internal/nodeprobe/accepted-source.json": "80250323a384aeb9763c384d696d6b106e2317e5179779a2946232e16b6a3ee4",
+    "server/internal/nodeprobe/accepted-source.json": "9ef4cf144d2caaba57da1b3347ac06789966ad2fc2856d4f49aa19f9ee23d6b9",
     "server/internal/nodeprobe/accepted_integration_test.go": "dad17af02d3bf2f8a784d40b718896826ff55a967cc738dbfa466f36ca874394",
-    "server/internal/nodeprobe/manifest_test.go": "d2352c5d923c1ddd6b2d831534d6ecbf05850d139bc84ada6143d186b5f8cb34",
+    "server/internal/nodeprobe/manifest_test.go": "11bb84a61aec06ba0a07079bbc5931f1f23061b32036faae2977c625a87528f7",
     "server/internal/nodeprobe/nodeprobe.go": "e1cbd551ea8b612129c9a3c4265c280d0bd9ebf1fe699f0f3854df8fcc3f5971",
     "server/internal/nodeprobe/nodeprobe_test.go": "f224a3a02c40e6c9b66f88e8dc110901ca307ee638133bf0f704dcf7fb3d20c2",
     "server/internal/notify/store.go": "c21f784443e8a0aeefa357bc0ba3db513dfbed3dec7099de5f9fde67f3cc2cba",
@@ -219,14 +219,14 @@
     "server/internal/tsnetd/doc.go": "c6c7f82188a471659d6f88c394183e92d1b6db91ff812565a57623f3246e05b3",
     "server/internal/tsnetd/tsnetd.go": "53e3600da04764b08b1ad65c0d96b2aa0f5456239a77cd6e6b2c05ece94b1cf7",
     "server/internal/tsnetd/tsnetd_test.go": "d5d1f9f806db0c5aee2c2db4546ef41d69e51227e9ce24765de3feb4c2a1599b",
-    "tools/nodeprobe/fixtures/providers.tsv": "c9e02d01821df7d7afe2292fefb211cefea7e3abecde8b35bd9ffa2a0721ee7e",
-    "tools/nodeprobe/fixtures/titles.tsv": "cff45d25492fdfe9689330c630c80bad20a1f27243e5aae1d93bc57de0a22b58"
+    "tools/nodeprobe/fixtures/providers.tsv": "737a527de80c9dd6a82fe7dfdcfef7f4a0efb63d1080bbec21a5e4e095e9a9d0",
+    "tools/nodeprobe/fixtures/titles.tsv": "962b7abf5e0fe3abdc1b8673e8a4109b1ce336fded97c21b815ff7e3b8d86429"
   },
   "included": [
     "server sources",
     "LICENSE",
     "tools/nodeprobe/fixtures"
   ],
-  "inputCommit": "a38b528af9014fc05b9b205139259925ab9e2c63",
-  "inputTree": "d5c1ca34503b5eb1073be329bc3f0702984a287d"
+  "inputCommit": "c3af584eca932692948eb9e140391b0c3006b1fe",
+  "inputTree": "214e6a67676e2b9fcb6fdc03938b9451ae4958db"
 }

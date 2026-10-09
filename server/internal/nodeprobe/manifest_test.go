@@ -10,16 +10,16 @@ func TestAcceptedManifestPinsNSourceAndArtifacts(t *testing.T) {
 	if err := json.Unmarshal(manifestBytes, &m); err != nil {
 		t.Fatal(err)
 	}
-	if m.SourceCommit != "dbe81822928449825ab77c0cca9285735e5baf5a" || m.SourceTree != "6d2d98d47a1a322e17cf38a01dde84c57a513f20" {
+	if m.SourceCommit != "f9e896bf1c884a53c555b661160d4b3f1093315f" || m.SourceTree != "24c62183a29df79d90fab7a997019ddc179372b3" {
 		t.Fatalf("source=%s tree=%s", m.SourceCommit, m.SourceTree)
 	}
-	if m.Platform != "darwin/arm64" || m.Binary.SHA256 != "57073fd42d7bdcfbd339687c09531d01aaaa02e02271257a5dd2a9ce72ffb2a3" || m.Binary.Size != 861088 {
+	if m.Platform != "darwin/arm64" || m.Binary.SHA256 != "4c2cd0cd420c9e78e82980cbab5d03957d73a8e4745e596de84860d48066f934" || m.Binary.Size != 860640 {
 		t.Fatalf("binary=%+v platform=%s", m.Binary, m.Platform)
 	}
 	if m.PiExtension.SHA256 != "c28855ea4ac6f411044fb9a8066c2e5c3e5580197c1ae412e88d23d07467b714" || m.PiExtension.Size != 6844 {
 		t.Fatalf("extension=%+v", m.PiExtension)
 	}
-	if len(m.Corpora) != 2 || m.Corpora[0].Path != "tools/nodeprobe/fixtures/titles.tsv" || m.Corpora[0].SHA256 != "cff45d25492fdfe9689330c630c80bad20a1f27243e5aae1d93bc57de0a22b58" || m.Corpora[1].Path != "tools/nodeprobe/fixtures/providers.tsv" || m.Corpora[1].SHA256 != "c9e02d01821df7d7afe2292fefb211cefea7e3abecde8b35bd9ffa2a0721ee7e" {
+	if len(m.Corpora) != 2 || m.Corpora[0].Path != "tools/nodeprobe/fixtures/titles.tsv" || m.Corpora[0].SHA256 != "962b7abf5e0fe3abdc1b8673e8a4109b1ce336fded97c21b815ff7e3b8d86429" || m.Corpora[1].Path != "tools/nodeprobe/fixtures/providers.tsv" || m.Corpora[1].SHA256 != "737a527de80c9dd6a82fe7dfdcfef7f4a0efb63d1080bbec21a5e4e095e9a9d0" {
 		t.Fatalf("corpora=%+v", m.Corpora)
 	}
 }
