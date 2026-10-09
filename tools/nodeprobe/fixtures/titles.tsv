@@ -22,6 +22,10 @@ hello	idle	unknown	title
 Codex CLI	idle	codex	title
 ⠁ Codex synthetic-unknown	unknown	codex	title
 π - pi-static-name - repo	unknown	pi	title
+Kiro CLI	unknown	kiro_cli	title
+Aider	unknown	aider	title
+Goose	unknown	goose	title
+OpenCode	unknown	opencode	title
 grok	idle	grok	title
 command still running	1	grok	footer
 just a prompt · nothing in flight	0	grok	footer

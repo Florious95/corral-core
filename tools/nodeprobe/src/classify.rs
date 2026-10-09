@@ -54,6 +54,10 @@ pub const PROVIDER_CODEX: &str = "codex";
 pub const PROVIDER_COPILOT: &str = "copilot";
 pub const PROVIDER_CURSOR: &str = "cursor";
 pub const PROVIDER_PI: &str = "pi";
+pub const PROVIDER_KIRO: &str = "kiro_cli";
+pub const PROVIDER_AIDER: &str = "aider";
+pub const PROVIDER_GOOSE: &str = "goose";
+pub const PROVIDER_OPENCODE: &str = "opencode";
 
 const GROK_THINK: &str = " - Thinking - ";
 const GROK_WAIT: &str = " - Waiting for response";
@@ -172,12 +176,15 @@ pub fn classify_unidentified(title: &str) -> Class {
 /// 刚起的会话标题是光秃秃的产品名，本家检测器不认领，于是每个新会话都先判「未知」。
 /// 正确语义：无前导符号（字母/数字/空）⇒ 空闲；unknown 只由**认不出的前导符号**产生。
 pub fn classify_for(provider: &str, title: &str) -> Class {
-    // Pi currently keeps a static `π` identity title across idle and active
-    // turns.  Title-only observation therefore has no honest state signal.
-    if provider == PROVIDER_PI {
+    // Pi's static title and the newly supported CLIs have no accepted title
+    // activity signal. Preserve identity without inventing working or idle.
+    if matches!(
+        provider,
+        PROVIDER_PI | PROVIDER_KIRO | PROVIDER_AIDER | PROVIDER_GOOSE | PROVIDER_OPENCODE
+    ) {
         return Class {
             state: STATE_UNKNOWN,
-            provider: PROVIDER_PI,
+            provider: intern_expect(provider),
             first: first_non_space(title),
             known: false,
         };
@@ -383,6 +390,10 @@ fn intern_expect(s: &str) -> &'static str {
         "copilot" => PROVIDER_COPILOT,
         "cursor" => PROVIDER_CURSOR,
         "pi" => PROVIDER_PI,
+        "kiro_cli" => PROVIDER_KIRO,
+        "aider" => PROVIDER_AIDER,
+        "goose" => PROVIDER_GOOSE,
+        "opencode" => PROVIDER_OPENCODE,
         _ => STATE_UNKNOWN,
     }
 }

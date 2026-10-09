@@ -154,9 +154,9 @@ mod tests {
     }
 
     #[test]
-    fn six_rows_and_basename() {
+    fn accepted_rows_and_basename() {
         let t = load();
-        assert_eq!(t.len(), 6);
+        assert_eq!(t.len(), 12);
         assert_eq!(lookup("codex").map(|e| e.id.as_str()), Some("codex"));
         assert_eq!(lookup("agent").map(|e| e.id.as_str()), Some("cursor"));
         assert_eq!(
@@ -185,7 +185,13 @@ mod tests {
             ("copilot", "copilot"),
             ("grok", "grok"),
             ("agent", "cursor"),
+            ("cursor-agent", "cursor"),
             ("pi", "pi"),
+            ("kiro-cli", "kiro_cli"),
+            ("kiro-cli-chat", "kiro_cli"),
+            ("aider", "aider"),
+            ("goose", "goose"),
+            ("opencode", "opencode"),
         ];
         for (comm, id) in want {
             let e = lookup(comm).unwrap_or_else(|| panic!("comm {comm} missing"));
@@ -205,7 +211,11 @@ mod tests {
             "make",
             "sshd",
             "node",
-            "cursor-agent",
+            "python",
+            "q",
+            "kiro-cli-term",
+            "kiro_cli_desktop",
+            "cursor-helper",
             "",
         ] {
             assert!(lookup(noise).is_none(), "noise {noise} must not be a node");
