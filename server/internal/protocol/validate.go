@@ -1,0 +1,658 @@
+package protocol
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+	"unicode/utf8"
+)
+
+// FrameType methods map each payload Go type to its wire discriminator, and
+// Validate methods enforce the contract invariants. Together they let the
+// codec (json.go / binary.go) route and check frames in one place.
+
+func (Auth) FrameType() FrameType               { return TypeAuth }
+func (AuthAck) FrameType() FrameType            { return TypeAuthAck }
+func (CreateAgent) FrameType() FrameType        { return TypeCreateAgent }
+func (CreateAgentResult) FrameType() FrameType  { return TypeCreateAgentResult }
+func (CloseSession) FrameType() FrameType       { return TypeCloseSession }
+func (CloseSessionResult) FrameType() FrameType { return TypeCloseSessionResult }
+func (List) FrameType() FrameType               { return TypeList }
+func (Listing) FrameType() FrameType            { return TypeListing }
+func (ListDelta) FrameType() FrameType          { return TypeListDelta }
+func (Subscribe) FrameType() FrameType          { return TypeSubscribe }
+func (PresenceUpdate) FrameType() FrameType     { return TypePresenceUpdate }
+func (Unsubscribe) FrameType() FrameType        { return TypeUnsubscribe }
+func (Input) FrameType() FrameType              { return TypeInput }
+func (InputAck) FrameType() FrameType           { return TypeInputAck }
+func (Scrollback) FrameType() FrameType         { return TypeScrollback }
+func (Resize) FrameType() FrameType             { return TypeResize }
+func (ErrorFrame) FrameType() FrameType         { return TypeError }
+func (ScrollWheel) FrameType() FrameType        { return TypeScrollWheel }
+func (PaneModeChanged) FrameType() FrameType    { return TypePaneModeChanged }
+func (AttachPreview) FrameType() FrameType      { return TypeAttachPreview }
+func (Level2Subscribe) FrameType() FrameType    { return TypeLevel2Subscribe }
+func (Level2Unsubscribe) FrameType() FrameType  { return TypeLevel2Unsubscribe }
+func (Level2Frame) FrameType() FrameType        { return TypeLevel2Frame }
+func (Level2Heartbeat) FrameType() FrameType    { return TypeLevel2Heartbeat }
+func (OverlaySubscribe) FrameType() FrameType   { return TypeOverlaySubscribe }
+func (OverlayUnsubscribe) FrameType() FrameType { return TypeOverlayUnsubscribe }
+func (OverlayFrame) FrameType() FrameType       { return TypeOverlayFrame }
+func (NotificationRecord) FrameType() FrameType { return TypeNotification }
+func (NotificationsSync) FrameType() FrameType  { return TypeNotificationsSync }
+func (NotificationsPage) FrameType() FrameType  { return TypeNotificationsPage }
+
+// Validate reports whether the auth frame is well-formed: a non-empty token.
+func (a Auth) Validate() error {
+	if a.Token == "" {
+		return fmt.Errorf("%w: auth token must be non-empty", ErrInvalidField)
+	}
+	return validateCapabilities(a.Capabilities)
+}
+
+// Validate reports whether the ack is unambiguous: a rejection must carry a
+// reason and an acceptance must not. Reason means failure only — one field,
+// one meaning.
+func (a AuthAck) Validate() error {
+	if !a.OK && a.Reason == "" {
+		return fmt.Errorf("%w: rejected auth_ack must carry a reason", ErrInvalidField)
+	}
+	if a.OK && a.Reason != "" {
+		return fmt.Errorf("%w: accepted auth_ack must not carry a reason", ErrInvalidField)
+	}
+	if err := validateCapabilities(a.Capabilities); err != nil {
+		return err
+	}
+	if a.NotificationState != nil && !a.OK {
+		return fmt.Errorf("%w: rejected auth_ack must not carry notification_state", ErrInvalidField)
+	}
+	seen := make(map[string]struct{}, len(a.AgentLaunchers))
+	for _, launcher := range a.AgentLaunchers {
+		if launcher.Provider == "" || launcher.DisplayName == "" {
+			return fmt.Errorf("%w: auth_ack agent launcher provider/display_name must be non-empty", ErrInvalidField)
+		}
+		if launcher.Naming != "cli" && launcher.Naming != "tmux" {
+			return fmt.Errorf("%w: auth_ack agent launcher naming must be cli or tmux", ErrInvalidField)
+		}
+		if _, ok := seen[launcher.Provider]; ok {
+			return fmt.Errorf("%w: duplicate auth_ack agent launcher provider %q", ErrInvalidField, launcher.Provider)
+		}
+		seen[launcher.Provider] = struct{}{}
+	}
+	return nil
+}
+
+// Validate reports whether a create-agent request has a usable correlation id.
+// Empty semantic fields are left for the typed result path so clients receive
+// the controlled invalid_field reason rather than an unrelated ErrorFrame.
+func (a CreateAgent) Validate() error {
+	if a.ReqID == 0 {
+		return fmt.Errorf("%w: create_agent req_id must be >= 1", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether a close-session request has a usable correlation id
+// and a non-empty target ref.
+func (s CloseSession) Validate() error {
+	if s.ReqID == 0 {
+		return fmt.Errorf("%w: close_session req_id must be >= 1", ErrInvalidField)
+	}
+	if s.Ref == "" {
+		return fmt.Errorf("%w: close_session ref must be non-empty", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether a close-session result is unambiguous.
+func (r CloseSessionResult) Validate() error {
+	if r.ReqID == 0 {
+		return fmt.Errorf("%w: close_session_result req_id must be >= 1", ErrInvalidField)
+	}
+	if r.OK && r.Reason != "" {
+		return fmt.Errorf("%w: accepted close_session_result must not carry a reason", ErrInvalidField)
+	}
+	if !r.OK && r.Reason == "" {
+		return fmt.Errorf("%w: failed close_session_result must carry a reason", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether a create-agent result is unambiguous.
+func (r CreateAgentResult) Validate() error {
+	if r.ReqID == 0 {
+		return fmt.Errorf("%w: create_agent_result req_id must be >= 1", ErrInvalidField)
+	}
+	if r.OK {
+		if r.Ref == "" || r.Name == "" || (r.Naming != "cli" && r.Naming != "tmux") || r.Reason != "" {
+			return fmt.Errorf("%w: successful create_agent_result must carry ref/name/naming and no reason", ErrInvalidField)
+		}
+		return nil
+	}
+	if r.Reason == "" || r.Ref != "" || r.Name != "" || r.Naming != "" {
+		return fmt.Errorf("%w: failed create_agent_result must carry only a reason", ErrInvalidField)
+	}
+	switch r.Reason {
+	case string(CreateAgentInvalidField), string(CreateAgentTargetNotFound), string(CreateAgentProviderUnavailable), string(CreateAgentUnsupportedBypass), string(CreateAgentLaunchFailed):
+		return nil
+	default:
+		return fmt.Errorf("%w: unknown create_agent reason %q", ErrInvalidField, r.Reason)
+	}
+}
+
+func validateCapabilities(caps []string) error {
+	if len(caps) > 32 {
+		return fmt.Errorf("%w: capabilities must contain at most 32 entries", ErrInvalidField)
+	}
+	for _, cap := range caps {
+		if cap == "" || len(cap) > 64 || !isCapability(cap) {
+			return fmt.Errorf("%w: invalid capability", ErrInvalidField)
+		}
+	}
+	return nil
+}
+
+func isCapability(s string) bool {
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("_-.", r)) {
+			return false
+		}
+	}
+	return true
+}
+
+// Validate reports whether the request is well-formed: ReqID >= 1.
+func (l List) Validate() error {
+	if l.ReqID == 0 {
+		return fmt.Errorf("%w: list req_id must be >= 1", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate checks a workspace: non-empty cwd, a non-negative count, and every
+// member session valid.
+func (w Workspace) Validate() error {
+	if w.Cwd == "" {
+		return fmt.Errorf("%w: workspace cwd must be non-empty", ErrInvalidField)
+	}
+	if w.SessionCount < 0 {
+		return fmt.Errorf("%w: workspace session_count must be >= 0", ErrInvalidField)
+	}
+	if w.WorkingCount < 0 || w.WorkingCount > w.SessionCount {
+		return fmt.Errorf("%w: workspace working_count must be between 0 and session_count", ErrInvalidField)
+	}
+	for _, s := range w.Sessions {
+		if err := s.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Validate checks a session entry: a non-empty ref and cwd, and nonzero
+// dimensions.
+func (s Session) Validate() error {
+	if s.Ref == "" {
+		return fmt.Errorf("%w: session ref must be non-empty", ErrInvalidField)
+	}
+	if s.Cwd == "" {
+		return fmt.Errorf("%w: session cwd must be non-empty", ErrInvalidField)
+	}
+	if s.Rows == 0 || s.Cols == 0 {
+		return fmt.Errorf("%w: session rows/cols must be >= 1", ErrInvalidField)
+	}
+	// Pre-four-axis fixtures/peers may omit every additive field together.
+	// Candidate output never takes this branch; partial/new values are strict.
+	if s.Provider == "" && s.Activity == "" && s.Health == "" {
+		if s.Status != "" && s.Status != SessionStatusWorking && s.Status != SessionStatusIdle && s.Status != SessionStatusUnknown {
+			return fmt.Errorf("%w: legacy session status %q is not working/idle/unknown", ErrInvalidField, s.Status)
+		}
+		return nil
+	}
+	if s.Provider == "" {
+		return fmt.Errorf("%w: session provider must be non-empty", ErrInvalidField)
+	}
+	if s.Activity != SessionStatusWorking && s.Activity != SessionStatusIdle && s.Activity != SessionStatusUnknown {
+		return fmt.Errorf("%w: session activity %q is not working/idle/unknown", ErrInvalidField, s.Activity)
+	}
+	if s.Status != "" && s.Status != s.Activity {
+		return fmt.Errorf("%w: session status %q diverges from activity %q", ErrInvalidField, s.Status, s.Activity)
+	}
+	if s.Health != SessionHealthNormal && s.Health != SessionHealthAbnormal && s.Health != SessionHealthUnknown {
+		return fmt.Errorf("%w: session health %q is not normal/abnormal/unknown", ErrInvalidField, s.Health)
+	}
+	return nil
+}
+
+// Validate checks the full listing: valid request correlation and sequence,
+// and every workspace (and thus every session) valid.
+func (l Listing) Validate() error {
+	if l.ReqID == 0 {
+		return fmt.Errorf("%w: listing req_id must be >= 1", ErrInvalidField)
+	}
+	if l.Seq == 0 {
+		return fmt.Errorf("%w: listing seq must be >= 1", ErrInvalidField)
+	}
+	for _, w := range l.Workspaces {
+		if err := w.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Validate checks a delta: valid sequence, and every added/changed session,
+// removed ref, and changed workspace valid.
+func (d ListDelta) Validate() error {
+	if d.Seq == 0 {
+		return fmt.Errorf("%w: list_delta seq must be >= 1", ErrInvalidField)
+	}
+	for _, s := range d.AddedSessions {
+		if err := s.Validate(); err != nil {
+			return err
+		}
+	}
+	for _, s := range d.ChangedSessions {
+		if err := s.Validate(); err != nil {
+			return err
+		}
+	}
+	for _, r := range d.RemovedRefs {
+		if r == "" {
+			return fmt.Errorf("%w: removed ref must be non-empty", ErrInvalidField)
+		}
+	}
+	for _, w := range d.ChangedWorkspaces {
+		if err := w.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Validate reports whether the subscription is well-formed: a non-empty ref,
+// nonzero client dimensions, and a known client type. Empty ClientType remains
+// accepted for wire compatibility with pre-presence peers; such peers are not
+// included in presence counts.
+func (s Subscribe) Validate() error {
+	if s.Ref == "" {
+		return fmt.Errorf("%w: subscribe ref must be non-empty", ErrInvalidField)
+	}
+	if s.Rows == 0 || s.Cols == 0 {
+		return fmt.Errorf("%w: subscribe rows/cols must be >= 1", ErrInvalidField)
+	}
+	if s.ClientType != "" && s.ClientType != ClientTypeMobile && s.ClientType != ClientTypeDesktop {
+		return fmt.Errorf("%w: subscribe client_type must be mobile or desktop", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether a presence update is internally consistent.
+func (p PresenceUpdate) Validate() error {
+	if p.Ref == "" {
+		return fmt.Errorf("%w: presence_update ref must be non-empty", ErrInvalidField)
+	}
+	if p.HasMobile != (p.MobileCount > 0) {
+		return fmt.Errorf("%w: presence_update has_mobile must equal mobile_count > 0", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether the unsubscription is well-formed: a non-empty ref.
+func (u Unsubscribe) Validate() error {
+	if u.Ref == "" {
+		return fmt.Errorf("%w: unsubscribe ref must be non-empty", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether the input request is well-formed: a ReqID >= 1, a
+// non-empty ref, and at most one of (Text/AttachmentPath) / Keys (a frame
+// carrying both a key press and text or an attachment is a protocol error;
+// neither present means a bare Enter, any combination of Text/AttachmentPath
+// alone is legal). Every key must be in the closed Key set.
+func (i Input) Validate() error {
+	if i.ReqID == 0 {
+		return fmt.Errorf("%w: input req_id must be >= 1", ErrInvalidField)
+	}
+	if i.Ref == "" {
+		return fmt.Errorf("%w: input ref must be non-empty", ErrInvalidField)
+	}
+	n := 0
+	if i.Text != "" || i.AttachmentPath != "" {
+		n++
+	}
+	if len(i.Keys) > 0 {
+		n++
+	}
+	if len(i.Bytes) > 0 {
+		n++
+	}
+	if n > 1 {
+		return fmt.Errorf("%w: input carries more than one of text/attachment_path, keys, bytes; at most one is allowed", ErrInvalidField)
+	}
+	for _, k := range i.Keys {
+		if !k.IsValid() {
+			return fmt.Errorf("%w: unknown input key %q", ErrInvalidField, k)
+		}
+	}
+	return nil
+}
+
+// Validate reports whether the attach_preview frame is well-formed: a
+// non-empty ref and a non-empty path.
+func (p AttachPreview) Validate() error {
+	if p.Ref == "" {
+		return fmt.Errorf("%w: attach_preview ref must be non-empty", ErrInvalidField)
+	}
+	if p.Path == "" {
+		return fmt.Errorf("%w: attach_preview path must be non-empty", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether the ack is unambiguous: a rejection must carry a
+// known reason and an acceptance must not.
+func (a InputAck) Validate() error {
+	if a.ReqID == 0 {
+		return fmt.Errorf("%w: input_ack req_id must be >= 1", ErrInvalidField)
+	}
+	if !a.OK {
+		if a.Reason == "" {
+			return fmt.Errorf("%w: failed input_ack must carry a reason", ErrInvalidField)
+		}
+		switch a.Reason {
+		case InputFailSessionNotFound, InputFailNotSubscribed, InputFailInjectFailed, InputFailTooLarge, InputFailInternal:
+		default:
+			return fmt.Errorf("%w: unknown input fail reason %q", ErrInvalidField, a.Reason)
+		}
+		return nil
+	}
+	if a.Reason != "" {
+		return fmt.Errorf("%w: accepted input_ack must not carry a reason", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether the scrollback request is well-formed: a ReqID >= 1,
+// a non-empty ref, and a count >= 1. FromLine is any int32; the server clamps
+// the requested range to what tmux has.
+func (s Scrollback) Validate() error {
+	if s.ReqID == 0 {
+		return fmt.Errorf("%w: scrollback req_id must be >= 1", ErrInvalidField)
+	}
+	if s.Ref == "" {
+		return fmt.Errorf("%w: scrollback ref must be non-empty", ErrInvalidField)
+	}
+	if s.Count == 0 {
+		return fmt.Errorf("%w: scrollback count must be >= 1", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether the resize request is well-formed: a non-empty ref
+// and nonzero client dimensions.
+func (r Resize) Validate() error {
+	if r.Ref == "" {
+		return fmt.Errorf("%w: resize ref must be non-empty", ErrInvalidField)
+	}
+	if r.Rows == 0 || r.Cols == 0 {
+		return fmt.Errorf("%w: resize rows/cols must be >= 1", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether the error frame is well-formed: a known error code.
+// Reason is optional.
+func (e ErrorFrame) Validate() error {
+	switch e.Code {
+	case ErrCodeUnauthorized, ErrCodeBadFrame, ErrCodeInvalidField, ErrCodeUnsupportedVersion,
+		ErrCodeUnsupportedType, ErrCodeSessionNotFound, ErrCodeInternal:
+		return nil
+	default:
+		return fmt.Errorf("%w: unknown error code %q", ErrInvalidField, e.Code)
+	}
+}
+
+// Validate reports whether an upload response is well-formed: a non-empty
+// absolute path.
+func (u UploadResp) Validate() error {
+	if u.Path == "" {
+		return fmt.Errorf("%w: upload path must be non-empty", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether the scroll_wheel frame is well-formed: a non-empty
+// ref and a non-zero delta (zero delta has no direction and is a caller error).
+func (s ScrollWheel) Validate() error {
+	if s.Ref == "" {
+		return fmt.Errorf("%w: scroll_wheel ref must be non-empty", ErrInvalidField)
+	}
+	if s.Delta == 0 {
+		return fmt.Errorf("%w: scroll_wheel delta must be non-zero", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether the pane_mode_changed frame is well-formed: a
+// non-empty ref.
+func (p PaneModeChanged) Validate() error {
+	if p.Ref == "" {
+		return fmt.Errorf("%w: pane_mode_changed ref must be non-empty", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether the level2 subscribe frame is well-formed.
+// Workspace must be a non-empty cwd (requirement 061).
+func (s Level2Subscribe) Validate() error {
+	if s.Workspace == "" {
+		return fmt.Errorf("%w: level2_subscribe workspace must be non-empty", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether the level2 unsubscribe frame is well-formed. The
+// workspace may be empty (idempotent unbind).
+func (s Level2Unsubscribe) Validate() error { return nil }
+
+// Validate checks a level2 heartbeat: non-empty workspace and seq >= 1.
+func (h Level2Heartbeat) Validate() error {
+	if h.Workspace == "" {
+		return fmt.Errorf("%w: level2_heartbeat workspace must be non-empty", ErrInvalidField)
+	}
+	if h.Seq == 0 {
+		return fmt.Errorf("%w: level2_heartbeat seq must be >= 1", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate checks a level2 live frame: a non-empty workspace, a seq >= 1, and
+// every session valid.
+func (s OverlaySubscribe) Validate() error {
+	if strings.TrimSpace(s.Socket) == "" {
+		return fmt.Errorf("%w: overlay_subscribe socket must be non-empty", ErrInvalidField)
+	}
+	return nil
+}
+func (OverlayUnsubscribe) Validate() error { return nil }
+
+func (f OverlayFrame) Validate() error {
+	if f.Seq == 0 {
+		return fmt.Errorf("%w: overlay_frame seq must be >= 1", ErrInvalidField)
+	}
+	if strings.TrimSpace(f.Text) == "" {
+		return fmt.Errorf("%w: overlay_frame text must be non-empty", ErrInvalidField)
+	}
+	return nil
+}
+
+func (f Level2Frame) Validate() error {
+	if f.Workspace == "" {
+		return fmt.Errorf("%w: level2_frame workspace must be non-empty", ErrInvalidField)
+	}
+	if f.Seq == 0 {
+		return fmt.Errorf("%w: level2_frame seq must be >= 1", ErrInvalidField)
+	}
+	for _, s := range f.Sessions {
+		if err := s.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r NotificationRecord) Validate() error {
+	if !isUUIDv4(r.ID) || !isUUIDv4(r.StreamID) {
+		return fmt.Errorf("%w: notification id/stream_id must be UUID v4", ErrInvalidField)
+	}
+	if r.HostID == "" || len(r.HostID) < 8 || len(r.HostID) > 64 || !isHostID(r.HostID) {
+		return fmt.Errorf("%w: invalid notification host_id", ErrInvalidField)
+	}
+	if !isSeq(r.Seq) {
+		return fmt.Errorf("%w: notification seq must be canonical uint64", ErrInvalidField)
+	}
+	if _, err := time.Parse("2006-01-02T15:04:05.000Z", r.Timestamp); err != nil {
+		return fmt.Errorf("%w: notification timestamp must be RFC3339 milliseconds UTC", ErrInvalidField)
+	}
+	if err := validateText(r.Title, 256, false); err != nil {
+		return fmt.Errorf("%w: notification title", ErrInvalidField)
+	}
+	if err := validateText(r.Body, 16384, false); err != nil {
+		return fmt.Errorf("%w: notification body", ErrInvalidField)
+	}
+	if r.Level != "info" && r.Level != "success" && r.Level != "warning" && r.Level != "error" {
+		return fmt.Errorf("%w: invalid notification level", ErrInvalidField)
+	}
+	if (r.SessionRef == nil) != (r.SessionInstance == nil) {
+		return fmt.Errorf("%w: session_ref and session_instance must be paired", ErrInvalidField)
+	}
+	if r.SessionRef != nil {
+		if *r.SessionRef == "" || len(*r.SessionRef) > 255 || strings.IndexByte(*r.SessionRef, 0) >= 0 || *r.SessionInstance == "" || len(*r.SessionInstance) > 128 || !isASCIIIdentifier(*r.SessionInstance) {
+			return fmt.Errorf("%w: invalid notification session link", ErrInvalidField)
+		}
+	}
+	if r.Workspace != nil {
+		if err := validateText(*r.Workspace, 4096, true); err != nil {
+			return fmt.Errorf("%w: notification workspace", ErrInvalidField)
+		}
+	}
+	if r.AgentName != nil {
+		if err := validateText(*r.AgentName, 128, false); err != nil {
+			return fmt.Errorf("%w: notification agent_name", ErrInvalidField)
+		}
+	}
+	return nil
+}
+
+func (c NotificationCursor) Validate() error {
+	if !isUUIDv4(c.StreamID) || (c.Seq != "0" && !isSeq(c.Seq)) {
+		return fmt.Errorf("%w: invalid notification cursor", ErrInvalidField)
+	}
+	return nil
+}
+
+func (s NotificationsSync) Validate() error {
+	if s.ReqID == 0 {
+		return fmt.Errorf("%w: notifications_sync req_id must be >= 1", ErrInvalidField)
+	}
+	if s.PageSize > 100 {
+		return fmt.Errorf("%w: notifications_sync page_size must be <= 100", ErrInvalidField)
+	}
+	if s.Cursor != nil && s.PageToken != "" {
+		return fmt.Errorf("%w: notifications_sync cursor and page_token are exclusive", ErrInvalidField)
+	}
+	if s.PageToken != "" && s.PageSize != 0 {
+		return fmt.Errorf("%w: notifications_sync page_token cannot carry page_size", ErrInvalidField)
+	}
+	if s.Cursor != nil {
+		if err := s.Cursor.Validate(); err != nil {
+			return err
+		}
+	}
+	if len(s.PageToken) > 256 || !isASCII(s.PageToken) {
+		return fmt.Errorf("%w: invalid notifications_sync page_token", ErrInvalidField)
+	}
+	return nil
+}
+
+func (p NotificationsPage) Validate() error {
+	if p.ReqID == 0 {
+		return fmt.Errorf("%w: notifications_page req_id must be >= 1", ErrInvalidField)
+	}
+	if !p.OK {
+		return nil
+	}
+	if p.HostID == "" || p.StreamID == "" || p.Order != "asc" {
+		return fmt.Errorf("%w: invalid notifications_page identity/order", ErrInvalidField)
+	}
+	if p.SnapshotCursor == nil || !isSeq(p.RetainedFromSeq) {
+		return fmt.Errorf("%w: notifications_page cursor missing", ErrInvalidField)
+	}
+	for _, item := range p.Items {
+		if err := item.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isSeq(s string) bool {
+	if s == "" || (len(s) > 1 && s[0] == '0') {
+		return false
+	}
+	n, err := strconv.ParseUint(s, 10, 64)
+	return err == nil && n > 0
+}
+
+func isUUIDv4(s string) bool {
+	if len(s) != 36 || s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' || s[14] != '4' {
+		return false
+	}
+	if !strings.ContainsRune("89abAB", rune(s[19])) {
+		return false
+	}
+	for i, r := range s {
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			continue
+		}
+		if !strings.ContainsRune("0123456789abcdefABCDEF", r) {
+			return false
+		}
+	}
+	return true
+}
+
+func isHostID(s string) bool { return isASCIIIdentifier(s) }
+
+func isASCIIIdentifier(s string) bool {
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+func isASCII(s string) bool {
+	for _, r := range s {
+		if r < 0x20 || r > 0x7e {
+			return false
+		}
+	}
+	return true
+}
+
+func validateText(s string, max int, allowEmpty bool) error {
+	if !utf8.ValidString(s) || len(s) == 0 && !allowEmpty || len(s) > max || strings.TrimSpace(s) == "" && !allowEmpty {
+		return fmt.Errorf("invalid text")
+	}
+	for _, r := range s {
+		if r == 0 || r < 0x20 && r != '\n' && r != '\r' && r != '\t' {
+			return fmt.Errorf("invalid control character")
+		}
+	}
+	return nil
+}

@@ -1,0 +1,870 @@
+package api
+
+// ws_handler.go implements the per-frame protocol logic: auth, list, subscribe
+// (snapshot + delta stream), unsubscribe, input (decidable ack), scrollback
+// (converged range + 12-byte metadata header), and resize. Every C→S frame has
+// a decidable result — an ack, a data reply, or an error frame; no frame is
+// ever swallowed silently (knowledge-base red line).
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/agentmirror/agentmirror/internal/bridge"
+	"github.com/agentmirror/agentmirror/internal/discovery"
+	"github.com/agentmirror/agentmirror/internal/protocol"
+	"github.com/coder/websocket"
+)
+
+// snapshotWithCursor captures the pane's visible screen and re-anchors the
+// cursor inside the returned bytes (fix-term-residuals). Two transformations
+// over the raw capture:
+//
+//  1. trailing blank lines are trimmed — capture-pane emits the full pane
+//     height as bare LFs with no cursor state, so replaying them only walks
+//     the client cursor to the bottom row (and risks a scroll-up on the last
+//     terminator); a replay clears the grid first, so trailing blanks carry
+//     zero information;
+//  2. a cursor-position escape (CUP, 1-based) matching the pane's REAL cursor
+//     is appended, so the client's VT engine lands the cursor exactly where
+//     the pane's is. Without it, the next delta without absolute addressing
+//     (bash's SIGWINCH prompt redraw is plain "\r ESC[K …") prints at the
+//     capture's end instead of the real cursor row — the phantom-prompt
+//     residual seen on device.
+//
+// Both stay inside the snapshot's existing "raw ANSI bytes" contract: zero
+// protocol change, zero client change (docs/protocol.md §6.2).
+func snapshotWithCursor(ctx context.Context, br *bridge.Pane) ([]byte, error) {
+	frame, err := br.CaptureState(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return snapshotFromCapture(frame), nil
+}
+
+func snapshotFromCapture(frame bridge.CapturedPane) []byte {
+	snap := bytes.TrimRight(frame.Data, "\n")
+	prefix := mouseModePrefix(frame.Mouse)
+	out := make([]byte, 0, len(prefix)+len(snap)+16)
+	out = append(out, prefix...)
+	out = append(out, snap...)
+	out = append(out, []byte(fmt.Sprintf("\x1b[%d;%dH", frame.CursorY+1, frame.CursorX+1))...)
+	return out
+}
+
+func mouseModePrefix(mode bridge.MouseMode) []byte {
+	if !mode.Any {
+		return nil
+	}
+	prefix := make([]byte, 0, 24)
+	// Restore the protocol's enable order. 1000 is the button baseline and
+	// 1002 is the drag extension used by Pi/Claude; tmux reports them as
+	// mutually exclusive, so the final 1002 state still has the right effect.
+	if mode.Standard || mode.Button || mode.All {
+		prefix = append(prefix, []byte("\x1b[?1000h")...)
+	}
+	if mode.Button || mode.All {
+		prefix = append(prefix, []byte("\x1b[?1002h")...)
+	}
+	if mode.SGR {
+		prefix = append(prefix, []byte("\x1b[?1006h")...)
+	}
+	return prefix
+}
+
+// handleAuth validates the pairing token and answers auth_ack. On rejection the
+// connection is closed right after the ack, so the client can treat
+// "closed right after auth" as a rejection (docs/protocol.md §4.2). The token
+// is never echoed and never logged (§9).
+func (c *wsConn) handleAuth(a protocol.Auth) bool {
+	if c.s.tokenValidator.ValidateToken(c.ctx, a.Token) {
+		c.authed.Store(true)
+		// The connection is now a live client: count it so the listing loop
+		// wakes for the 0→1 transition and keeps polling (idle-gate, taskbook
+		// #fix-daemon-idle-cpu). teardown un-counts it on close.
+		c.s.markAuthed()
+		ack := &protocol.AuthAck{OK: true, AgentLaunchers: c.s.agentLauncherValues()}
+		if len(a.Capabilities) > 0 {
+			seen := make(map[string]struct{}, len(a.Capabilities))
+			for _, capability := range a.Capabilities {
+				if _, duplicate := seen[capability]; duplicate {
+					continue
+				}
+				seen[capability] = struct{}{}
+				if capability == "notifications_v1" && c.s.notifications != nil {
+					ack.Capabilities = append(ack.Capabilities, capability)
+					ack.NotificationState = ptrNotificationState(c.s.notifications.State())
+				}
+			}
+		}
+		// Queue auth_ack before exposing the capability to the broadcaster: a
+		// concurrent local publish must never overtake the handshake verdict.
+		c.send(ack)
+		if len(ack.Capabilities) > 0 {
+			c.notificationsCap.Store(true)
+		}
+		return true
+	}
+	c.send(&protocol.AuthAck{OK: false, Reason: "invalid token"})
+	c.sendClose(websocket.StatusPolicyViolation, "unauthorized")
+	return false
+}
+
+// handleList admits a bounded, independently numbered refresh intent. Only
+// catalog work leaves the reader: subsequent known-ref Subscribe can proceed.
+func (c *wsConn) handleList(l protocol.List) {
+	c.s.scans.list(c, l.ReqID)
+}
+
+func snapshotSessionCount(snap *modelSnapshot) int {
+	if snap == nil {
+		return 0
+	}
+	return len(snap.byRef)
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+// handleSubscribe starts mirroring a session: resize the pane to the client's
+// dims, attach the pipe (bridge.Subscribe), send a full snapshot, then relay
+// deltas. Re-subscribing the same ref is idempotent: the previous subscription
+// is torn down and a fresh snapshot is replayed (requirement 004 reconnect
+// replay). A failure to subscribe is an error frame.
+//
+// Subscribe-frame timestamps (recv/start/done/queue_ms) are logged at the
+// handleFrame call site so every return path is covered once.
+func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
+	// 订阅计数（含首次与重复订阅；重复订阅 = 重连或客户端重订阅 → 推完整快照 → 整屏重建）。
+	c.s.sendQueue.recordSubscribe()
+	c.connMetrics.recordSubscribe()
+	// A ref already carries the exact tmux socket and pane id. Resolve it
+	// directly when the catalog is cold or being refreshed; waiting for the
+	// unrelated host scan here leaves the client with a blank terminal.
+	br, _, ok := c.resolveSubscribePane(s.Ref)
+	if !ok {
+		c.sendError(protocol.ErrCodeSessionNotFound, "unknown session ref")
+		return
+	}
+	c.subscribeCancel(s.Ref)
+
+	// Pane-level original-geometry accounting (fix-host-pane-geometry-accounting):
+	// the first subscriber of this pane snapshots its pre-phone geometry as the
+	// shared baseline; later subscribers (other connections to the same pane) only
+	// bump the count and never rebase it. The restore happens when the last
+	// subscriber leaves (see paneGeometry.release), so the pane always returns to
+	// the same geometry regardless of how many clients came and went in between.
+	geom := c.s.geometryFor(s.Ref)
+	_, _, _ = geom.acquire(c.ctx, br)
+	subCtx, cancel := context.WithCancel(c.ctx)
+	clientType := s.ClientType
+	retainPaneSize := s.RetainPaneSize != nil && *s.RetainPaneSize
+	sub := &subscription{
+		ref:            s.Ref,
+		conn:           c,
+		server:         c.s,
+		clientType:     clientType,
+		retainPaneSize: retainPaneSize,
+		ctx:            subCtx,
+		cancel:         cancel,
+		ready:          make(chan struct{}),
+		initialFailed:  make(chan struct{}),
+		relayDone:      make(chan struct{}),
+		gate:           newReflowGate(),
+	}
+	// Install the release hook before any fallible operation after acquire. All
+	// exits (including capture/encode failure) then use the same idempotent owner.
+	sub.restoreSize = func() {
+		geom.release(c.ctx, br, c.s.log, s.Ref, sub.retainPaneSize)
+	}
+
+	// The first subscribe is a reflow epoch too. Open the gate before tmux
+	// receives SIGWINCH, so redraw bytes produced by the initial phone geometry
+	// are drained locally instead of becoming a wide, pre-reflow first frame.
+	currentCols, currentRows, sizeErr := br.Size(c.ctx)
+	needsResize := sizeErr != nil || currentCols != int(s.Cols) || currentRows != int(s.Rows)
+	initialEpoch, started := sub.gate.begin()
+	if !started {
+		teardownSubscription(sub)
+		c.sendError(protocol.ErrCodeInternal, "cannot open initial reflow gate")
+		return
+	}
+	defer sub.gate.end()
+	c.connMetrics.recordReflowEpoch()
+
+	// Attach the pipe before resize so the relay can continuously drain the
+	// SIGWINCH burst while the gate waits for a quiet terminal.
+	ch, loss, detach, err := br.SubscribeWithLoss(c.ctx)
+	if err != nil {
+		teardownSubscription(sub)
+		c.sendError(protocol.ErrCodeInternal, "cannot attach mirror")
+		return
+	}
+	sub.detach = detach
+	sub.loss = loss
+	go c.relay(subCtx, sub, ch)
+
+	// Initial client dims reshape the pane so the CLI redraws for the phone
+	// (requirement 005). A resize failure is not fatal: the mirror continues at
+	// the pane's current size, and the real existence check happens below.
+	if needsResize {
+		sub.gate.resetSynchronizedOutput()
+		if _, _, err := br.Resize(c.ctx, int(s.Cols), int(s.Rows)); err != nil {
+			c.logErr("subscribe resize", err)
+		}
+	}
+	if err := c.publishReflowSnapshot(subCtx, br, sub.gate, protocol.Resize{Ref: s.Ref, Cols: s.Cols, Rows: s.Rows}, initialEpoch, needsResize); err != nil {
+		if errors.Is(err, errReflowBackpressure) {
+			c.abortConnection("mirror_loss: ws_send_queue_overflow")
+		}
+		close(sub.initialFailed)
+		<-sub.relayDone
+		if errors.Is(err, errMirrorGeometry) {
+			c.s.log.Warn("ws: subscription grid changed", "ref", s.Ref, "err", err)
+			c.sendError(protocol.ErrCodeInternal, err.Error())
+		} else {
+			c.sendError(protocol.ErrCodeInternal, "cannot establish fresh mirror snapshot")
+		}
+		return
+	}
+	if subCtx.Err() != nil || c.catalogAborted.Load() {
+		teardownSubscription(sub)
+		return
+	}
+	if !c.flushInitialPending(subCtx, sub) {
+		teardownSubscription(sub)
+		return
+	}
+	c.subsMu.Lock()
+	if subCtx.Err() != nil || c.catalogAborted.Load() {
+		c.subsMu.Unlock()
+		teardownSubscription(sub)
+		return
+	}
+	c.subs[sub.ref] = sub
+	c.subsMu.Unlock()
+	c.s.registerPresence(sub)
+	sub.releaseRelayGate()
+	c.startSnapshotRefresh(sub, br)
+}
+
+// flushInitialPending publishes the one or two chunks that can race the
+// initial gate handoff. It runs after the snapshot has been queued and before
+// the relay ready latch opens, so those deltas retain wire ordering.
+func (c *wsConn) flushInitialPending(ctx context.Context, sub *subscription) bool {
+	for {
+		sub.pendingMu.Lock()
+		pending := sub.pending
+		sub.pending = nil
+		if len(pending) == 0 {
+			sub.pendingClosed = true
+			sub.pendingMu.Unlock()
+			return true
+		}
+		sub.pendingMu.Unlock()
+		for _, delta := range pending {
+			frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
+				Kind: protocol.KindDelta,
+				Ref:  sub.ref,
+				Data: delta.data,
+			})
+			if err != nil {
+				c.s.log.Debug("ws: encode initial pending delta", "conn", c.id, "err", err)
+				continue
+			}
+			if !c.sendMirrorWaitRef(ctx, sub.loss, sub.ref, delta.epoch, frame) {
+				return false
+			}
+		}
+	}
+}
+
+// handleUnsubscribe stops mirroring a session. Idempotent: unsubscribing a
+// session that is not subscribed is not an error and produces no reply
+// (docs/protocol.md §4.2).
+func (c *wsConn) handleUnsubscribe(u protocol.Unsubscribe) {
+	c.subscribeCancel(u.Ref)
+}
+
+// handleInput delivers passthrough input (requirement 059, replacing 003
+// clause 1's whole-line injection) OR a set of named special keys, and MUST
+// answer with input_ack (requirement 003 send-must-arrive): ok:true once the
+// input entered the pane, or a machine-readable failure reason. Every failure
+// class in §7.3 is decidable and surfaced.
+//
+// Passthrough semantics (059): the CLI input box is the draft, so a non-empty
+// Text is TYPED into the pane without an Enter (TypeKeys); an empty Text with
+// no attachment is a bare Enter — the send button only commits what is already
+// in the CLI input box. This replaces the old "inject whole line then Enter".
+//
+// The Keys path (R-1 shortcut bar, requirement 017) sends named keys without
+// an Enter — "press that key once". (Text or AttachmentPath) and Keys are
+// mutually exclusive; the frame validator (Input.Validate) already rejected a
+// frame carrying both, so at most one branch runs.
+//
+// AttachmentPath (feat-image-upload-inline; two-step preview added by
+// requirement 057) routes one of two ways, chosen here by consumeAttachPreview:
+//   - a matching AttachPreview was recorded for this ref+path ⇒
+//     bridge.Pane.InjectAfterPreview, which does NOT re-paste (already done at
+//     upload time) and only waits out whatever remains of
+//     bridge.PasteSettleDelay since that preview — typically zero, once the
+//     user's own typing covered it (requirement 057 clause 5: normal path is
+//     zero wait, not "a little wait").
+//   - no match (empty path, stale preview, or a client that never called
+//     AttachPreview) ⇒ bridge.Pane.InjectWithAttachment, the original
+//     paste-here-and-now-then-wait-the-full-delay path — the compatibility
+//     fallback requirement 057 keeps rather than dropping. Byte-identical to
+//     plain Inject when AttachmentPath is empty.
+func (c *wsConn) handleInput(i protocol.Input) {
+	ack := func(ok bool, reason protocol.InputFailReason) {
+		c.send(&protocol.InputAck{ReqID: i.ReqID, OK: ok, Reason: reason})
+	}
+
+	if !c.subscribed(i.Ref) {
+		ack(false, protocol.InputFailNotSubscribed)
+		return
+	}
+	// Catalog populated before resolving (a client can address a pane shown in
+	// a listing it received before the loop's first tick).
+	c.s.ensureInitialScan(c.ctx)
+	br, ok := c.resolveBridge(i.Ref)
+	if !ok {
+		ack(false, protocol.InputFailSessionNotFound)
+		return
+	}
+	// Copy-mode safety bailout (feat-remote-scroll-forward leader Q2 mandate):
+	// if the pane is in tmux copy-mode when the user types, the keystrokes
+	// would be consumed by copy-mode commands rather than reaching the
+	// shell/TUI. Exit copy-mode first so text arrives at its intended target.
+	// This is a best-effort pre-flight: a PaneInMode failure is non-fatal
+	// (the injection proceeds; the pane will likely report ErrPaneNotFound).
+	// ExitCopyMode is idempotent — cancel on a normal pane is a tmux no-op.
+	if inMode, modeErr := br.PaneInMode(c.ctx); modeErr == nil && inMode {
+		if exitErr := br.ExitCopyMode(c.ctx); exitErr == nil {
+			c.send(&protocol.PaneModeChanged{Ref: i.Ref, InCopyMode: false})
+			c.sendScrollSnapshot(i.Ref, br)
+		}
+	}
+
+	// Named-key injection: no size gate (the closed key set is tiny and fixed),
+	// no trailing Enter, same decidable ack.
+	if len(i.Keys) > 0 {
+		// bridge.SendKeys takes wire key names as strings; the protocol Key
+		// values are those exact strings (protocol.Key is a string kind).
+		names := make([]string, len(i.Keys))
+		for n, k := range i.Keys {
+			names[n] = string(k)
+		}
+		if err := br.SendKeys(c.ctx, names...); err != nil {
+			if errors.Is(err, bridge.ErrPaneNotFound) {
+				ack(false, protocol.InputFailSessionNotFound)
+			} else {
+				// Any tmux refusal (dead server, timeout, unknown) means the
+				// send-keys did not go in.
+				ack(false, protocol.InputFailInjectFailed)
+			}
+			return
+		}
+		ack(true, "")
+		return
+	}
+	// Raw-byte passthrough (input step 1): arbitrary bytes including C0/CSI.
+	// Same max-input-bytes / too_large gate as Text — no backdoor. Same
+	// decidable ack taxonomy. Does not append Enter.
+	if len(i.Bytes) > 0 {
+		if len(i.Bytes) > c.s.maxInput {
+			ack(false, protocol.InputFailTooLarge)
+			return
+		}
+		injectRaw := br.InjectRaw
+		// Escape-prefixed VT/SGR packets must stay in one PTY write; otherwise
+		// an interactive CLI can consume the lone ESC as a standalone key.
+		if bytes.IndexByte(i.Bytes, 0x1b) >= 0 {
+			injectRaw = br.InjectRawAtomic
+		}
+		if err := injectRaw(c.ctx, i.Bytes); err != nil {
+			if errors.Is(err, bridge.ErrPaneNotFound) {
+				ack(false, protocol.InputFailSessionNotFound)
+			} else {
+				ack(false, protocol.InputFailInjectFailed)
+			}
+			return
+		}
+		ack(true, "")
+		return
+	}
+	if len(i.Text) > c.s.maxInput {
+		ack(false, protocol.InputFailTooLarge)
+		return
+	}
+	// 直通输入（059，取代 003 第1条「一次性注入」）：App 键盘每键直通，CLI 输入框即草稿。
+	// 四种路径：
+	//   0. Bytes 非空 → 裸字节透传（InjectRaw），不追加 Enter；
+	//   1. AttachmentPath 非空 → 提交带图（预贴路径已在 pane，发文字[若有]+Enter 提交；
+	//      命中预贴记录走 InjectAfterPreview 只补沉降，未命中走 InjectWithAttachment 兼容）；
+	//   2. Text 非空且无附件 → 直通：文本打到 CLI 输入框，**不追加 Enter**（TypeKeys）；
+	//   3. Text 为空且无附件 → 裸 Enter：发送键只提交。
+	var err error
+	if i.AttachmentPath != "" {
+		if elapsed, ok := c.s.consumeAttachPreview(i.Ref, i.AttachmentPath); ok {
+			err = br.InjectAfterPreview(c.ctx, i.Text, remainingSettleDelay(elapsed))
+		} else {
+			err = br.InjectWithAttachment(c.ctx, i.Text, i.AttachmentPath)
+		}
+	} else if i.Text != "" {
+		err = br.TypeKeys(c.ctx, i.Text)
+	} else {
+		err = br.Inject(c.ctx, "")
+	}
+	if err != nil {
+		if errors.Is(err, bridge.ErrPaneNotFound) {
+			ack(false, protocol.InputFailSessionNotFound)
+		} else {
+			// Any tmux refusal (dead server, timeout, unknown) means the
+			// send-keys did not go in.
+			ack(false, protocol.InputFailInjectFailed)
+		}
+		return
+	}
+	ack(true, "")
+}
+
+// handleAttachPreview pastes an image path into a pane ahead of send
+// (requirement 057): the moment upload succeeds, not at send time, so Claude
+// Code's async decode/cache-write runs in the background while the user
+// keeps typing. No ack on success (the mirror delta stream carries the
+// `[Image #N]` result, same doctrine as ScrollWheel); TypeError on failure.
+// Never clears anything already in the pane (requirement 057 clause 3): an
+// unconfirmed preview is left visible, not silently wiped.
+func (c *wsConn) handleAttachPreview(m protocol.AttachPreview) {
+	if !c.subscribed(m.Ref) {
+		c.sendError(protocol.ErrCodeSessionNotFound, "not subscribed to session")
+		return
+	}
+	c.s.ensureInitialScan(c.ctx)
+	br, ok := c.resolveBridge(m.Ref)
+	if !ok {
+		c.sendError(protocol.ErrCodeSessionNotFound, "unknown session ref")
+		return
+	}
+	if err := br.PastePreview(c.ctx, m.Path); err != nil {
+		if errors.Is(err, bridge.ErrPaneNotFound) {
+			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
+		} else {
+			c.sendError(protocol.ErrCodeInternal, "attach preview failed")
+		}
+		return
+	}
+	c.s.recordAttachPreview(m.Ref, m.Path)
+}
+
+// handleScrollWheel delivers one scroll-wheel gesture to a remote pane
+// (feat-remote-scroll-forward). No ack on success — the mirror delta stream
+// carries the visual result, and a per-notch round-trip at ~123ms RTT would
+// make the gesture feel sticky. TypeError on failure (pane gone / tmux error).
+// When the pane enters copy-mode, pushes TypePaneModeChanged so the App can
+// show a minimal indicator (leader Q2 mandate: user must know when copy-mode
+// is active to avoid "typed but nothing happened" confusion).
+func (c *wsConn) handleScrollWheel(sw protocol.ScrollWheel) {
+	if !c.subscribed(sw.Ref) {
+		c.sendError(protocol.ErrCodeSessionNotFound, "not subscribed to session")
+		return
+	}
+	c.s.ensureInitialScan(c.ctx)
+	br, ok := c.resolveBridge(sw.Ref)
+	if !ok {
+		c.sendError(protocol.ErrCodeSessionNotFound, "unknown session ref")
+		return
+	}
+	enteredCopyMode, err := br.InjectScroll(c.ctx, sw.Delta)
+	if err != nil {
+		if errors.Is(err, bridge.ErrPaneNotFound) {
+			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
+		} else {
+			c.sendError(protocol.ErrCodeInternal, "scroll injection failed")
+		}
+		return
+	}
+	if enteredCopyMode {
+		c.send(&protocol.PaneModeChanged{Ref: sw.Ref, InCopyMode: true})
+	}
+	c.sendScrollSnapshot(sw.Ref, br)
+}
+
+// Copy-mode scrolls tmux's view without writing to the pane's PTY. Publish the
+// resulting screen using the existing snapshot protocol instead of waiting for
+// pipe-pane output that will never arrive.
+func (c *wsConn) sendScrollSnapshot(ref string, br *bridge.Pane) {
+	snap, inMode, err := br.SnapshotAfterScroll(c.ctx)
+	if err != nil {
+		c.sendError(protocol.ErrCodeInternal, "cannot capture scroll viewport")
+		return
+	}
+	if snap == nil {
+		return
+	}
+	if !inMode {
+		c.send(&protocol.PaneModeChanged{Ref: ref, InCopyMode: false})
+	}
+	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{Kind: protocol.KindSnapshot, Ref: ref, Data: snap})
+	if err != nil {
+		c.sendError(protocol.ErrCodeInternal, "cannot encode scroll viewport")
+		return
+	}
+	c.sendBinary(frame)
+}
+
+// handleScrollback fetches one line range of history (docs/protocol.md §4.2,
+// §6.3). The request's from_line is addressed in capture-pane semantics: 0 =
+// the visible screen's top row, negative = history above it. The server clamps
+// the request to the pane's available range and reports the ACTUAL range in
+// the binary reply's 12-byte header so the client can anchor its scroll
+// viewport without guessing.
+func (c *wsConn) handleScrollback(sc protocol.Scrollback) {
+	c.s.ensureInitialScan(c.ctx)
+	br, pane, ok := c.resolvePane(sc.Ref)
+	if !ok {
+		c.sendError(protocol.ErrCodeSessionNotFound, "unknown session ref")
+		return
+	}
+
+	start, end, err := c.scrollbackRange(c.ctx, br, pane, int(sc.FromLine), int(sc.Count))
+	if err != nil {
+		c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
+		return
+	}
+
+	// Protocol scrollback coordinates are top-relative (0 = screen top, negative =
+	// history above) — identical to tmux capture-pane -S/-E. Pass them straight
+	// through (D-36): the old `- pane.Height` translation assumed bottom-relative
+	// tmux semantics and shifted every page into history (current-screen requests
+	// returned stale history, history pages reported wrong anchors).
+	var data []byte
+	if start == 0 && end == -1 {
+		// H=0 has no history to capture. Preserve the existing one-empty-line
+		// protocol placeholder without accidentally capturing visible screen rows.
+		data = []byte("\n")
+	} else {
+		data, err = br.Scrollback(c.ctx, start, end)
+		if err != nil {
+			if errors.Is(err, bridge.ErrPaneNotFound) {
+				c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
+			} else {
+				c.sendError(protocol.ErrCodeInternal, "scrollback failed")
+			}
+			return
+		}
+	}
+
+	// capture-pane appends one separator LF after the requested range. Remove
+	// only that terminator: additional trailing LFs are real blank rows and are
+	// part of the page's content/anchor semantics.
+	data = trimScrollbackTerminator(data)
+	lineCount := uint32(bytes.Count(data, []byte("\n")) + 1)
+	if len(data) == 0 {
+		// Degenerate fully-blank page: report one empty line (EncodeBinary requires
+		// LineCount >= 1); a blank page carries no content either way.
+		lineCount = 1
+		data = []byte("\n")
+	}
+
+	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
+		Kind:      protocol.KindScrollback,
+		Ref:       sc.Ref,
+		ReqID:     sc.ReqID,
+		FromLine:  int32(start),
+		LineCount: lineCount,
+		Data:      data,
+	})
+	if err != nil {
+		c.sendError(protocol.ErrCodeInternal, "cannot encode scrollback")
+		return
+	}
+	c.sendBinary(frame)
+}
+
+// handleResize reports the client's terminal dims (docs/protocol.md §4.2). It
+// applies only to subscribed sessions (requirement 005: whoever last operated
+// the pane wins). An unknown ref is an error; resize on an unsubscribed but
+// known session is a no-op, and there is no resize ack frame — the fresh
+// snapshot pushed after a successful resize is the de-facto receipt.
+func (c *wsConn) handleResize(r protocol.Resize) {
+	c.s.ensureInitialScan(c.ctx)
+	br, ok := c.resolveBridge(r.Ref)
+	if !ok {
+		c.sendError(protocol.ErrCodeSessionNotFound, "unknown session ref")
+		return
+	}
+	sub := c.subscriptionFor(r.Ref)
+	if sub == nil {
+		return
+	}
+	if sub.gate == nil {
+		sub.gate = newReflowGate()
+	}
+	ctx := sub.ctx
+	if ctx == nil { // direct subscription fixtures may use the connection context
+		ctx = c.ctx
+	}
+	if ctx.Err() != nil {
+		return
+	}
+	// Read the actual pane size before opening the gate so a same-size request
+	// remains a no-op and does not disturb the live delta stream.
+	beforeW, beforeH, err := br.Size(ctx)
+	if err != nil {
+		c.logErr("resize read before", err)
+		beforeW, beforeH = -1, -1
+	}
+	if beforeW == int(r.Cols) && beforeH == int(r.Rows) {
+		sub.gate.setSnapshotGeometry(int(r.Cols), int(r.Rows))
+		return // Do not drain even one live byte for a no-op resize.
+	}
+	epoch, started := sub.gate.begin()
+	if !started {
+		c.s.log.Debug("ws: resize already converging", "conn", c.id, "ref", r.Ref)
+		return
+	}
+	defer sub.gate.end()
+	afterW, afterH, err := br.Resize(ctx, int(r.Cols), int(r.Rows))
+	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+		// Once draining starts, resuming deltas without a replacement snapshot
+		// would silently omit bytes. Keep the error reply, but retire the mirror.
+		c.subscribeCancel(r.Ref)
+		if errors.Is(err, bridge.ErrPaneNotFound) {
+			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
+		} else {
+			c.sendError(protocol.ErrCodeInternal, "resize failed")
+		}
+		return
+	}
+	if beforeW >= 0 && beforeW == afterW && beforeH == afterH && sub.gate.endIfClean() {
+		return
+	}
+	c.markStaleBefore(r.Ref, epoch)
+	c.connMetrics.recordReflowEpoch()
+	c.s.sendQueue.recordResizeSnapshot()
+	c.connMetrics.recordResizeSnapshot()
+	if err := c.publishReflowSnapshot(ctx, br, sub.gate, r, epoch, true); err != nil {
+		// EOF/unsubscribe restores the original geometry. It invalidates this
+		// mirror's in-flight capture, not the otherwise healthy transport.
+		if ctx.Err() != nil {
+			return
+		}
+		c.logErr("resize snapshot", err)
+		c.abortConnection("mirror_loss: cannot establish fresh resize snapshot")
+		return
+	}
+	c.startSnapshotRefresh(sub, br)
+}
+
+var errReflowBackpressure = errors.New("reflow snapshot queue unavailable")
+var errMirrorGeometry = errors.New("mirror geometry mismatch")
+
+// A same-geometry subscribe has no SIGWINCH to wait for. On a real resize,
+// a complete observed synchronized-output frame permits an early fresh capture;
+// unknown programs keep the bounded fallback. Publication still uses the same
+// revision check and atomic admission as the slow path.
+func (c *wsConn) publishReflowSnapshot(ctx context.Context, br *bridge.Pane, gate *reflowGate, target protocol.Resize, epoch uint64, waitForResize bool) (result error) {
+	started := time.Now()
+	deadline := started.Add(reflowHardCap)
+	var captures, wrappedRejected, actualCols, actualRows int
+	var completed uint64
+	var failureStage, fallbackReason string
+	gate.setSnapshotGeometry(int(target.Cols), int(target.Rows))
+	defer func() {
+		// One metadata-only decision per handoff. A slow device trace alone
+		// cannot distinguish missing completion from rejected native wraps.
+		if c.s != nil && c.s.log != nil {
+			c.s.log.Info("perf_reflow", "conn", c.id, "ref", target.Ref, "epoch", epoch,
+				"resize", waitForResize, "cols", target.Cols, "rows", target.Rows,
+				"actual_cols", actualCols, "actual_rows", actualRows,
+				"captures", captures, "completed_frame", completed, "wrapped_rejected", wrappedRejected,
+				"deadline_reached", !time.Now().Before(deadline), "elapsed_ms", time.Since(started).Milliseconds(),
+				"fallback_reason", fallbackReason, "failure_stage", failureStage,
+				"snapshot_recovery", gate.usesSnapshots(), "success", result == nil)
+		}
+	}()
+	captureFrame := func(ctx context.Context) (bridge.CapturedPane, error) {
+		captures++
+		frame, err := br.CaptureState(ctx)
+		if err != nil {
+			failureStage = "capture"
+			return frame, err
+		}
+		actualCols, actualRows = frame.Cols, frame.Rows
+		if err := validateCapturedGeometry(frame, int(target.Cols), int(target.Rows)); err != nil {
+			failureStage = "geometry"
+			return frame, err
+		}
+		return frame, nil
+	}
+	captureFresh := func(ctx context.Context) ([]byte, error) {
+		if c.snapshotFn != nil {
+			return c.snapshotFn(ctx, br) // deterministic capture boundaries in tests
+		}
+		frame, err := captureFrame(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return snapshotFromCapture(frame), nil
+	}
+	publish := func(snap []byte) error {
+		err := c.queueReflowSnapshot(target.Ref, epoch, snap)
+		if err != nil {
+			failureStage = "publish"
+		}
+		return err
+	}
+	err := gate.captureAndPublish(ctx, func(ctx context.Context) ([]byte, error) {
+		if c.snapshotFn != nil {
+			return captureFresh(ctx)
+		}
+		for {
+			if waitForResize {
+				if err := gate.waitForReflow(ctx, deadline, false); err != nil {
+					failureStage = "wait"
+					return nil, err
+				}
+			}
+			if err := gate.waitForReflow(ctx, deadline, true); err != nil {
+				failureStage = "open_synchronized_frame"
+				return nil, err
+			}
+			completed = gate.completedFrame()
+			frame, err := captureFrame(ctx)
+			if err != nil {
+				return nil, err
+			}
+			// A 2026 frame can have been computed at the OLD width before the
+			// source handled SIGWINCH. Native tmux soft wraps expose that case;
+			// do not accept the old wide frame as a fast-path completion. Unknown
+			// applications with legitimate soft wraps retain the bounded fallback.
+			if waitForResize && frame.WrappedRows && time.Now().Before(deadline) {
+				wrappedRejected++
+				gate.rejectCompletedFrame(completed)
+				continue
+			}
+			return snapshotFromCapture(frame), nil
+		}
+	}, publish)
+	if errors.Is(err, errReflowUnstable) {
+		fallbackReason = failureStage
+		if fallbackReason == "" {
+			fallbackReason = "capture_contention"
+		}
+		failureStage = ""
+		// Retry with a NEW capture. A clean cut immediately returns to deltas;
+		// only a still-contended capture needs temporary snapshot recovery.
+		return gate.startSnapshotMode(ctx, captureFresh, publish)
+	}
+	return err
+}
+
+func validateCapturedGeometry(frame bridge.CapturedPane, cols, rows int) error {
+	if cols > 0 && rows > 0 && (frame.Cols != cols || frame.Rows != rows) {
+		return fmt.Errorf("%w: requested=%dx%d actual=%dx%d", errMirrorGeometry, cols, rows, frame.Cols, frame.Rows)
+	}
+	return nil
+}
+
+func (c *wsConn) queueReflowSnapshot(ref string, epoch uint64, snap []byte) error {
+	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{Kind: protocol.KindSnapshot, Ref: ref, Data: snap})
+	if err != nil {
+		return err
+	}
+	if !c.sendPriorityBinary(ref, epoch, frame) {
+		return errReflowBackpressure
+	}
+	return nil
+}
+
+// scrollbackRange converges a scrollback request (protocol from_line/count,
+// 0 = screen top, negative = history) to the pane's available range and
+// returns the actual [start, end] in protocol coordinates. Convergence policy:
+// clamp to the available range; a request entirely above the history (or
+// entirely below the screen) is shifted to the nearest available edge so the
+// client receives a useful page instead of a single degenerate line.
+func (c *wsConn) scrollbackRange(ctx context.Context, br *bridge.Pane, _ discovery.Pane, fromLine, count int) (int, int, error) {
+	metadata, err := br.ScrollbackMetadata(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	return scrollbackRangeFor(metadata.HistorySize, metadata.PaneHeight, fromLine, count)
+}
+
+// scrollbackRangeFor clamps a protocol request against actual tmux metadata.
+// int64 intermediates keep extreme int32/uint32 request values from wrapping.
+func scrollbackRangeFor(historySize, paneHeight, fromLine, count int) (int, int, error) {
+	if historySize < 0 || paneHeight <= 0 {
+		return 0, 0, fmt.Errorf("invalid scrollback metadata history=%d height=%d", historySize, paneHeight)
+	}
+	oldest := -int64(historySize)
+	bottom := int64(paneHeight) - 1
+	requestEnd := int64(fromLine) + int64(count) - 1
+
+	switch {
+	case requestEnd <= oldest:
+		// Entirely above history: keep the page in history and move it to the
+		// oldest available edge. With H=0 this returns (0,-1), a no-capture
+		// empty-history sentinel handled by handleScrollback.
+		start := oldest
+		end := oldest + int64(count) - 1
+		if end > -1 {
+			end = -1
+		}
+		return int(start), int(end), nil
+	case int64(fromLine) > bottom:
+		// Entirely below the screen: shift so the page ends at the actual bottom.
+		start := bottom - int64(count) + 1
+		if start < oldest {
+			start = oldest
+		}
+		return int(start), int(bottom), nil
+	default:
+		start := int64(fromLine)
+		if start < oldest {
+			start = oldest
+		}
+		end := requestEnd
+		if end > bottom {
+			end = bottom
+		}
+		if start > end {
+			end = start
+		}
+		return int(start), int(end), nil
+	}
+}
+
+func trimScrollbackTerminator(data []byte) []byte {
+	if len(data) > 0 && data[len(data)-1] == '\n' {
+		return data[:len(data)-1]
+	}
+	return data
+}
+
+// countLines counts the newline-delimited lines in a capture-pane result,
+// tolerating a missing trailing newline.
+func countLines(data []byte) int {
+	n := 0
+	for _, b := range data {
+		if b == '\n' {
+			n++
+		}
+	}
+	if n > 0 && data[len(data)-1] != '\n' {
+		n++
+	}
+	return n
+}

@@ -1,0 +1,165 @@
+package api
+
+// session.go implements the server-side session catalog: the map from a
+// stable session ref to the tmux pane it mirrors, plus the bridge instance
+// bound to that pane. A ref must survive reconnects and listing deltas, so it
+// is derived from the pane's stable identity (socket + pane id), never from a
+// transient index or the display name.
+
+import (
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+
+	"github.com/agentmirror/agentmirror/internal/bridge"
+	"github.com/agentmirror/agentmirror/internal/discovery"
+	"github.com/agentmirror/agentmirror/internal/nodeprobe"
+)
+
+// sessionRef returns the stable, opaque session ref for a discovered pane.
+// It is built from the two fields that together uniquely identify a pane
+// across the host — the tmux server socket and the bare pane id (a pane id is
+// only unique within one server, and this host runs many, requirement 001).
+// The unit separator keeps the two fields unambiguous in the joined string.
+// A ref stays valid across reconnect because a pane keeps its socket and id
+// for its whole lifetime.
+func sessionRef(p discovery.Pane) string {
+	return p.Socket + "\x1f" + p.PaneID
+}
+
+// parseSessionRef validates and splits the stable socket/pane identity carried
+// by a client-facing ref. Only absolute socket paths and numeric tmux pane ids
+// are accepted, preventing a close request from widening its target through a
+// crafted tmux target expression.
+func parseSessionRef(ref string) (socket, paneID string, ok bool) {
+	socket, paneID, ok = strings.Cut(ref, "\x1f")
+	if !ok || socket == "" || !filepath.IsAbs(socket) || len(paneID) < 2 || paneID[0] != '%' {
+		return "", "", false
+	}
+	if _, err := strconv.ParseUint(paneID[1:], 10, 64); err != nil {
+		return "", "", false
+	}
+	return socket, paneID, true
+}
+
+// filterModelToIdentifiedAgents keeps the existing discovery surface but
+// removes panes whose structurally joined nodeprobe provider is unknown. The
+// provider axis is the identity decision; activity and health stay independent
+// so an identified Agent with either axis unknown remains discoverable.
+func filterModelToIdentifiedAgents(model *discovery.Model, observations map[string]nodeprobe.Observation) *discovery.Model {
+	if model == nil {
+		return &discovery.Model{}
+	}
+	out := &discovery.Model{}
+	for _, ws := range model.Workspaces {
+		panes := make([]discovery.Pane, 0, len(ws.Panes))
+		for _, p := range ws.Panes {
+			obs := observations[sessionRef(p)]
+			if obs.Provider == "" || obs.Provider == "unknown" {
+				continue
+			}
+			panes = append(panes, p)
+		}
+		if len(panes) > 0 {
+			out.Workspaces = append(out.Workspaces, discovery.Workspace{CWD: ws.CWD, Panes: panes})
+		}
+	}
+	return out
+}
+
+// sessionEntry is one mirrorable pane known to the catalog: its stable ref
+// and the bridge bound to the pane's bare id on its socket. A Pane bound to a
+// bare id is the only tmux addressing form that passes the exact existence
+// check (term-bridge knowledge base §5).
+type sessionEntry struct {
+	ref         string
+	pane        discovery.Pane
+	observation nodeprobe.Observation
+	bridge      *bridge.Pane
+}
+
+// sessionCatalog holds every pane in the current mirrorable discovery
+// snapshot, keyed by stable ref. Production supplies the snapshot after the
+// shared nodeprobe provider-identity filter. It is the service's in-memory
+// index from client-facing ref to the tmux instance behind it; nothing here is
+// persisted and nothing here depends on connection state (requirement 004:
+// the server keeps no client session state, only host tmux is the source of truth).
+type sessionCatalog struct {
+	mu    sync.RWMutex
+	byRef map[string]*sessionEntry
+}
+
+func newSessionCatalog() *sessionCatalog {
+	return &sessionCatalog{byRef: make(map[string]*sessionEntry)}
+}
+
+// rebuild replaces the catalog contents with the latest discovery model. It
+// is called by the listing loop after each scan; panes that vanished are
+// dropped (their bridge stream readers see EOF and wind down), new panes are
+// indexed, and existing panes keep their identity. The bridge binding is
+// (re)constructed from the pane's socket and id — never from anything a
+// client supplied.
+func (c *sessionCatalog) rebuild(model *discovery.Model, observations map[string]nodeprobe.Observation) {
+	next := make(map[string]*sessionEntry)
+	for i := range model.Workspaces {
+		ws := &model.Workspaces[i]
+		for j := range ws.Panes {
+			p := ws.Panes[j]
+			ref := sessionRef(p)
+			observation, ok := observations[ref]
+			if !ok {
+				observation = nodeprobe.Unknown()
+			}
+			e := &sessionEntry{
+				ref:         ref,
+				pane:        p,
+				observation: observation,
+				bridge:      bridge.NewPane(p.Socket, p.PaneID),
+			}
+			next[e.ref] = e
+		}
+	}
+	c.mu.Lock()
+	c.byRef = next
+	c.mu.Unlock()
+}
+
+// entry returns the session entry for a client-facing ref, or nil.
+func (c *sessionCatalog) entry(ref string) *sessionEntry {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.byRef[ref]
+}
+
+// directPaneFromRef resolves a cold subscribe ref without consulting the
+// discovery catalog. Session refs are deliberately self-contained (socket
+// path + unit separator + bare pane id), so an authenticated client can enter
+// a pane it just received while a host/workspace scan is still in flight.
+// Keep the parser narrow: only absolute socket paths and tmux's numeric pane
+// ids are accepted, and the path must still be a UNIX socket at use time.
+func directPaneFromRef(ref string) (*bridge.Pane, discovery.Pane, bool) {
+	socket, paneID, ok := parseSessionRef(ref)
+	if !ok {
+		return nil, discovery.Pane{}, false
+	}
+	st, err := os.Lstat(socket)
+	if err != nil || st.Mode()&os.ModeSocket == 0 {
+		return nil, discovery.Pane{}, false
+	}
+	pane := discovery.Pane{Socket: socket, PaneID: paneID}
+	return bridge.NewPane(socket, paneID), pane, true
+}
+
+// list returns all current entries in stable ref order (deterministic output
+// for tests and for diffing).
+func (c *sessionCatalog) list() []*sessionEntry {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]*sessionEntry, 0, len(c.byRef))
+	for _, e := range c.byRef {
+		out = append(out, e)
+	}
+	return out
+}
