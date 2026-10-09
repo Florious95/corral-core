@@ -6,4 +6,10 @@ codex	codex	Codex
 copilot	copilot	Copilot
 grok	grok	Grok
 agent	cursor	Cursor
+cursor-agent	cursor	Cursor	path-segment
 pi	pi	Pi
+kiro-cli	kiro_cli	Kiro CLI
+kiro-cli-chat	kiro_cli	Kiro CLI
+aider	aider	Aider
+goose	goose	Goose
+opencode	opencode	OpenCode
