@@ -73,7 +73,8 @@
     "server/internal/api/perf14_independent_oracle_test.go": "edbfce26146e6a35f511a158b7c9030894bea6465628a1d64b3112054bf8b854",
     "server/internal/api/perf14_mutation_bound_test.go": "d3d2ae3bf97ad63dc15bd1a0592c2b23549f4a51b2f88dd6fd71b7a0a7b54500",
     "server/internal/api/perf14_real_page_oracle_test.go": "a8974204988e54773a8feeb11cac616a8a2105af05b2c052e964e99759e61f15",
-    "server/internal/api/presence.go": "1465923cd3fb3bc6fc26fe5e2c1c25cf0a60ddbabc19bc038460117b148f6f0f",
+    "server/internal/api/mobile_grid_ownership_test.go": "851e53753002ac056e630af5e902a6df7c7e34ab672be12e8bb9112fdb169c11",
+    "server/internal/api/presence.go": "3654b798135e7d126a96b03a863cf8c08b67dedfb8bc6f9281a55b974e1ec931",
     "server/internal/api/raw_bytes_api_test.go": "3a283da4d038a1ad44b9b67bbfb09c14ef57b38cd07e657472875a753ff1d2c5",
     "server/internal/api/reflow_barrier_test.go": "7fe564611cf9c263aa53c0c075b69c9872333d67aa6826eac69db827f2e6f39e",
     "server/internal/api/reflow_gate.go": "4a145761b928f5117bee8c449554f623a3d904a7f5dbd4425931b3fd9dff5a99",
@@ -110,7 +111,7 @@
     "server/internal/api/workspace_working_count_red_test.go": "bb47480d052a3a1548756eafea243255503a8b2ca6b50c4fe8f5c610caefaf8e",
     "server/internal/api/ws.go": "b21a128fee546bd05a9cc20aa833047311cbce30ed7fef6f91e1a7551a821625",
     "server/internal/api/ws_conn.go": "f27615bd15226dcff8e830427a8fd815163d05957eab4c5726c2cc3192bbd9af",
-    "server/internal/api/ws_handler.go": "1effbf6255ea1ff8f0c324176927daa42a08e7a0eeae73f811baf192a542ad5e",
+    "server/internal/api/ws_handler.go": "dad9497cfe7c3bd3780a13af2204b0eb34f252ed07789449e891085a6f0c163e",
     "server/internal/api/ws_handler_mouse_test.go": "61fbea094d292b2727497b1058a2eddd485f2b404033e2ace938f38cdf49925d",
     "server/internal/api/ws_perf_subscribe_test.go": "d1ecf715b33a2ff915924714d67b25f87664343f58ff7f7c8c72c01b2bef294c",
     "server/internal/api/ws_snapshot_refresh.go": "acfe58a1b236fe2503d1b08060d2f2d37634eaedb71f523f80351d7c45530193",
@@ -227,6 +228,9 @@
     "LICENSE",
     "tools/nodeprobe/fixtures"
   ],
-  "inputCommit": "c3af584eca932692948eb9e140391b0c3006b1fe",
-  "inputTree": "214e6a67676e2b9fcb6fdc03938b9451ae4958db"
+  "baseInputCommit": "c3af584eca932692948eb9e140391b0c3006b1fe",
+  "baseInputTree": "214e6a67676e2b9fcb6fdc03938b9451ae4958db",
+  "publicBaseCommit": "5f1af6db963a3798b984d2de2025c89e1ef2aca0",
+  "backportedFixCommit": "25adb03df",
+  "derivation": "Only mobile ownership guards and their real tmux/WebSocket regression test are backported; all other accepted runtime bytes remain unchanged."
 }
