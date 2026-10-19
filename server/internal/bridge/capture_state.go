@@ -12,18 +12,19 @@ import (
 // the same tmux command group, rather than separate client round trips while
 // the application may be rendering another frame.
 type CapturedPane struct {
-	Data        []byte
-	Cols, Rows  int
-	CursorX     int
-	CursorY     int
-	Mouse       MouseMode
-	WrappedRows bool
+	Data         []byte
+	Cols, Rows   int
+	CursorX      int
+	CursorY      int
+	CursorHidden bool
+	Mouse        MouseMode
+	WrappedRows  bool
 }
 
 func (p *Pane) CaptureState(ctx context.Context) (CapturedPane, error) {
 	out, err := runTmux(ctx, p.socket, p.timeout,
 		"display-message", "-p", "-t", p.target,
-		"#{pane_width}|#{pane_height}|#{cursor_x}|#{cursor_y}|#{mouse_any_flag}|#{mouse_standard_flag}|#{mouse_button_flag}|#{mouse_all_flag}|#{mouse_sgr_flag}",
+		"#{pane_width}|#{pane_height}|#{cursor_x}|#{cursor_y}|#{mouse_any_flag}|#{mouse_standard_flag}|#{mouse_button_flag}|#{mouse_all_flag}|#{mouse_sgr_flag}|#{cursor_flag}",
 		";", "capture-pane", "-e", "-p", "-t", p.target,
 		";", "capture-pane", "-J", "-p", "-t", p.target)
 	if err != nil {
@@ -38,10 +39,10 @@ func parseCapturedPane(out []byte) (CapturedPane, error) {
 		return CapturedPane{}, fmt.Errorf("tmux: missing capture metadata")
 	}
 	fields := strings.Split(string(header), "|")
-	if len(fields) != 9 {
-		return CapturedPane{}, fmt.Errorf("tmux: capture metadata needs nine fields")
+	if len(fields) != 10 {
+		return CapturedPane{}, fmt.Errorf("tmux: capture metadata needs ten fields")
 	}
-	var values [9]int
+	var values [10]int
 	for i, field := range fields {
 		value, err := strconv.Atoi(field)
 		if err != nil || value < 0 || i >= 4 && value > 1 {
@@ -71,6 +72,7 @@ func parseCapturedPane(out []byte) (CapturedPane, error) {
 	return CapturedPane{
 		Data: rest[:end], Cols: values[0], Rows: values[1],
 		CursorX: values[2], CursorY: values[3],
+		CursorHidden: values[9] == 0,
 		Mouse: MouseMode{
 			Any: values[4] == 1, Standard: values[5] == 1,
 			Button: values[6] == 1, All: values[7] == 1, SGR: values[8] == 1,

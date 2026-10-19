@@ -48,8 +48,13 @@ func snapshotWithCursor(ctx context.Context, br *bridge.Pane) ([]byte, error) {
 func snapshotFromCapture(frame bridge.CapturedPane) []byte {
 	snap := bytes.TrimRight(frame.Data, "\n")
 	prefix := mouseModePrefix(frame.Mouse)
-	out := make([]byte, 0, len(prefix)+len(snap)+16)
+	out := make([]byte, 0, len(prefix)+len(snap)+24)
 	out = append(out, prefix...)
+	cursorMode := 'h'
+	if frame.CursorHidden {
+		cursorMode = 'l'
+	}
+	out = append(out, []byte(fmt.Sprintf("\x1b[?25%c", cursorMode))...)
 	out = append(out, snap...)
 	out = append(out, []byte(fmt.Sprintf("\x1b[%d;%dH", frame.CursorY+1, frame.CursorX+1))...)
 	return out
