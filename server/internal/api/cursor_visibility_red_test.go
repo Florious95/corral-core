@@ -7,6 +7,7 @@ package api
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 func TestSubscribeSnapshotRestoresHiddenHardwareCursor(t *testing.T) {
 	te := startTmuxEnv(t, `sh -c "printf '\\033[?25l\\033]0;cursor-hidden-ready\\007'; sleep 300"`)
 	time.Sleep(100 * time.Millisecond)
+	assertCursorFlag(t, te, "0")
 	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
 	snapshot := te.readBinaryFrame()
 	if snapshot.Kind != protocol.KindSnapshot {
@@ -29,6 +31,7 @@ func TestSubscribeSnapshotRestoresHiddenHardwareCursor(t *testing.T) {
 func TestSubscribeSnapshotRestoresVisibleHardwareCursor(t *testing.T) {
 	te := startTmuxEnv(t, `sh -c "printf '\\033[?25h\\033]0;cursor-visible-ready\\007'; sleep 300"`)
 	time.Sleep(100 * time.Millisecond)
+	assertCursorFlag(t, te, "1")
 	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
 	snapshot := te.readBinaryFrame()
 	if snapshot.Kind != protocol.KindSnapshot {
@@ -36,5 +39,16 @@ func TestSubscribeSnapshotRestoresVisibleHardwareCursor(t *testing.T) {
 	}
 	if !bytes.Contains(snapshot.Data, []byte("\x1b[?25h")) {
 		t.Fatalf("visible cursor state was dropped from the snapshot ANSI: %q", snapshot.Data)
+	}
+}
+
+func assertCursorFlag(t *testing.T, te *tmuxEnv, want string) {
+	t.Helper()
+	out, err := runTmuxCmd(te.env, te.sock, "display-message", "-p", "-t", te.paneID, "#{cursor_flag}")
+	if err != nil {
+		t.Fatalf("read cursor_flag: %v", err)
+	}
+	if got := strings.TrimSpace(out); got != want {
+		t.Fatalf("tmux cursor_flag = %q, want %q", got, want)
 	}
 }
