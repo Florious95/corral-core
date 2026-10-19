@@ -217,16 +217,21 @@ func assertPaneSnapshot(t *testing.T, te *tmuxEnv, got []byte) {
 	if err != nil {
 		t.Fatalf("capture pane: %v", err)
 	}
-	cursor, err := runTmuxCmd(te.env, te.sock, "display-message", "-p", "-t", te.paneID, "#{cursor_x},#{cursor_y}")
+	cursor, err := runTmuxCmd(te.env, te.sock, "display-message", "-p", "-t", te.paneID, "#{cursor_x},#{cursor_y},#{cursor_flag}")
 	if err != nil {
 		t.Fatalf("cursor position: %v", err)
 	}
-	var x, y int
-	if _, err := fmt.Sscanf(cursor, "%d,%d", &x, &y); err != nil {
+	var x, y, cursorFlag int
+	if _, err := fmt.Sscanf(cursor, "%d,%d,%d", &x, &y, &cursorFlag); err != nil {
 		t.Fatalf("parse cursor %q: %v", cursor, err)
 	}
 	cup := fmt.Sprintf("\x1b[%d;%dH", y+1, x+1)
-	want := append(bytes.TrimRight([]byte(raw), "\r\n"), []byte(cup)...)
+	visibility := byte('h')
+	if cursorFlag == 0 {
+		visibility = 'l'
+	}
+	want := append([]byte(fmt.Sprintf("\x1b[?25%c", visibility)), bytes.TrimRight([]byte(raw), "\r\n")...)
+	want = append(want, []byte(cup)...)
 	if len(got) < len(cup) {
 		t.Fatalf("snapshot shorter than cursor suffix: got=%d suffix=%d", len(got), len(cup))
 	}
