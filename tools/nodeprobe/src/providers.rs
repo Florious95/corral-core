@@ -154,9 +154,9 @@ mod tests {
     }
 
     #[test]
-    fn six_rows_and_basename() {
+    fn provider_rows_and_basename() {
         let t = load();
-        assert_eq!(t.len(), 6);
+        assert_eq!(t.len(), 7);
         assert_eq!(lookup("codex").map(|e| e.id.as_str()), Some("codex"));
         assert_eq!(lookup("agent").map(|e| e.id.as_str()), Some("cursor"));
         assert_eq!(
@@ -167,6 +167,14 @@ mod tests {
         assert_ne!(full, "codex");
         assert_eq!(lookup(full).map(|e| e.id.as_str()), Some("codex"));
         assert!(lookup("bash").is_none());
+        // Native installer execs ~/.local/share/claude/versions/<ver>; its comm
+        // basename is the version, so only the versions directory identifies it.
+        assert_eq!(
+            lookup("/Users/alauda/.local/share/claude/versions/2.1.282").map(|e| e.id.as_str()),
+            Some("claude_code")
+        );
+        assert!(lookup("2.1.282").is_none());
+        assert!(lookup("/Users/alauda/code/claude/target/release/server").is_none());
     }
 
     /// Same comm→id table as the server consumer, using the shared TSV.

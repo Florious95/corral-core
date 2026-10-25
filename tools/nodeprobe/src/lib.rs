@@ -6,6 +6,7 @@
 //!       what: 输出每个席位的四轴状态；加新 provider 不必改本文件
 //!   depends:
 //!     - classify（provider 匹配器）
+//!     - claude_activity（Claude Code 自写会话登记；tmux 下标题恒为 ✳，不能判活）
 //!     - tmux list-panes
 //!     - ps pid/ppid/stat/comm snapshot
 //!   boundary:
@@ -16,6 +17,7 @@
 //! ---
 
 pub mod classify;
+pub mod claude_activity;
 pub mod pi_activity;
 pub mod proctree;
 pub mod providers;
@@ -23,7 +25,7 @@ pub mod web;
 
 use classify::{
     classify, format_codepoint, parse_corpus_line, BackgroundTasks, Class, CorpusRow,
-    PROVIDER_PI, STATE_UNKNOWN,
+    PROVIDER_CLAUDE, PROVIDER_PI, STATE_UNKNOWN,
 };
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -357,6 +359,20 @@ pub fn probe(spec: SocketSpec) -> Result<Report, String> {
             .filter(|(_, comm)| providers::lookup(comm).is_some_and(|e| e.id == PROVIDER_PI))
             .map(|(pid, _)| *pid)
             .collect();
+        let claude_observation = (class.provider == PROVIDER_CLAUDE).then(|| {
+            let claude_pids: Vec<i32> = processes
+                .iter()
+                .filter(|(_, comm)| {
+                    providers::lookup(comm).is_some_and(|e| e.id == PROVIDER_CLAUDE)
+                })
+                .map(|(pid, _)| *pid)
+                .collect();
+            claude_activity::observe(
+                claude_activity::sessions_dir().as_deref(),
+                &claude_pids,
+                &p.pane_id,
+            )
+        });
         let pi_channel_dir = pi_activity::channel_dir();
         let pi_observation = if class.provider == PROVIDER_PI {
             Some(pi_activity::observe(
@@ -413,15 +429,45 @@ pub fn probe(spec: SocketSpec) -> Result<Report, String> {
                     }
                 }
             }
-            None => (
-                class.state,
-                title_session_name,
-                pi_activity::HEALTH_UNKNOWN,
-                "activity channel unavailable for non-Pi provider".to_string(),
-            ),
+            None => match &claude_observation {
+                Some(Ok(o)) => (
+                    o.activity,
+                    title_session_name,
+                    pi_activity::HEALTH_UNKNOWN,
+                    o.detail.clone(),
+                ),
+                Some(Err(why)) => (
+                    class.state,
+                    title_session_name,
+                    pi_activity::HEALTH_UNKNOWN,
+                    format!(
+                        "{} unavailable ({why}); title-only activity",
+                        claude_activity::METHOD
+                    ),
+                ),
+                None => (
+                    class.state,
+                    title_session_name,
+                    pi_activity::HEALTH_UNKNOWN,
+                    "activity channel unavailable for non-Pi provider".to_string(),
+                ),
+            },
         };
-        let evidence =
-            evidence_for_axes(&p.title, &class, comms, activity, activity_detail, health);
+        let evidence = if let Some(Ok(_)) = &claude_observation {
+            Evidence {
+                method: claude_activity::METHOD.to_string(),
+                detail: format!(
+                    "provider={} activity={} health={} {} title={}",
+                    class.provider, activity, health, activity_detail, p.title
+                ),
+                glyph: None,
+                codepoint: None,
+                title: None,
+                comms,
+            }
+        } else {
+            evidence_for_axes(&p.title, &class, comms, activity, activity_detail, health)
+        };
         let name = if p.window_name.is_empty() {
             p.session.clone()
         } else {

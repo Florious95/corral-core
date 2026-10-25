@@ -1,7 +1,9 @@
 # comm-basename	provider-id	display-name	[match]
 # match empty = basename only; path-segment = also hit when raw comm contains /<comm-basename>/ as a directory.
+# A path-segment key may span directories: claude/versions = Claude Code native installer (~/.local/share/claude/versions/<ver>).
 # Shared by Go (server) and Rust (nodeprobe). Do not fork this table.
 claude	claude_code	Claude Code
+claude/versions	claude_code	Claude Code	path-segment
 codex	codex	Codex
 copilot	copilot	Copilot
 grok	grok	Grok
