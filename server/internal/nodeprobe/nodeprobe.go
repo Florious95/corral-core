@@ -357,20 +357,28 @@ func SampleModel(ctx context.Context, model *discovery.Model, sampler Sampler) (
 		if err != nil {
 			return nil, err
 		}
-		rows := map[key][]Node{}
-		for _, n := range report.Nodes {
-			k := key{report.Socket, n.Session, n.PaneID, n.WindowIndex}
-			rows[k] = append(rows[k], n)
-		}
-		for _, p := range bySocket[socket] {
-			obs := Unknown()
-			matches := rows[key{p.Socket, p.Session, p.PaneID, p.WindowIndex}]
-			if len(matches) == 1 {
-				n := matches[0]
-				obs = Observation{Provider: n.Provider, Activity: n.Activity, SessionName: n.SessionName, Health: n.Health}
-			}
-			out[p.Socket+"\x1f"+p.PaneID] = obs
-		}
+		JoinReport(report, bySocket[socket], out)
 	}
 	return out, nil
+}
+
+// JoinReport projects a complete immutable socket report onto the requested
+// panes. Zero/duplicate rows remain unknown; projection never changes report.
+// @pre report is read-only; out is caller-owned
+// @post structural joins retain the exact SampleModel semantics
+func JoinReport(report Report, panes []discovery.Pane, out map[string]Observation) {
+	rows := map[key][]Node{}
+	for _, n := range report.Nodes {
+		k := key{report.Socket, n.Session, n.PaneID, n.WindowIndex}
+		rows[k] = append(rows[k], n)
+	}
+	for _, p := range panes {
+		obs := Unknown()
+		matches := rows[key{p.Socket, p.Session, p.PaneID, p.WindowIndex}]
+		if len(matches) == 1 {
+			n := matches[0]
+			obs = Observation{Provider: n.Provider, Activity: n.Activity, SessionName: n.SessionName, Health: n.Health}
+		}
+		out[p.Socket+"\x1f"+p.PaneID] = obs
+	}
 }

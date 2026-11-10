@@ -2,8 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -16,25 +14,27 @@ import (
 // revalidates even unknown providers: an Agent starting in an existing shell
 // must become visible without needing a new pane or a title-based identity guess.
 // New/changed socket inventories require a fresh accepted identity join.
+// All reports come from the shared per-socket broker, so L1 and L2 scopes of
+// the same socket do not each start nodeprobe.
 type inventorySample struct {
 	signature    string
 	model        *discovery.Model
 	observations map[string]nodeprobe.Observation
-	updated      time.Time
+	sampled      time.Time // accepted report startedAt; cache hits never move it
 	refreshing   bool
 }
 
 type inventorySampler struct {
 	ctx     context.Context
-	sampler nodeprobe.Sampler
+	reports *reportBroker
 	mu      sync.Mutex
 	entries map[string]*inventorySample
 	jobs    chan *inventorySample
 	workers sync.WaitGroup
 }
 
-func newInventorySampler(ctx context.Context, sampler nodeprobe.Sampler) *inventorySampler {
-	p := &inventorySampler{ctx: ctx, sampler: sampler, entries: make(map[string]*inventorySample), jobs: make(chan *inventorySample, 64)}
+func newInventorySampler(ctx context.Context, reports *reportBroker) *inventorySampler {
+	p := &inventorySampler{ctx: ctx, reports: reports, entries: make(map[string]*inventorySample), jobs: make(chan *inventorySample, 64)}
 	for i := 0; i < 2; i++ {
 		p.workers.Add(1)
 		go p.worker()
@@ -50,11 +50,11 @@ func (p *inventorySampler) worker() {
 			return
 		case entry := <-p.jobs:
 			ctx, cancel := context.WithTimeout(p.ctx, 5*time.Second)
-			observations, err := nodeprobe.SampleModel(ctx, entry.model, p.sampler)
+			observations, sampled, err := p.reports.sampleModel(ctx, entry.model, p.reports.now().Add(-reportShareWindow))
 			cancel()
 			p.mu.Lock()
 			if err == nil {
-				entry.observations, entry.updated = observations, time.Now()
+				entry.observations, entry.sampled = observations, sampled
 			}
 			entry.refreshing = false
 			p.mu.Unlock()
@@ -62,28 +62,20 @@ func (p *inventorySampler) worker() {
 	}
 }
 
-func (p *inventorySampler) sample(ctx context.Context, model *discovery.Model) (map[string]nodeprobe.Observation, error) {
-	models := map[string]*discovery.Model{}
-	signatures := map[string]*strings.Builder{}
-	for _, ws := range model.Workspaces {
-		for _, pane := range ws.Panes {
-			if models[pane.Socket] == nil {
-				models[pane.Socket] = &discovery.Model{}
-				signatures[pane.Socket] = &strings.Builder{}
-			}
-			models[pane.Socket].Workspaces = append(models[pane.Socket].Workspaces, discovery.Workspace{CWD: ws.CWD, Panes: []discovery.Pane{pane}})
-			fmt.Fprintf(signatures[pane.Socket], "%q/%q/%d/%q/%d/%q/%q;", pane.Socket, pane.Session, pane.WindowIndex, pane.PaneID, pane.PanePID, pane.Command, ws.CWD)
-		}
-	}
+// sample retains unchanged inventory observations; new identities require a
+// shared report no older than fresh, without a separate failure retry clock.
+func (p *inventorySampler) sample(ctx context.Context, model *discovery.Model, fresh time.Time) (map[string]nodeprobe.Observation, error) {
+	models, signatures := socketModels(model)
 	type task struct {
 		socket string
 		entry  *inventorySample
 	}
 	var missing []task
 	out := map[string]nodeprobe.Observation{}
+	now := p.reports.now()
 	p.mu.Lock()
 	for socket, m := range models {
-		sig := signatures[socket].String()
+		sig := signatures[socket]
 		entry := p.entries[socket]
 		if entry == nil || entry.signature != sig {
 			missing = append(missing, task{socket, &inventorySample{signature: sig, model: m}})
@@ -92,7 +84,7 @@ func (p *inventorySampler) sample(ctx context.Context, model *discovery.Model) (
 		for ref, obs := range entry.observations {
 			out[ref] = obs
 		}
-		if time.Since(entry.updated) >= 2*time.Second && !entry.refreshing {
+		if now.Sub(entry.sampled) >= 2*time.Second && !entry.refreshing {
 			select {
 			case p.jobs <- entry:
 				entry.refreshing = true
@@ -107,7 +99,7 @@ func (p *inventorySampler) sample(ctx context.Context, model *discovery.Model) (
 	}
 	p.mu.Unlock()
 	// The host coordinator admits only one scan at a time. At most four cold
-	// identity calls run concurrently, irrespective of host or request count.
+	// identity calls wait concurrently, irrespective of host or request count.
 	jobs := make(chan task, len(missing))
 	for _, task := range missing {
 		jobs <- task
@@ -121,7 +113,7 @@ func (p *inventorySampler) sample(ctx context.Context, model *discovery.Model) (
 		go func() {
 			defer wg.Done()
 			for task := range jobs {
-				obs, err := nodeprobe.SampleModel(ctx, task.entry.model, p.sampler)
+				obs, sampled, err := p.reports.sampleModel(ctx, task.entry.model, fresh)
 				resultMu.Lock()
 				if err != nil {
 					if firstErr == nil {
@@ -135,7 +127,7 @@ func (p *inventorySampler) sample(ctx context.Context, model *discovery.Model) (
 				}
 				resultMu.Unlock()
 				p.mu.Lock()
-				task.entry.observations, task.entry.updated = obs, time.Now()
+				task.entry.observations, task.entry.sampled = obs, sampled
 				p.entries[task.socket] = task.entry
 				p.mu.Unlock()
 			}
