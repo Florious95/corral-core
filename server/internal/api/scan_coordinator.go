@@ -289,10 +289,11 @@ func (q *scanCoordinator) scan(ctx context.Context, g *catalogGeneration) catalo
 	}
 	var observations map[string]nodeprobe.Observation
 	sampleStarted := time.Now()
+	// A new structure requires a report no older than this scan's cutoff.
 	if q.s.inventorySamples != nil {
-		observations, err = q.s.inventorySamples.sample(ctx, model)
+		observations, err = q.s.inventorySamples.sample(ctx, model, result.started)
 	} else {
-		observations, err = nodeprobe.SampleModel(ctx, model, q.s.nodeprobe)
+		observations, _, err = q.s.reports.sampleModel(ctx, model, result.started)
 	}
 	sampleTime = time.Since(sampleStarted)
 	if err != nil {

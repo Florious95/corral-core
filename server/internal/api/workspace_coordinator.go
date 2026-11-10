@@ -31,9 +31,12 @@ type workspaceJob struct {
 	cwd     string
 	queued  time.Time
 	started time.Time
-	waiters map[*wsConn]workspaceWaiter // coordinator lock only; worker never reads it
-	ctx     context.Context
-	cancel  context.CancelFunc
+	// Only periodic waiters may adopt a shared report within reportShareWindow;
+	// a new lease or explicit refresh retains the job's original cutoff.
+	periodic bool
+	waiters  map[*wsConn]workspaceWaiter // coordinator lock only; worker never reads it
+	ctx      context.Context
+	cancel   context.CancelFunc
 }
 
 type workspaceResult struct {
@@ -110,7 +113,7 @@ func (q *workspaceCoordinator) subscribe(c *wsConn, epoch uint64) {
 	accepted := len(q.targets) < catalogGlobalLimit
 	if accepted {
 		target := workspaceTarget{cwd: cwd, epoch: epoch}
-		accepted = q.enqueueLocked(c, target, time.Now())
+		accepted = q.enqueueLocked(c, target, time.Now(), false)
 		if accepted {
 			q.targets[c] = target
 		}
@@ -145,7 +148,7 @@ func (q *workspaceCoordinator) remove(c *wsConn) {
 	q.wake()
 }
 
-func (q *workspaceCoordinator) enqueueLocked(c *wsConn, target workspaceTarget, now time.Time) bool {
+func (q *workspaceCoordinator) enqueueLocked(c *wsConn, target workspaceTarget, now time.Time, periodic bool) bool {
 	job := q.pending[target.cwd]
 	if job == nil {
 		if len(q.pending) >= workspacePendingLimit {
@@ -156,10 +159,11 @@ func (q *workspaceCoordinator) enqueueLocked(c *wsConn, target workspaceTarget, 
 		if len(q.order) >= 2*workspacePendingLimit {
 			q.compactOrderLocked()
 		}
-		job = &workspaceJob{cwd: target.cwd, queued: now, waiters: make(map[*wsConn]workspaceWaiter)}
+		job = &workspaceJob{cwd: target.cwd, queued: now, periodic: true, waiters: make(map[*wsConn]workspaceWaiter)}
 		q.pending[target.cwd] = job
 		q.order = append(q.order, target.cwd)
 	}
+	job.periodic = job.periodic && periodic
 	job.waiters[c] = workspaceWaiter{epoch: target.epoch, deadline: now.Add(workspaceRefreshTimeout)}
 	return true
 }
@@ -242,7 +246,7 @@ func (q *workspaceCoordinator) maintain(now time.Time) time.Time {
 			next = earlierWorkspaceTime(next, due)
 			continue
 		}
-		if !q.enqueueLocked(c, target, now) {
+		if !q.enqueueLocked(c, target, now, true) {
 			// No busy timer loop when the bounded queue is full. Completion
 			// wakes us earlier; otherwise retry at the existing L2 cadence.
 			next = earlierWorkspaceTime(next, now.Add(q.s.level2Interval))
@@ -342,7 +346,11 @@ func (q *workspaceCoordinator) scan(job *workspaceJob) (result workspaceResult) 
 		sockets = len(seen)
 	}
 	start = time.Now()
-	observations, err := nodeprobe.SampleModel(job.ctx, scoped, q.s.nodeprobe)
+	fence := job.started
+	if job.periodic {
+		fence = q.s.reports.now().Add(-reportShareWindow)
+	}
+	observations, _, err := q.s.reports.sampleModel(job.ctx, scoped, fence)
 	sampleTime = time.Since(start)
 	if err != nil {
 		result.err = err

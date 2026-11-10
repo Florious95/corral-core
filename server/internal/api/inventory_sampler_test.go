@@ -37,10 +37,10 @@ func (s *inventoryTestProbe) Sample(ctx context.Context, socket string) (nodepro
 func TestWorkspaceInventoryCachedL1DoesNotWaitForStatusAndRechecksUnknown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	probe := &inventoryTestProbe{provider: "unknown", entered: make(chan struct{}, 8)}
-	p := newInventorySampler(ctx, probe)
+	p := newInventorySampler(ctx, newReportBroker(ctx, probe, nil))
 	defer func() { cancel(); p.workers.Wait() }()
 	model := workspaceFixtureModel("/A", "/fixture/A", "%0")
-	obs, err := p.sample(ctx, model)
+	obs, err := p.sample(ctx, model, time.Now())
 	if err != nil || obs["/fixture/A\x1f%0"].Provider != "unknown" {
 		t.Fatal(obs, err)
 	}
@@ -50,13 +50,16 @@ func TestWorkspaceInventoryCachedL1DoesNotWaitForStatusAndRechecksUnknown(t *tes
 	probe.provider = "claude_code"
 	probe.gate = gate
 	probe.mu.Unlock()
+	// Age both the inventory and the broker's original report, without
+	// waiting or bypassing the shared report freshness policy.
+	p.reports.now = func() time.Time { return time.Now().Add(3 * time.Second) }
 	p.mu.Lock()
-	p.entries["/fixture/A"].updated = time.Now().Add(-3 * time.Second)
+	p.entries["/fixture/A"].sampled = p.reports.now().Add(-3 * time.Second)
 	p.mu.Unlock()
 	// No timed sleep oracle: block the dependency, require the light call to
 	// complete while the actual background status request remains blocked.
 	done := make(chan error, 1)
-	go func() { _, err := p.sample(ctx, model); done <- err }()
+	go func() { _, err := p.sample(ctx, model, time.Now()); done <- err }()
 	select {
 	case err := <-done:
 		if err != nil {
@@ -72,7 +75,7 @@ func TestWorkspaceInventoryCachedL1DoesNotWaitForStatusAndRechecksUnknown(t *tes
 	}
 	close(gate)
 	catalogEventually(t, "new Agent in unchanged shell never became visible", func() bool {
-		obs, err := p.sample(ctx, model)
+		obs, err := p.sample(ctx, model, time.Now())
 		return err == nil && obs["/fixture/A\x1f%0"].Provider == "claude_code"
 	})
 	probe.mu.Lock()
@@ -86,17 +89,17 @@ func TestWorkspaceInventoryCachedL1DoesNotWaitForStatusAndRechecksUnknown(t *tes
 func TestWorkspaceInventoryChangedPIDRequiresFreshIdentity(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	probe := &inventoryTestProbe{provider: "claude_code", entered: make(chan struct{}, 8)}
-	p := newInventorySampler(ctx, probe)
+	p := newInventorySampler(ctx, newReportBroker(ctx, probe, nil))
 	defer func() { cancel(); p.workers.Wait() }()
 	m := workspaceFixtureModel("/A", "/fixture/A", "%0")
-	if _, err := p.sample(ctx, m); err != nil {
+	if _, err := p.sample(ctx, m, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	m.Workspaces[0].Panes[0].PanePID = 321
 	probe.mu.Lock()
 	probe.provider = "unknown"
 	probe.mu.Unlock()
-	obs, err := p.sample(ctx, m)
+	obs, err := p.sample(ctx, m, time.Now())
 	if err != nil || obs["/fixture/A\x1f%0"].Provider != "unknown" {
 		t.Fatal("replaced process inherited old Agent identity", obs, err)
 	}

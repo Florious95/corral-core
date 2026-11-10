@@ -50,7 +50,8 @@ func TestNodeprobeFailureDoesNotPublishEmptyReplacement(t *testing.T) {
 	if before == nil || len(before.byRef) == 0 {
 		t.Fatal("missing initial snapshot")
 	}
-	s.nodeprobe = errorNodeprobe{}
+	// Sampling is owned by the shared broker after server construction.
+	s.reports.sampler = errorNodeprobe{}
 	if err := s.rebuildCatalog(context.Background()); err == nil {
 		t.Fatal("expected visible nodeprobe failure")
 	}

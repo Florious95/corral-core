@@ -146,6 +146,7 @@ type Server struct {
 
 	nodeprobe        nodeprobe.Sampler
 	inventorySamples *inventorySampler
+	reports          *reportBroker // sole nodeprobe producer, shared by L1 and L2
 	filterAgents     bool
 
 	// agentLaunchers is the explicit provider capability set advertised in
@@ -264,8 +265,9 @@ func NewServer(opts Options) *Server {
 	// 不再启动 overlayLoop。opts.OverlayCapturer 若注入也只保留字段，不被调用。
 	s.overlay = opts.OverlayCapturer
 	s.loopCtx, s.loopStop = context.WithCancel(context.Background())
+	s.reports = newReportBroker(s.loopCtx, s.nodeprobe, s.log)
 	if _, production := s.nodeprobe.(*nodeprobe.Runner); production {
-		s.inventorySamples = newInventorySampler(s.loopCtx, s.nodeprobe)
+		s.inventorySamples = newInventorySampler(s.loopCtx, s.reports)
 	}
 	if scoped, ok := s.discoverer.(WorkspaceDiscoverer); ok {
 		s.workspaceScans = newWorkspaceCoordinator(s, scoped)
